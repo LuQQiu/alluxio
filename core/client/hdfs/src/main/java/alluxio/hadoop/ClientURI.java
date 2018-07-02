@@ -30,6 +30,9 @@ import java.net.URI;
 public final class ClientURI implements Serializable {
   private static final long serialVersionUID = 7091616565184279202L;
 
+  /**
+   * The Uri type.
+   */
   public enum UriType {
     NORMAL, // alluxio://host1:port1/path
     ZOOKEEPER, // Uri begins with alluxio://zk:// or alluxio://zk:/
@@ -75,15 +78,24 @@ public final class ClientURI implements Serializable {
     mPath = addressesAndPath.substring(sepIndex + 1);
   }
 
+  /**
+   * @return is Zookeeper enabled
+   */
   public boolean isZookeeperEnabled() {
     return mUriType == UriType.ZOOKEEPER;
   }
 
+  /**
+   * @return Zookeeper addresses, null when zookeeper is not enabled
+   */
   @Nullable
   public String getZookeeperAddresses() {
     return mZookeeperAddresses;
   }
 
+  /**
+   * @return the hostname when the uri type is normal
+   */
   @Nullable
   public String getHost() {
     if (mUriType == UriType.NORMAL) {
@@ -92,6 +104,9 @@ public final class ClientURI implements Serializable {
     return null;
   }
 
+  /**
+   * @return the port when uri type is normal
+   */
   public int getPort() {
     if (mUriType == UriType.NORMAL) {
       return mUri.getPort();
@@ -99,14 +114,23 @@ public final class ClientURI implements Serializable {
     return -1;
   }
 
+  /**
+   * @return the port when uri type is normal
+   */
   public String getPath() {
     return mPath;
   }
 
+  /**
+   * @return the uri type
+   */
   public UriType getUriType() {
     return mUriType;
   }
 
+  /**
+   * @return the uri when uri type is normal
+   */
   @Nullable
   public URI getUri() {
     return mUri;

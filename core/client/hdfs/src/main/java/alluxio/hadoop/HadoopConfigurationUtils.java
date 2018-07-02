@@ -40,8 +40,8 @@ public final class HadoopConfigurationUtils {
    * @param source the {@link org.apache.hadoop.conf.Configuration} to merge
    * @param alluxioConfiguration the Alluxio configuration to merge to
    */
-  public static void mergeHadoopConfiguration(ClientURI uri, org.apache.hadoop.conf.Configuration source,
-      AlluxioConfiguration alluxioConfiguration) {
+  public static void mergeHadoopConfiguration(ClientURI uri,
+      org.apache.hadoop.conf.Configuration source, AlluxioConfiguration alluxioConfiguration) {
     // Load Alluxio configuration if any and merge to the one in Alluxio file system
     // Push Alluxio configuration to the Job configuration
     Properties alluxioConfProperties = new Properties();

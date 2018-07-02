@@ -504,7 +504,8 @@ abstract class AbstractFileSystem extends org.apache.hadoop.fs.FileSystem {
    * @param uri the uri
    * @param conf the hadoop conf
    */
-  void initializeInternal(ClientURI uri, org.apache.hadoop.conf.Configuration conf) throws IOException {
+  void initializeInternal(ClientURI uri, org.apache.hadoop.conf.Configuration conf)
+      throws IOException {
     // Load Alluxio configuration if any and merge to the one in Alluxio file system. These
     // modifications to ClientContext are global, affecting all Alluxio clients in this JVM.
     // We assume here that all clients use the same configuration.

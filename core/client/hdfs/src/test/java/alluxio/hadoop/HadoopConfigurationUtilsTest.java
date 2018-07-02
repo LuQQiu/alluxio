@@ -20,6 +20,8 @@ import org.junit.After;
 import org.junit.Assert;
 import org.junit.Test;
 
+import java.net.URI;
+
 /**
  * Tests for the {@link HadoopConfigurationUtils} class.
  */
@@ -42,7 +44,9 @@ public final class HadoopConfigurationUtilsTest {
   public void mergeEmptyHadoopConfiguration() {
     org.apache.hadoop.conf.Configuration hadoopConfig = new org.apache.hadoop.conf.Configuration();
     long beforeSize = Configuration.toMap().size();
-    HadoopConfigurationUtils.mergeHadoopConfiguration(hadoopConfig, Configuration.global());
+    ClientURI clientURI = new ClientURI(URI.create("alluxio://localhost:19998/path"));
+    HadoopConfigurationUtils.mergeHadoopConfiguration(clientURI,
+        hadoopConfig, Configuration.global());
     long afterSize = Configuration.toMap().size();
     Assert.assertEquals(beforeSize, afterSize);
   }
@@ -56,10 +60,11 @@ public final class HadoopConfigurationUtilsTest {
     hadoopConfig.set(PropertyKey.S3A_ACCESS_KEY.toString(), TEST_S3_ACCCES_KEY);
     hadoopConfig.set(PropertyKey.S3A_SECRET_KEY.toString(), TEST_S3_SECRET_KEY);
     hadoopConfig.set(TEST_ALLUXIO_PROPERTY, TEST_ALLUXIO_VALUE);
-
     // This hadoop config will not be loaded into Alluxio configuration.
     hadoopConfig.set("hadoop.config.parameter", "hadoop config value");
-    HadoopConfigurationUtils.mergeHadoopConfiguration(hadoopConfig, Configuration.global());
+    ClientURI clientURI = new ClientURI(URI.create("alluxio://localhost:19998/path"));
+    HadoopConfigurationUtils.mergeHadoopConfiguration(clientURI,
+        hadoopConfig, Configuration.global());
     Assert.assertEquals(TEST_S3_ACCCES_KEY, Configuration.get(PropertyKey.S3A_ACCESS_KEY));
     Assert.assertEquals(TEST_S3_SECRET_KEY, Configuration.get(PropertyKey.S3A_SECRET_KEY));
     Assert.assertEquals(Source.RUNTIME, Configuration.getSource(PropertyKey.S3A_ACCESS_KEY));
