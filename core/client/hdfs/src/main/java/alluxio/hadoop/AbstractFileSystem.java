@@ -138,6 +138,15 @@ abstract class AbstractFileSystem extends org.apache.hadoop.fs.FileSystem {
   }
 
   @Override
+  public void checkPath(Path path) {
+    LOG.debug("checkPath: path is {}", path);
+    if (!path.toString().startsWith(getScheme())) {
+      throw new IllegalArgumentException("Wrong path " + path
+          + "do not start with alluxio scheme: " + getScheme());
+    }
+  }
+
+  @Override
   public void close() throws IOException {
     // super.close should be called first before releasing the resources in this instance, as the
     // super class may invoke other methods in this class. For example,
@@ -453,14 +462,15 @@ abstract class AbstractFileSystem extends org.apache.hadoop.fs.FileSystem {
     HadoopUtils.addSwiftCredentials(conf);
     setConf(conf);
 
+    ClientURI clientURI = new ClientURI(uri);
+    boolean connectDetailsMatch = connectDetailsMatch(clientURI, conf);
+
     // HDFS doesn't allow the authority to be empty; it must be "/" instead.
     String authority = uri.getAuthority() == null ? "/" : uri.getAuthority();
     mAlluxioHeader = getScheme() + "://" + authority;
     // Set the statistics member. Use mStatistics instead of the parent class's variable.
     mStatistics = statistics;
     mUri = URI.create(mAlluxioHeader);
-
-    boolean connectDetailsMatch = connectDetailsMatch(mUri, conf);
 
     if (sInitialized && connectDetailsMatch) {
       updateFileSystemAndContext();
@@ -480,7 +490,7 @@ abstract class AbstractFileSystem extends org.apache.hadoop.fs.FileSystem {
         }
       }
 
-      initializeInternal(uri, conf);
+      initializeInternal(clientURI, conf);
       sInitialized = true;
     }
 
@@ -494,12 +504,11 @@ abstract class AbstractFileSystem extends org.apache.hadoop.fs.FileSystem {
    * @param uri the uri
    * @param conf the hadoop conf
    */
-  void initializeInternal(URI uri, org.apache.hadoop.conf.Configuration conf) throws IOException {
+  void initializeInternal(ClientURI uri, org.apache.hadoop.conf.Configuration conf) throws IOException {
     // Load Alluxio configuration if any and merge to the one in Alluxio file system. These
     // modifications to ClientContext are global, affecting all Alluxio clients in this JVM.
     // We assume here that all clients use the same configuration.
-    HadoopConfigurationUtils.mergeHadoopConfiguration(conf, Configuration.global());
-    Configuration.set(PropertyKey.ZOOKEEPER_ENABLED, isZookeeperMode());
+    HadoopConfigurationUtils.mergeHadoopConfiguration(uri, conf, Configuration.global());
     // When using zookeeper we get the leader master address from the alluxio.zookeeper.address
     // configuration property, so the user doesn't need to specify the authority.
     if (!Configuration.getBoolean(PropertyKey.ZOOKEEPER_ENABLED)) {
@@ -532,11 +541,11 @@ abstract class AbstractFileSystem extends org.apache.hadoop.fs.FileSystem {
    * @param conf the hadoop conf
    * @return whether the details match
    */
-  private boolean connectDetailsMatch(URI uri, org.apache.hadoop.conf.Configuration conf) {
+  private boolean connectDetailsMatch(ClientURI uri, org.apache.hadoop.conf.Configuration conf) {
     // Create the master inquire client that we would have after merging the hadoop conf into
     // Alluxio Configuration.
     AlluxioConfiguration alluxioConf = new InstancedConfiguration(Configuration.global());
-    HadoopConfigurationUtils.mergeHadoopConfiguration(conf, alluxioConf);
+    HadoopConfigurationUtils.mergeHadoopConfiguration(uri, conf, alluxioConf);
     ConnectDetails newDetails = Factory.getConnectDetails(alluxioConf);
 
     return newDetails.equals(FileSystemContext.get().getMasterInquireClient().getConnectDetails());

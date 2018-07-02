@@ -41,7 +41,10 @@ public final class HadoopUtils {
    * @return the path component of the {@link Path} URI
    */
   public static String getPathWithoutScheme(Path path) {
-    return path.toUri().getPath();
+    String pathStr = path.toString();
+    String trimScheme = pathStr.substring(pathStr.lastIndexOf(":") + 1);
+    String trimSlashes = trimScheme.replace("^/+", "");
+    return trimSlashes.substring(trimSlashes.indexOf('/'));
   }
 
   /**

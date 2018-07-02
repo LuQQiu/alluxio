@@ -36,10 +36,11 @@ public final class HadoopConfigurationUtils {
   /**
    * Merges Hadoop {@link org.apache.hadoop.conf.Configuration} into the Alluxio configuration.
    *
+   * @param uri the client uri to get zookeeper information from
    * @param source the {@link org.apache.hadoop.conf.Configuration} to merge
    * @param alluxioConfiguration the Alluxio configuration to merge to
    */
-  public static void mergeHadoopConfiguration(org.apache.hadoop.conf.Configuration source,
+  public static void mergeHadoopConfiguration(ClientURI uri, org.apache.hadoop.conf.Configuration source,
       AlluxioConfiguration alluxioConfiguration) {
     // Load Alluxio configuration if any and merge to the one in Alluxio file system
     // Push Alluxio configuration to the Job configuration
@@ -50,6 +51,10 @@ public final class HadoopConfigurationUtils {
       if (PropertyKey.isValid(propertyName)) {
         alluxioConfProperties.put(propertyName, entry.getValue());
       }
+    }
+    if (uri.isZookeeperEnabled()) {
+      alluxioConfProperties.put(PropertyKey.ZOOKEEPER_ENABLED, true);
+      alluxioConfProperties.put(PropertyKey.ZOOKEEPER_ADDRESS, uri.getZookeeperAddresses());
     }
     LOG.info("Loading Alluxio properties from Hadoop configuration: {}", alluxioConfProperties);
     // Merge the relevant Hadoop configuration into Alluxio's configuration.
