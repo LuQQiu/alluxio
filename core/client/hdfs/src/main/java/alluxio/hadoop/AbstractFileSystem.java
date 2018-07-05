@@ -230,7 +230,8 @@ abstract class AbstractFileSystem extends org.apache.hadoop.fs.FileSystem {
   public FSDataOutputStream createNonRecursive(Path path, FsPermission permission,
       boolean overwrite, int bufferSize, short replication, long blockSize, Progressable progress)
           throws IOException {
-    AlluxioURI parentUri = new AlluxioURI(HadoopUtils.getPathWithoutScheme(path.getParent().toString()));
+    AlluxioURI parentUri = new AlluxioURI(HadoopUtils
+        .getPathWithoutScheme(path.getParent().toString()));
     ensureExists(parentUri);
     return create(path, permission, overwrite, bufferSize, replication, blockSize, progress);
   }

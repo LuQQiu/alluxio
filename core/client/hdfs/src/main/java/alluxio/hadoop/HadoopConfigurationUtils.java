@@ -15,12 +15,11 @@ import alluxio.AlluxioConfiguration;
 import alluxio.Configuration;
 import alluxio.PropertyKey;
 import alluxio.conf.Source;
-
 import alluxio.exception.status.InvalidArgumentException;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.net.URI;
 import java.util.Map;
 import java.util.Properties;
 
@@ -57,7 +56,8 @@ public final class HadoopConfigurationUtils {
     }
     if (path.contains("zk:")) {
       alluxioConfProperties.put(PropertyKey.ZOOKEEPER_ENABLED, true);
-      alluxioConfProperties.put(PropertyKey.ZOOKEEPER_ADDRESS, HadoopUtils.getZookeeperAddresses(path));
+      alluxioConfProperties.put(PropertyKey.ZOOKEEPER_ADDRESS,
+          HadoopUtils.getZookeeperAddresses(path));
     }
     LOG.info("Loading Alluxio properties from Hadoop configuration: {}", alluxioConfProperties);
     // Merge the relevant Hadoop configuration into Alluxio's configuration.

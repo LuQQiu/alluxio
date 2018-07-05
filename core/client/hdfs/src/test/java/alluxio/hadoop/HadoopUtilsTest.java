@@ -11,65 +11,15 @@
 
 package alluxio.hadoop;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-
-import org.apache.hadoop.fs.Path;
+import org.junit.Assert;
 import org.junit.Test;
 
-import java.net.URI;
-
-/**
- * Tests for the {@link HadoopUtils} class.
- */
 public final class HadoopUtilsTest {
 
-  /**
-   * Test for the {@link HadoopUtils#getPathWithoutScheme(Path)} method.
-   */
   @Test
-  public void testGetPathWithoutSchema() {
-    final Path path = new Path("/foo/bar/baz");
-
-    final String output = HadoopUtils.getPathWithoutScheme(path);
-    assertEquals("/foo/bar/baz", output);
-  }
-
-  /**
-   * Test for the {@link HadoopUtils#getPathWithoutScheme(Path)} method that contains the schema.
-   */
-  @Test
-  public void testGetPathWithoutSchemaThatContainsSchema() {
-    final Path path = new Path("file:///foo/bar/baz");
-
-    final String output = HadoopUtils.getPathWithoutScheme(path);
-    assertEquals("/foo/bar/baz", output);
-  }
-
-  /**
-   * This test doesn't work the way you might expect.
-   *
-   * If you take the URI.create("hdfs://localhost:1234/foo/bar/baz?please=dont&amp;show=up").getPath
-   * it will return /foo/bar/baz. If you go through Hadoop's Path using {@link Path#Path(String)}
-   * then Hadoop injects the query params into the path, so when you call toURI it gives a different
-   * response.
-   */
-  @Test
-  public void testGetPathWithoutSchemaFromHDFS() {
-    final Path path = new Path("hdfs://localhost:1234/foo/bar/baz?please=dont&show=up");
-
-    final String output = HadoopUtils.getPathWithoutScheme(path);
-    assertFalse("/foo/bar/baz".equals(output));
-  }
-
-  /**
-   * Test for the {@link HadoopUtils#getPathWithoutScheme(Path)} method from an HDFS URI.
-   */
-  @Test
-  public void testGetPathWithoutSchemaFromHDFSURI() {
-    final Path path = new Path(URI.create("hdfs://localhost:1234/foo/bar/baz?please=dont&show=up"));
-
-    final String output = HadoopUtils.getPathWithoutScheme(path);
-    assertEquals("/foo/bar/baz", output);
+  public void test() {
+    String path = "alluxio://zk:host1:port1;host2:port2/path/to/file";
+    String zookeeperAddresses = HadoopUtils.getZookeeperAddresses(path);
+    Assert.assertEquals("host1:port1,host2:port2", zookeeperAddresses);
   }
 }

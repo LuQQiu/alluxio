@@ -14,7 +14,6 @@ package alluxio.hadoop;
 import alluxio.AlluxioURI;
 import alluxio.PropertyKey;
 
-import alluxio.exception.status.InvalidArgumentException;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
@@ -42,8 +41,8 @@ public final class HadoopUtils {
    * @return the path component of the {@link Path} URI
    */
   public static String getPathWithoutScheme(String path) {
-    String trimScheme = path.substring(path.lastIndexOf(":") + 1);
-    String trimSlashes = trimScheme.replace("^/+", "");
+    String trimScheme = path.substring(path.indexOf("zk:") + 3);
+    String trimSlashes = trimScheme.replaceAll("^/+", "");
     return trimSlashes.substring(trimSlashes.indexOf('/'));
   }
 
@@ -77,11 +76,14 @@ public final class HadoopUtils {
    * @return zookeeper addresses
    */
   public static String getZookeeperAddresses(String path) throws IllegalArgumentException {
-    // get the zookeeper addresses from the path and replace the semicolon separator to comma separator
+    // get the zookeeper addresses from the path
+    // and replace the semicolon separator to comma separator
     String zkAddress;
     try {
-      zkAddress = getPathWithoutScheme(path)
-          .substring(0, path.indexOf("/")).replaceAll(";", ",");
+      String trimScheme = path.substring(path.indexOf("zk:") + 3);
+      String trimSlashes = trimScheme.replaceAll("^/+", "");
+      String addresses = trimSlashes.substring(0, trimSlashes.indexOf('/'));
+      zkAddress = addresses.replaceAll(";", ",");
     } catch (Exception e) {
       throw new IllegalArgumentException("Alluxio on Zookeeper URI is invalid. "
           + "The valid URI should be: alluxio://zk://host1:port1;host2:port2;../path/to/file");
