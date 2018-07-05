@@ -16,9 +16,11 @@ import alluxio.Configuration;
 import alluxio.PropertyKey;
 import alluxio.conf.Source;
 
+import alluxio.exception.status.InvalidArgumentException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.net.URI;
 import java.util.Map;
 import java.util.Properties;
 
@@ -36,12 +38,13 @@ public final class HadoopConfigurationUtils {
   /**
    * Merges Hadoop {@link org.apache.hadoop.conf.Configuration} into the Alluxio configuration.
    *
-   * @param uri the client uri to get zookeeper information from
+   * @param path the path to get configuration from
    * @param source the {@link org.apache.hadoop.conf.Configuration} to merge
    * @param alluxioConfiguration the Alluxio configuration to merge to
    */
-  public static void mergeHadoopConfiguration(ClientURI uri,
-      org.apache.hadoop.conf.Configuration source, AlluxioConfiguration alluxioConfiguration) {
+  public static void mergeHadoopConfiguration(String path,
+      org.apache.hadoop.conf.Configuration source, AlluxioConfiguration alluxioConfiguration)
+      throws InvalidArgumentException {
     // Load Alluxio configuration if any and merge to the one in Alluxio file system
     // Push Alluxio configuration to the Job configuration
     Properties alluxioConfProperties = new Properties();
@@ -52,9 +55,9 @@ public final class HadoopConfigurationUtils {
         alluxioConfProperties.put(propertyName, entry.getValue());
       }
     }
-    if (uri.isZookeeperEnabled()) {
+    if (path.contains("zk:")) {
       alluxioConfProperties.put(PropertyKey.ZOOKEEPER_ENABLED, true);
-      alluxioConfProperties.put(PropertyKey.ZOOKEEPER_ADDRESS, uri.getZookeeperAddresses());
+      alluxioConfProperties.put(PropertyKey.ZOOKEEPER_ADDRESS, HadoopUtils.getZookeeperAddresses(path));
     }
     LOG.info("Loading Alluxio properties from Hadoop configuration: {}", alluxioConfProperties);
     // Merge the relevant Hadoop configuration into Alluxio's configuration.
