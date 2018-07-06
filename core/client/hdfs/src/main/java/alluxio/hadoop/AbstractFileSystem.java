@@ -139,15 +139,6 @@ abstract class AbstractFileSystem extends org.apache.hadoop.fs.FileSystem {
   }
 
   @Override
-  public void checkPath(Path path) {
-    LOG.debug("checkPath: path is {}", path);
-    if (!path.toString().startsWith(getScheme())) {
-      throw new IllegalArgumentException("Wrong path " + path
-          + "do not start with alluxio scheme: " + getScheme());
-    }
-  }
-
-  @Override
   public void close() throws IOException {
     // super.close should be called first before releasing the resources in this instance, as the
     // super class may invoke other methods in this class. For example,
