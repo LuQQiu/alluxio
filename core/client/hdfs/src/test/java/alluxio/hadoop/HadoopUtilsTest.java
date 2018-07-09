@@ -18,8 +18,9 @@ public final class HadoopUtilsTest {
 
   @Test
   public void test() {
-    String path = "alluxio://zk:host1:port1;host2:port2/path/to/file";
+    String path = "alluxio://zk@host1:port1;host2:port2/path/to/file";
     String zookeeperAddresses = HadoopUtils.getZookeeperAddresses(path);
     Assert.assertEquals("host1:port1,host2:port2", zookeeperAddresses);
+    Assert.assertEquals("/path/to/file", HadoopUtils.getPathWithoutScheme(path));
   }
 }

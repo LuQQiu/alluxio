@@ -54,7 +54,7 @@ public final class HadoopConfigurationUtils {
         alluxioConfProperties.put(propertyName, entry.getValue());
       }
     }
-    if (path.contains("zk:")) {
+    if (path.contains("zk@")) {
       alluxioConfProperties.put(PropertyKey.ZOOKEEPER_ENABLED, true);
       alluxioConfProperties.put(PropertyKey.ZOOKEEPER_ADDRESS,
           HadoopUtils.getZookeeperAddresses(path));

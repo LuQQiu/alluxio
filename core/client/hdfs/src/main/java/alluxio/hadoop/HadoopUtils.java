@@ -41,9 +41,8 @@ public final class HadoopUtils {
    * @return the path component of the {@link Path} URI
    */
   public static String getPathWithoutScheme(String path) {
-    String trimScheme = path.substring(path.indexOf("zk:") + 3);
-    String trimSlashes = trimScheme.replaceAll("^/+", "");
-    return trimSlashes.substring(trimSlashes.indexOf('/'));
+    String trimScheme = path.substring(path.indexOf("zk@") + 3);
+    return trimScheme.substring(trimScheme.indexOf('/'));
   }
 
   /**
@@ -80,9 +79,8 @@ public final class HadoopUtils {
     // and replace the semicolon separator to comma separator
     String zkAddress;
     try {
-      String trimScheme = path.substring(path.indexOf("zk:") + 3);
-      String trimSlashes = trimScheme.replaceAll("^/+", "");
-      String addresses = trimSlashes.substring(0, trimSlashes.indexOf('/'));
+      String trimScheme = path.substring(path.indexOf("zk@") + 3);
+      String addresses = trimScheme.substring(0, trimScheme.indexOf('/'));
       zkAddress = addresses.replaceAll(";", ",");
     } catch (Exception e) {
       throw new IllegalArgumentException("Alluxio on Zookeeper URI is invalid. "
