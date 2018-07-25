@@ -16,7 +16,9 @@ import alluxio.Configuration;
 import alluxio.PropertyKey;
 import alluxio.client.file.FileSystem;
 import alluxio.client.file.URIStatus;
+import alluxio.client.file.options.CreateFileOptions;
 import alluxio.client.file.options.SetAttributeOptions;
+import alluxio.client.file.policy.FileWriteLocationPolicy;
 import alluxio.exception.AlluxioException;
 import alluxio.exception.DirectoryNotEmptyException;
 import alluxio.exception.FileAlreadyExistsException;
@@ -25,6 +27,7 @@ import alluxio.exception.InvalidPathException;
 import alluxio.security.authorization.Mode;
 import alluxio.security.group.provider.ShellBasedUnixGroupsMapping;
 
+import alluxio.util.CommonUtils;
 import com.google.common.base.Preconditions;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
@@ -186,8 +189,13 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
               MAX_OPEN_FILES);
           return -ErrorCodes.EMFILE();
         }
-
-        final OpenFileEntry ofe = new OpenFileEntry(null, mFileSystem.createFile(uri));
+        FileWriteLocationPolicy locationPolicy;
+        locationPolicy = CommonUtils.createNewClassInstance(
+            Configuration.<FileWriteLocationPolicy>getClass(
+                PropertyKey.USER_FILE_COPY_FROM_LOCAL_WRITE_LOCATION_POLICY),
+            new Class[] {}, new Object[] {});
+        final OpenFileEntry ofe = new OpenFileEntry(null, mFileSystem.createFile(uri,
+            CreateFileOptions.defaults().setLocationPolicy(locationPolicy)));
         LOG.debug("Alluxio OutStream created for {}", path);
         mOpenFiles.put(mNextOpenFileId, ofe);
         fi.fh.set(mNextOpenFileId);
