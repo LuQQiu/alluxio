@@ -113,6 +113,7 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
    */
   @Override
   public int chmod(String path, @mode_t long mode) {
+    LOG.info("chmod path {} with mode {}", path, mode);
     AlluxioURI uri = mPathResolverCache.getUnchecked(path);
 
     SetAttributeOptions options = SetAttributeOptions.defaults().setMode(new Mode((short) mode));
@@ -135,6 +136,8 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
    */
   @Override
   public int chown(String path, @uid_t long uid, @gid_t long gid) {
+    LOG.info("chown path {} with uid {} and gid {}", path, uid, gid);
+    AlluxioURI uri = mPathResolverCache.getUnchecked(path);
     if (!mIsShellGroupMapping) {
       LOG.info("Cannot change the owner of path {} because the group mapping is not shell based",
           path);
@@ -154,7 +157,6 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
       }
       SetAttributeOptions options =
           SetAttributeOptions.defaults().setGroup(groupName).setOwner(userName);
-      final AlluxioURI uri = mPathResolverCache.getUnchecked(path);
       LOG.info("Change owner and group of file {} to {}:{}", path, userName, groupName);
 
       mFileSystem.setAttribute(uri, options);
@@ -175,9 +177,10 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
    */
   @Override
   public int create(String path, @mode_t long mode, FuseFileInfo fi) {
+    LOG.info("create with path {} and mode {} and fileInfo {}", path, mode, fi.toString());
     final AlluxioURI uri = mPathResolverCache.getUnchecked(path);
     final int flags = fi.flags.get();
-    LOG.trace("create({}, {}) [Alluxio: {}]", path, Integer.toHexString(flags), uri);
+    LOG.info("create({}, {}) [Alluxio: {}]", path, Integer.toHexString(flags), uri);
 
     try {
       synchronized (mOpenFiles) {
@@ -188,14 +191,14 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
         }
 
         final OpenFileEntry ofe = new OpenFileEntry(null, mFileSystem.createFile(uri));
-        LOG.debug("Alluxio OutStream created for {}", path);
+        LOG.info("Alluxio OutStream created for {}", path);
         mOpenFiles.put(mNextOpenFileId, ofe);
         fi.fh.set(mNextOpenFileId);
 
         // Assuming I will never wrap around (2^64 open files are quite a lot anyway)
         mNextOpenFileId += 1;
       }
-      LOG.debug("{} created and opened", path);
+      LOG.info("{} created and opened", path);
     } catch (FileAlreadyExistsException e) {
       LOG.debug("File {} already exists", uri, e);
       return -ErrorCodes.EEXIST();
@@ -224,7 +227,7 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
    */
   @Override
   public int flush(String path, FuseFileInfo fi) {
-    LOG.trace("flush({})", path);
+    LOG.info("flush({}) with FuseFileinfo {}", path, fi.toString());
     final long fd = fi.fh.get();
     OpenFileEntry oe;
     synchronized (mOpenFiles) {
@@ -237,12 +240,13 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
     if (oe.getOut() != null) {
       try {
         oe.getOut().flush();
+        LOG.info("Flushed: {}", path);
       } catch (IOException e) {
         LOG.error("IOException on  {}", path, e);
         return -ErrorCodes.EIO();
       }
     } else {
-      LOG.debug("Not flushing: {} was not open for writing", path);
+      LOG.info("Not flushing: {} was not open for writing", path);
     }
     return 0;
   }
@@ -257,7 +261,7 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
   @Override
   public int getattr(String path, FileStat stat) {
     final AlluxioURI turi = mPathResolverCache.getUnchecked(path);
-    LOG.trace("getattr({}) [Alluxio: {}]", path, turi);
+    LOG.info("getattr({}) [Alluxio: {}]", path, turi);
     try {
       if (!mFileSystem.exists(turi)) {
         return -ErrorCodes.ENOENT();
@@ -293,7 +297,7 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
         mode |= FileStat.S_IFREG;
       }
       stat.st_mode.set(mode);
-
+      LOG.info("getattr({}) [Alluxio: {}] with stat {}", path, turi, stat.toString());
     } catch (InvalidPathException e) {
       LOG.debug("Invalid path {}", path, e);
       return -ErrorCodes.ENOENT();
@@ -332,7 +336,7 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
   @Override
   public int mkdir(String path, @mode_t long mode) {
     final AlluxioURI turi = mPathResolverCache.getUnchecked(path);
-    LOG.trace("mkdir({}) [Alluxio: {}]", path, turi);
+    LOG.info("mkdir({}) [Alluxio: {}]", path, turi);
     try {
       mFileSystem.createDirectory(turi);
     } catch (FileAlreadyExistsException e) {
@@ -366,11 +370,12 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
    */
   @Override
   public int open(String path, FuseFileInfo fi) {
+    LOG.info("open {}", path);
     final AlluxioURI uri = mPathResolverCache.getUnchecked(path);
     // (see {@code man 2 open} for the structure of the flags bitfield)
     // File creation flags are the last two bits of flags
     final int flags = fi.flags.get();
-    LOG.trace("open({}, 0x{}) [Alluxio: {}]", path, Integer.toHexString(flags), uri);
+    LOG.info("open({}, 0x{}) [Alluxio: {}]", path, Integer.toHexString(flags), uri);
 
     try {
       if (!mFileSystem.exists(uri)) {
@@ -391,10 +396,11 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
         final OpenFileEntry ofe = new OpenFileEntry(mFileSystem.openFile(uri), null);
         mOpenFiles.put(mNextOpenFileId, ofe);
         fi.fh.set(mNextOpenFileId);
-
+        LOG.info("Opened file {}", uri);
         // Assuming I will never wrap around (2^64 open files are quite a lot anyway)
         mNextOpenFileId += 1;
       }
+
 
     } catch (FileDoesNotExistException e) {
       LOG.debug("File does not exist {}", path, e);
@@ -430,12 +436,11 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
   @Override
   public int read(String path, Pointer buf, @size_t long size, @off_t long offset,
       FuseFileInfo fi) {
-
     if (size > Integer.MAX_VALUE) {
       LOG.error("Cannot read more than Integer.MAX_VALUE");
       return -ErrorCodes.EINVAL();
     }
-    LOG.trace("read({}, {}, {})", path, size, offset);
+    LOG.info("read({}, {}, {})", path, size, offset);
     final int sz = (int) size;
     final long fd = fi.fh.get();
     OpenFileEntry oe;
@@ -493,7 +498,7 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
   public int readdir(String path, Pointer buff, FuseFillDir filter,
       @off_t long offset, FuseFileInfo fi) {
     final AlluxioURI turi = mPathResolverCache.getUnchecked(path);
-    LOG.trace("readdir({}) [Alluxio: {}]", path, turi);
+    LOG.info("readdir({}) [Alluxio: {}]", path, turi);
 
     try {
       if (!mFileSystem.exists(turi)) {
@@ -544,7 +549,7 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
    */
   @Override
   public int release(String path, FuseFileInfo fi) {
-    LOG.trace("release({})", path);
+    LOG.info("release({})", path);
     final long fd = fi.fh.get();
     OpenFileEntry oe;
     synchronized (mOpenFiles) {
@@ -575,7 +580,7 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
   public int rename(String oldPath, String newPath) {
     final AlluxioURI oldUri = mPathResolverCache.getUnchecked(oldPath);
     final AlluxioURI newUri = mPathResolverCache.getUnchecked(newPath);
-    LOG.trace("rename({}, {}) [Alluxio: {}, {}]", oldPath, newPath, oldUri, newUri);
+    LOG.info("rename({}, {}) [Alluxio: {}, {}]", oldPath, newPath, oldUri, newUri);
 
     try {
       if (!mFileSystem.exists(oldUri)) {
@@ -612,7 +617,7 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
    */
   @Override
   public int rmdir(String path) {
-    LOG.trace("rmdir({})", path);
+    LOG.info("rmdir({})", path);
     return rmInternal(path, false);
   }
 
@@ -650,7 +655,7 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
    */
   @Override
   public int unlink(String path) {
-    LOG.trace("unlink({})", path);
+    LOG.info("unlink({})", path);
     return rmInternal(path, true);
   }
 
@@ -683,7 +688,7 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
       LOG.error("Cannot write more than Integer.MAX_VALUE");
       return ErrorCodes.EIO();
     }
-    LOG.trace("write({}, {}, {})", path, size, offset);
+    LOG.info("write({}, {}, {})", path, size, offset);
     final int sz = (int) size;
     final long fd = fi.fh.get();
     OpenFileEntry oe;
