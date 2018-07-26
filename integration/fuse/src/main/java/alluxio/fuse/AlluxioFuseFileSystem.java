@@ -188,10 +188,10 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
         }
 
         final OpenFileEntry ofe = new OpenFileEntry(null, mFileSystem.createFile(uri));
-        LOG.debug("Alluxio OutStream created for {}", path);
+        LOG.info("Alluxio OutStream created for {}", path);
         mOpenFiles.put(mNextOpenFileId, ofe);
         fi.fh.set(mNextOpenFileId);
-
+        LOG.info("Alluxio file id is {}", mNextOpenFileId);
         // Assuming I will never wrap around (2^64 open files are quite a lot anyway)
         mNextOpenFileId += 1;
       }
@@ -224,7 +224,7 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
    */
   @Override
   public int flush(String path, FuseFileInfo fi) {
-    LOG.info("flush({})", path);
+    LOG.info("flush({}) with id {}", path, fi.fh.get());
     final long fd = fi.fh.get();
     OpenFileEntry oe;
     synchronized (mOpenFiles) {
@@ -544,7 +544,7 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
    */
   @Override
   public int release(String path, FuseFileInfo fi) {
-    LOG.info("release({})", path);
+    LOG.info("release({}) with id {}", path, fi.fh.get());
     final long fd = fi.fh.get();
     OpenFileEntry oe;
     synchronized (mOpenFiles) {
@@ -683,7 +683,7 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
       LOG.error("Cannot write more than Integer.MAX_VALUE");
       return ErrorCodes.EIO();
     }
-    LOG.info("write({}, {}, {})", path, size, offset);
+    LOG.info("write({}, {}, {}) with id {}", path, size, offset, fi.fh.get());
     final int sz = (int) size;
     final long fd = fi.fh.get();
     OpenFileEntry oe;
