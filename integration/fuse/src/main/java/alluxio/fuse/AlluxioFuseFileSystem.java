@@ -47,9 +47,11 @@ import ru.serce.jnrfuse.struct.Timespec;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Timer;
 
 import javax.annotation.concurrent.ThreadSafe;
 
@@ -178,7 +180,8 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
     final AlluxioURI uri = mPathResolverCache.getUnchecked(path);
     final int flags = fi.flags.get();
     LOG.info("create({}, {}) [Alluxio: {}]", path, Integer.toHexString(flags), uri);
-
+    LOG.info(Arrays.toString(new Exception("create file trace stack").getStackTrace()));
+    long start = System.currentTimeMillis();
     try {
       synchronized (mOpenFiles) {
         if (mOpenFiles.size() >= MAX_OPEN_FILES) {
@@ -209,7 +212,7 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
       LOG.error("Unexpected exception on {}", path, e);
       return -ErrorCodes.EFAULT();
     }
-
+    LOG.info("create({}) takes {} ms", path, System.currentTimeMillis() - start);
     return 0;
   }
 
@@ -225,11 +228,13 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
   @Override
   public int flush(String path, FuseFileInfo fi) {
     LOG.info("flush({}) with id {}", path, fi.fh.get());
+    long start = System.currentTimeMillis();
     final long fd = fi.fh.get();
     OpenFileEntry oe;
     synchronized (mOpenFiles) {
       oe = mOpenFiles.get(fd);
     }
+    LOG.info(Arrays.toString(new Exception("flush trace stack").getStackTrace()));
     if (oe == null) {
       LOG.error("Cannot find fd for {} in table", path);
       return -ErrorCodes.EBADFD();
@@ -244,6 +249,7 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
     } else {
       LOG.debug("Not flushing: {} was not open for writing", path);
     }
+    LOG.info("flush({}) takes {} ms", path, System.currentTimeMillis() - start);
     return 0;
   }
 
@@ -545,6 +551,7 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
   @Override
   public int release(String path, FuseFileInfo fi) {
     LOG.info("release({}) with id {}", path, fi.fh.get());
+    long start = System.currentTimeMillis();
     final long fd = fi.fh.get();
     OpenFileEntry oe;
     synchronized (mOpenFiles) {
@@ -554,13 +561,14 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
         return -ErrorCodes.EBADFD();
       }
     }
-
+    LOG.info(Arrays.toString(new Exception("release trace stack before close").getStackTrace()));
     try {
       oe.close();
+      LOG.info(Arrays.toString(new Exception("release trace stack after close").getStackTrace()));
     } catch (IOException e) {
       LOG.error("Failed closing {} [in]", path, e);
     }
-
+    LOG.info("release({}) takes {} ms", path, System.currentTimeMillis() - start);
     return 0;
   }
 
@@ -683,7 +691,7 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
       LOG.error("Cannot write more than Integer.MAX_VALUE");
       return ErrorCodes.EIO();
     }
-    LOG.info("write({}, {}, {}) with id {}", path, size, offset, fi.fh.get());
+    LOG.trace("write({}, {}, {}) with id {}", path, size, offset, fi.fh.get());
     final int sz = (int) size;
     final long fd = fi.fh.get();
     OpenFileEntry oe;
@@ -729,7 +737,6 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
    */
   private int rmInternal(String path, boolean mustBeFile) {
     final AlluxioURI turi = mPathResolverCache.getUnchecked(path);
-
     try {
       if (!mFileSystem.exists(turi)) {
         LOG.error("File {} does not exist", turi);
