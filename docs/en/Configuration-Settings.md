@@ -182,39 +182,6 @@ remaining paths once this `alluxio-site.properties` file is found.
 
 If no above user-specified configuration is found for a property, Alluxio runtime will fallback to
 its [default property value](Configuration-Properties.html).
-<<<<<<< HEAD
-||||||| parent of 254d39ee74... [DOCFIX] add server configuration docs (#7679)
-
-To check the value of a specific configuration property and the source of its value, users can use
-the following commandline:
-
-```bash
-$ bin/alluxio getConf alluxio.worker.port
-29998
-$ bin/alluxio getConf --source alluxio.worker.port
-DEFAULT
-```
-
-To list all of the configuration properties with sources:
-
-```bash
-$ bin/alluxio getConf --source
-alluxio.conf.dir=/Users/bob/alluxio/conf (SYSTEM_PROPERTY)
-alluxio.debug=false (DEFAULT)
-...
-```
-
-Users can also specify `--master` option to list all of the cluster-default configuration properties
-by the masters. Note that, with `--master` option `getConf` will query the master and thus require
-the master nodes running; without `--master` option this command only checks the local configuration.
-
-```bash
-$ bin/alluxio getConf --master --source
-alluxio.conf.dir=/Users/bob/alluxio/conf (SYSTEM_PROPERTY)
-alluxio.debug=false (DEFAULT)
-...
-```
-=======
 
 To check the value of a specific configuration property and the source of its value, users can use
 the following commandline:
@@ -264,4 +231,3 @@ $ bin/alluxio fsadmin doctor configuration
 Configuration warnings can also be seen in the master logs.
 
 ![masterLogs]({{site.data.img.screenshot_configuration_checker_masterlogs}})
->>>>>>> 254d39ee74... [DOCFIX] add server configuration docs (#7679)
