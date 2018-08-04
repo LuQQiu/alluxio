@@ -32,7 +32,8 @@ import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
 import com.amazonaws.internal.StaticCredentialsProvider;
-import com.amazonaws.services.s3.AmazonS3Client;
+import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.S3ClientOptions;
 import com.amazonaws.services.s3.internal.Mimetypes;
 import com.amazonaws.services.s3.model.AccessControlList;
@@ -47,8 +48,6 @@ import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.Owner;
 import com.amazonaws.services.s3.model.PutObjectRequest;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
-import com.amazonaws.services.s3.transfer.TransferManager;
-import com.amazonaws.services.s3.transfer.TransferManagerConfiguration;
 import com.amazonaws.util.Base64;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Supplier;
@@ -88,13 +87,12 @@ public class S3AUnderFileSystem extends ObjectUnderFileSystem {
   private static final String DEFAULT_OWNER = "";
 
   /** AWS-SDK S3 client. */
-  private final AmazonS3Client mClient;
+  private final AmazonS3 mClient;
 
   /** Bucket name of user's configured Alluxio bucket. */
   private final String mBucketName;
 
-  /** Transfer Manager for efficient I/O to S3. */
-  private final TransferManager mManager;
+  private final ExecutorService mExecutor;
 
   /** The permissions associated with the bucket. Fetched once and assumed to be immutable. */
   private final Supplier<ObjectPermissions> mPermissions = Suppliers
@@ -148,8 +146,8 @@ public class S3AUnderFileSystem extends ObjectUnderFileSystem {
     ClientConfiguration clientConf = new ClientConfiguration();
 
     // Socket timeout
-    clientConf
-        .setSocketTimeout((int) Configuration.getMs(PropertyKey.UNDERFS_S3A_SOCKET_TIMEOUT_MS));
+    // clientConf
+    //    .setSocketTimeout((int) Configuration.getMs(PropertyKey.UNDERFS_S3A_SOCKET_TIMEOUT_MS));
 
     // HTTP protocol
     if (Boolean.parseBoolean(conf.getValue(PropertyKey.UNDERFS_S3A_SECURE_HTTP_ENABLED))) {
@@ -183,15 +181,17 @@ public class S3AUnderFileSystem extends ObjectUnderFileSystem {
 
     // Set client request timeout for all requests since multipart copy is used, and copy parts can
     // only be set with the client configuration.
-    clientConf
-        .setRequestTimeout((int) Configuration.getMs(PropertyKey.UNDERFS_S3A_REQUEST_TIMEOUT));
+    //clientConf
+    //    .setRequestTimeout((int) Configuration.getMs(PropertyKey.UNDERFS_S3A_REQUEST_TIMEOUT));
 
     // Signer algorithm
     if (conf.containsKey(PropertyKey.UNDERFS_S3A_SIGNER_ALGORITHM)) {
       clientConf.setSignerOverride(conf.getValue(PropertyKey.UNDERFS_S3A_SIGNER_ALGORITHM));
     }
 
-    AmazonS3Client amazonS3Client = new AmazonS3Client(credentials, clientConf);
+    AmazonS3 amazonS3Client = AmazonS3ClientBuilder.standard()
+        .withClientConfiguration(clientConf)
+        .withCredentials(credentials).build();
 
     // Set a custom endpoint.
     if (conf.containsKey(PropertyKey.UNDERFS_S3_ENDPOINT)) {
@@ -204,16 +204,11 @@ public class S3AUnderFileSystem extends ObjectUnderFileSystem {
       amazonS3Client.setS3ClientOptions(clientOptions);
     }
 
-    ExecutorService service = ExecutorServiceFactories
+    ExecutorService executor = ExecutorServiceFactories
         .fixedThreadPoolExecutorServiceFactory("alluxio-s3-transfer-manager-worker",
             numTransferThreads).create();
 
-    TransferManager transferManager = new TransferManager(amazonS3Client, service);
-
-    TransferManagerConfiguration transferConf = new TransferManagerConfiguration();
-    transferConf.setMultipartCopyThreshold(MULTIPART_COPY_THRESHOLD);
-    transferManager.setConfiguration(transferConf);
-    return new S3AUnderFileSystem(uri, amazonS3Client, bucketName, transferManager, conf);
+    return new S3AUnderFileSystem(uri, amazonS3Client, bucketName, executor, conf);
   }
 
   /**
@@ -222,15 +217,14 @@ public class S3AUnderFileSystem extends ObjectUnderFileSystem {
    * @param uri the {@link AlluxioURI} for this UFS
    * @param amazonS3Client AWS-SDK S3 client
    * @param bucketName bucket name of user's configured Alluxio bucket
-   * @param transferManager Transfer Manager for efficient I/O to S3
    * @param conf configuration for this S3A ufs
    */
-  protected S3AUnderFileSystem(AlluxioURI uri, AmazonS3Client amazonS3Client, String bucketName,
-      TransferManager transferManager, UnderFileSystemConfiguration conf) {
+  protected S3AUnderFileSystem(AlluxioURI uri, AmazonS3 amazonS3Client,
+      String bucketName, ExecutorService executor, UnderFileSystemConfiguration conf) {
     super(uri, conf);
     mClient = amazonS3Client;
     mBucketName = bucketName;
-    mManager = transferManager;
+    mExecutor = executor;
     mConf = conf;
   }
 
@@ -261,9 +255,9 @@ public class S3AUnderFileSystem extends ObjectUnderFileSystem {
           meta.setSSEAlgorithm(ObjectMetadata.AES_256_SERVER_SIDE_ENCRYPTION);
           request.setNewObjectMetadata(meta);
         }
-        mManager.copy(request).waitForCopyResult();
+        mClient.copyObject(request);
         return true;
-      } catch (AmazonClientException | InterruptedException e) {
+      } catch (AmazonClientException e) {
         LOG.error("Failed to copy file {} to {}", src, dst, e);
         if (i != retries - 1) {
           LOG.error("Retrying copying file {} to {}", src, dst);
@@ -292,7 +286,7 @@ public class S3AUnderFileSystem extends ObjectUnderFileSystem {
 
   @Override
   protected OutputStream createObject(String key) throws IOException {
-    return new S3AOutputStream(mBucketName, key, mManager);
+    return new S3AOutputStream(mBucketName, key, mClient, mExecutor);
   }
 
   @Override

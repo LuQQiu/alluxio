@@ -16,9 +16,13 @@ import alluxio.PropertyKey;
 import alluxio.util.CommonUtils;
 import alluxio.util.io.PathUtils;
 
+import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.internal.Mimetypes;
+import com.amazonaws.services.s3.model.CompleteMultipartUploadRequest;
+import com.amazonaws.services.s3.model.InitiateMultipartUploadRequest;
 import com.amazonaws.services.s3.model.ObjectMetadata;
-import com.amazonaws.services.s3.model.PutObjectRequest;
+import com.amazonaws.services.s3.model.PartETag;
+import com.amazonaws.services.s3.model.UploadPartRequest;
 import com.amazonaws.services.s3.transfer.TransferManager;
 import com.amazonaws.util.Base64;
 import com.google.common.base.Preconditions;
@@ -33,7 +37,13 @@ import java.io.OutputStream;
 import java.security.DigestOutputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
@@ -62,37 +72,36 @@ public class S3AOutputStream extends OutputStream {
   /** Flag to indicate this stream has been closed, to ensure close is only done once. */
   private boolean mClosed = false;
 
-  /**
-   * A {@link TransferManager} to upload the file to S3 using Multipart Uploads. Multipart Uploads
-   * involves uploading an object's data in parts instead of all at once, which can work around S3's
-   * limit of 5GB on a single Object PUT operation.
-   *
-   * It is recommended (http://docs.aws.amazon.com/AmazonS3/latest/dev/UploadingObjects.html)
-   * to upload file larger than 100MB using Multipart Uploads.
-   */
-  // TODO(calvin): Investigate if the lower level API can be more efficient.
-  private final TransferManager mManager;
-
   /** The output stream to a local file where the file will be buffered until closed. */
   private OutputStream mLocalOutputStream;
 
   /** The MD5 hash of the file. */
   private MessageDigest mHash;
 
+  private final String mUploadId;
+
+  private List<Future<PartETag>> mTags = new ArrayList<>();
+
+  private final AmazonS3 mClient;
+
+  private final ExecutorService mExecutor;
+
+  private AtomicInteger mPartNumber;
+
   /**
    * Constructs a new stream for writing a file.
    *
    * @param bucketName the name of the bucket
    * @param key the key of the file
-   * @param manager the transfer manager to upload the file with
+   * @param s3Client the Amazon S3 client to upload the file with
+   * @param executor the executor to submit upload jobs to
    */
-  public S3AOutputStream(String bucketName, String key, TransferManager manager)
-      throws IOException {
+  public S3AOutputStream(String bucketName, String key, AmazonS3 s3Client,
+      ExecutorService executor) throws IOException {
     Preconditions.checkArgument(bucketName != null && !bucketName.isEmpty(), "Bucket name must "
         + "not be null or empty.");
     mBucketName = bucketName;
     mKey = key;
-    mManager = manager;
     mFile = new File(PathUtils.concatPath(CommonUtils.getTmpDir(), UUID.randomUUID()));
     try {
       mHash = MessageDigest.getInstance("MD5");
@@ -103,6 +112,29 @@ public class S3AOutputStream extends OutputStream {
       mHash = null;
       mLocalOutputStream = new BufferedOutputStream(new FileOutputStream(mFile));
     }
+    mClient = s3Client;
+
+    mExecutor = executor;
+
+    LOG.info("BucketName {}, key {}", mBucketName, mKey);
+
+    // Generate the object metadata by setting server side encryption, md5 checksum, the file
+    // length, and encoding as octet stream since no assumptions are made about the file type
+    ObjectMetadata meta = new ObjectMetadata();
+    if (SSE_ENABLED) {
+      meta.setSSEAlgorithm(ObjectMetadata.AES_256_SERVER_SIDE_ENCRYPTION);
+    }
+    if (mHash != null) {
+      meta.setContentMD5(new String(Base64.encode(mHash.digest())));
+    }
+    meta.setContentType(Mimetypes.MIMETYPE_OCTET_STREAM);
+
+    InitiateMultipartUploadRequest initRequest =
+        new InitiateMultipartUploadRequest(mBucketName, mKey).withObjectMetadata(meta);
+    mUploadId = s3Client.initiateMultipartUpload(initRequest).getUploadId();
+    mPartNumber = new AtomicInteger(1);
+    LOG.info("Start multipart upload bucket name {}, key {}, meta {}", mBucketName, mKey, meta);
+    LOG.info("Upload id is " + mUploadId);
   }
 
   @Override
@@ -133,28 +165,40 @@ public class S3AOutputStream extends OutputStream {
     mLocalOutputStream.close();
     String path = getUploadPath();
     try {
-      // Generate the object metadata by setting server side encryption, md5 checksum, the file
-      // length, and encoding as octet stream since no assumptions are made about the file type
-      ObjectMetadata meta = new ObjectMetadata();
-      if (SSE_ENABLED) {
-        meta.setSSEAlgorithm(ObjectMetadata.AES_256_SERVER_SIDE_ENCRYPTION);
-      }
-      if (mHash != null) {
-        meta.setContentMD5(new String(Base64.encode(mHash.digest())));
-      }
-      meta.setContentLength(mFile.length());
-      meta.setContentType(Mimetypes.MIMETYPE_OCTET_STREAM);
+      LOG.info("start uploading data");
+      final UploadPartRequest uploadRequest = new UploadPartRequest()
+          .withBucketName(mBucketName)
+          .withKey(mKey)
+          .withUploadId(mUploadId)
+          .withPartNumber(mPartNumber.getAndIncrement())
+          .withFile(mFile)
+          .withPartSize(mFile.length());
 
-      // Generate the put request and wait for the transfer manager to complete the upload, then
-      // delete the temporary file on the local machine
-      PutObjectRequest putReq = new PutObjectRequest(mBucketName, path, mFile).withMetadata(meta);
-      mManager.upload(putReq).waitForUploadResult();
-      if (!mFile.delete()) {
-        LOG.error("Failed to delete temporary file @ {}", mFile.getPath());
+      Future<PartETag> futureETag = mExecutor.submit(new Callable<PartETag>() {
+        public PartETag call() {
+          return mClient.uploadPart(uploadRequest).getPartETag();
+        }
+      });
+      LOG.info("submit upload request file {}, file length {}",
+          mFile.toString(), mFile.length());
+      mTags.add(futureETag);
+      List<PartETag> tags = new ArrayList<>();
+      for (Future<PartETag> future : mTags) {
+        tags.add(future.get());
       }
+      LOG.info("tags " + tags.toString());
+      LOG.info("start completing upload");
+      CompleteMultipartUploadRequest compRequest = new CompleteMultipartUploadRequest(mBucketName,
+          mKey, mUploadId, tags);
+      mClient.completeMultipartUpload(compRequest);
+      LOG.info("Completed upload.");
     } catch (Exception e) {
       LOG.error("Failed to upload {}: {}", path, e.toString());
       throw new IOException(e);
+    } finally {
+      if (!mFile.delete()) {
+        LOG.error("Failed to delete temporary file @ {}", mFile.getPath());
+      }
     }
 
     // Set the closed flag, close can be retried until mFile.delete is called successfully
@@ -167,4 +211,5 @@ public class S3AOutputStream extends OutputStream {
   protected String getUploadPath() {
     return mKey;
   }
+  // TODO(lu) how to clean up
 }
