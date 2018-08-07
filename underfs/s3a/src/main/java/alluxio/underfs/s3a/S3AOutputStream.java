@@ -39,7 +39,9 @@ import java.security.DigestOutputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
@@ -57,7 +59,7 @@ import javax.annotation.concurrent.NotThreadSafe;
 @NotThreadSafe
 public class S3AOutputStream extends OutputStream {
   private static final Logger LOG = LoggerFactory.getLogger(S3AOutputStream.class);
-  private static final long PARTITION_SIZE = 10 * Constants.MB;
+  private static final long PARTITION_SIZE = 20 * Constants.MB;
   private static final long UPLOAD_THRESHOLD = 5 * Constants.MB;
   private static final boolean SSE_ENABLED =
       Configuration.getBoolean(PropertyKey.UNDERFS_S3A_SERVER_SIDE_ENCRYPTION_ENABLED);
@@ -88,7 +90,7 @@ public class S3AOutputStream extends OutputStream {
 
   private final String mUploadId;
 
-  private List<Future<PartETag>> mFutureTags = new ArrayList<>();
+  private Map<Future<PartETag>, File> mFutureTagsAndFile = new HashMap<>();
 
   private List<PartETag> mTags = new ArrayList<>();
 
@@ -144,7 +146,6 @@ public class S3AOutputStream extends OutputStream {
 
   @Override
   public void write(int b) throws IOException {
-    LOG.info("write(int b)");
     if (mFileClosed) {
       initNewFile();
     }
@@ -152,39 +153,23 @@ public class S3AOutputStream extends OutputStream {
     mOffset++;
     if (mOffset >= PARTITION_SIZE) {
       uploadPart();
-      initNewFile();
     }
   }
 
   @Override
   public void write(byte[] b) throws IOException {
-    LOG.info("write(byte[] b) with length {}", b.length);
     write(b, 0, b.length);
   }
 
   @Override
   public void write(byte[] b, int off, int len) throws IOException {
-    LOG.info("write(byte, off, len) now");
     if (mFileClosed) {
       initNewFile();
     }
-    int start = off;
-    int writeLen;
-    while (mOffset + len >= PARTITION_SIZE) {
-      writeLen = (int) (PARTITION_SIZE - mOffset);
-      mLocalOutputStream.write(b, start, writeLen);
-      len -= writeLen;
-      LOG.info("write(byte, off, len) : write from {} to {}, remaining {} bytes",
-          start, writeLen, len);
-      start = start + writeLen;
+    mLocalOutputStream.write(b, off, len);
+    mOffset += len;
+    if (mOffset >= PARTITION_SIZE) {
       uploadPart();
-      initNewFile();
-    }
-    if (len > 0) {
-      mLocalOutputStream.write(b, start, len);
-      LOG.info("write(byte, off, len) : write last: from {} to {}",
-          start, (start + len));
-      mOffset += len;
     }
   }
 
@@ -198,16 +183,9 @@ public class S3AOutputStream extends OutputStream {
     if (mOffset > UPLOAD_THRESHOLD) {
       uploadPart();
     }
-    try {
-      for (Future<PartETag> future : mFutureTags) {
-        mTags.add(future.get());
-      }
-      mFutureTags = new ArrayList<>();
-      LOG.info("flush() : get tags {}", mTags);
-    } catch (Exception e) {
-      LOG.error("Failed to upload {}: {}", getUploadPath(), e.toString());
-      throw new IOException(e);
-    }
+    waitForUploadResults();
+    LOG.info("flush() : get tags {}", mTags);
+    mFutureTagsAndFile = new HashMap<>();
     mLocalOutputStream.flush();
   }
 
@@ -232,23 +210,18 @@ public class S3AOutputStream extends OutputStream {
             .withPartSize(mFile.length());
         uploadRequest.setLastPart(true);
         Future<PartETag> futureETag = mExecutor.submit(() -> mClient.uploadPart(uploadRequest).getPartETag());
-        mFutureTags.add(futureETag);
+        mFutureTagsAndFile.put(futureETag, mFile);
         LOG.info("successfully upload last part {}, takes {}", partNumber, (System.currentTimeMillis() - start));
       }
 
-      for (Future<PartETag> future : mFutureTags) {
-        // TODO(lu) add timeout?
-        mTags.add(future.get());
-      }
+      waitForUploadResults();
+
       CompleteMultipartUploadRequest compRequest = new CompleteMultipartUploadRequest(mBucketName,
           mKey, mUploadId, mTags);
       mClient.completeMultipartUpload(compRequest);
+
       LOG.info("Completed upload with {} tags, we have {} parts, takes {}",
           mTags.size(), mPartNumber.get(), (System.currentTimeMillis() - start));
-
-      if (!mFile.delete()) {
-        LOG.error("Failed to delete temporary file @ {}", mFile.getPath());
-      }
     } catch (Exception e) {
       LOG.error("Failed to upload {}: {}", mKey, e.toString());
       throw new IOException(e);
@@ -266,7 +239,7 @@ public class S3AOutputStream extends OutputStream {
   }
 
   private void uploadPart() throws IOException {
-    if (mClosed) {
+    if (mFileClosed) {
       return;
     }
     mLocalOutputStream.close();
@@ -279,7 +252,7 @@ public class S3AOutputStream extends OutputStream {
         .withPartSize(mFile.length());
     Future<PartETag> futureETag = mExecutor.submit(()
         -> mClient.uploadPart(uploadRequest).getPartETag());
-    mFutureTags.add(futureETag);
+    mFutureTagsAndFile.put(futureETag, new File(mFile.getPath()));
     LOG.info("submit upload part {} with File {} and size {}",
         mPartNumber.get(), mFile.toString(), mFile.length());
     mFileClosed = true;
@@ -298,5 +271,19 @@ public class S3AOutputStream extends OutputStream {
     mOffset = 0;
     mFileClosed = false;
     LOG.info("init new temp file {}", mFile);
+  }
+
+  private void waitForUploadResults() throws IOException {
+    try {
+      for (Map.Entry<Future<PartETag>, File> entry : mFutureTagsAndFile.entrySet()) {
+        mTags.add(entry.getKey().get());
+        if (!entry.getValue().delete()) {
+          LOG.error("Failed to delete temporary file @ {}", mFile.getPath());
+        }
+      }
+    } catch (Exception e) {
+      LOG.error("Failed to upload {}: {}", getUploadPath(), e.toString());
+      throw new IOException(e);
+    }
   }
 }
