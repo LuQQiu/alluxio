@@ -223,7 +223,7 @@ public class S3AOutputStream extends OutputStream {
           mKey, mUploadId, mTags);
       mClient.completeMultipartUpload(compRequest);
 
-      LOG.info("Completed upload with {} tags, we have {} parts, takes {}",
+      LOG.info("Completed upload with {} tags, we have {} parts, the whole close takes {}",
           mTags.size(), mPartNumber.get(), (System.currentTimeMillis() - start));
     } catch (Exception e) {
       LOG.error("Failed to upload {}: {}", mKey, e.toString());
@@ -286,6 +286,7 @@ public class S3AOutputStream extends OutputStream {
    * Waits for the submitted upload to finish and delete all the tmp files.
    */
   private void waitForUploadResults() throws IOException {
+    long start = System.currentTimeMillis();
     try {
       for (Map.Entry<Future<PartETag>, File> entry : mFutureTagsAndFile.entrySet()) {
         mTags.add(entry.getKey().get());
@@ -297,5 +298,6 @@ public class S3AOutputStream extends OutputStream {
       LOG.error("Failed to upload {}: {}", getUploadPath(), e.toString());
       throw new IOException(e);
     }
+    LOG.info("wait for upload results takes {}", (System.currentTimeMillis() - start));
   }
 }
