@@ -43,6 +43,7 @@ public class HdfsUnderFileOutputStream extends OutputStream {
 
   @Override
   public void close() throws IOException {
+    LOG.info("close() in HdfsUnderFileOutputStream");
     mOut.close();
   }
 
@@ -61,16 +62,19 @@ public class HdfsUnderFileOutputStream extends OutputStream {
 
   @Override
   public void write(int b) throws IOException {
+    LOG.info("write(int b) in HdfsUnderFileOutputStream");
     mOut.write(b);
   }
 
   @Override
   public void write(byte[] b) throws IOException {
+    LOG.info("write(byte[] b) in HdfsUnderFileOutputStream");
     mOut.write(b);
   }
 
   @Override
   public void write(byte[] b, int off, int len) throws IOException {
+    LOG.info("write(byte[] b, int off, int len) in HdfsUnderFileOutputStream");
     mOut.write(b, off, len);
   }
 }

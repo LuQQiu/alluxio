@@ -171,6 +171,7 @@ public final class NettyPacketWriter implements PacketWriter {
 
   @Override
   public void writePacket(final ByteBuf buf) throws IOException {
+    LOG.info("writePacket() inside NettyPacketWriter.class");
     final long len;
     final long offset;
     try (LockResource lr = new LockResource(mLock)) {
@@ -211,6 +212,7 @@ public final class NettyPacketWriter implements PacketWriter {
 
   @Override
   public void cancel() {
+    LOG.info("cancel() inside NettyPacketWriter.class");
     if (mClosed) {
       return;
     }
@@ -219,6 +221,7 @@ public final class NettyPacketWriter implements PacketWriter {
 
   @Override
   public void flush() throws IOException {
+    LOG.info("flush() inside NettyPacketWriter.class");
     mChannel.flush();
 
     try (LockResource lr = new LockResource(mLock)) {
@@ -244,6 +247,7 @@ public final class NettyPacketWriter implements PacketWriter {
 
   @Override
   public void close() throws IOException {
+    LOG.info("close() inside NettyPacketWriter.class");
     if (mClosed) {
       return;
     }
