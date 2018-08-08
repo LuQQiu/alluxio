@@ -77,9 +77,6 @@ public class S3AUnderFileSystem extends ObjectUnderFileSystem {
   /** Static hash for a directory's empty contents. */
   private static final String DIR_HASH;
 
-  /** Threshold to do multipart copy. */
-  private static final long MULTIPART_COPY_THRESHOLD = 100 * Constants.MB;
-
   /** Default mode of objects if mode cannot be determined. */
   private static final short DEFAULT_MODE = 0700;
 

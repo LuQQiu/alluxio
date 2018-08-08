@@ -43,7 +43,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -59,7 +58,7 @@ import javax.annotation.concurrent.NotThreadSafe;
 @NotThreadSafe
 public class S3AOutputStream extends OutputStream {
   private static final Logger LOG = LoggerFactory.getLogger(S3AOutputStream.class);
-  private static final long PARTITION_SIZE = 20 * Constants.MB;
+  private static final long PARTITION_SIZE = 50 * Constants.MB;
   private static final long UPLOAD_THRESHOLD = 5 * Constants.MB;
   private static final boolean SSE_ENABLED =
       Configuration.getBoolean(PropertyKey.UNDERFS_S3A_SERVER_SIDE_ENCRYPTION_ENABLED);
@@ -83,11 +82,13 @@ public class S3AOutputStream extends OutputStream {
   /** The local file that will be uploaded when the stream is closed. */
   private File mFile;
 
+  /** The current File is closed or not. */
   private boolean mFileClosed = true;
 
   /** The output stream to a local file where the file will be buffered until closed. */
   private OutputStream mLocalOutputStream;
 
+  /** The upload id of this multipart upload. */
   private final String mUploadId;
 
   private Map<Future<PartETag>, File> mFutureTagsAndFile = new HashMap<>();
@@ -209,9 +210,11 @@ public class S3AOutputStream extends OutputStream {
             .withFile(mFile)
             .withPartSize(mFile.length());
         uploadRequest.setLastPart(true);
-        Future<PartETag> futureETag = mExecutor.submit(() -> mClient.uploadPart(uploadRequest).getPartETag());
+        Future<PartETag> futureETag = mExecutor.submit(()
+            -> mClient.uploadPart(uploadRequest).getPartETag());
         mFutureTagsAndFile.put(futureETag, mFile);
-        LOG.info("successfully upload last part {}, takes {}", partNumber, (System.currentTimeMillis() - start));
+        LOG.info("successfully upload last part {}, takes {}",
+            partNumber, (System.currentTimeMillis() - start));
       }
 
       waitForUploadResults();
@@ -238,6 +241,9 @@ public class S3AOutputStream extends OutputStream {
     return mKey;
   }
 
+  /**
+   * Stops writing to the mFile and uploads it.
+   */
   private void uploadPart() throws IOException {
     if (mFileClosed) {
       return;
@@ -260,6 +266,9 @@ public class S3AOutputStream extends OutputStream {
     mFile = null;
   }
 
+  /**
+   * Creates new file and the future write will write in this file.
+   */
   private void initNewFile() throws IOException {
     mFile = new File(PathUtils.concatPath(CommonUtils.getTmpDir(), UUID.randomUUID()));
     if (mHash != null) {
@@ -273,6 +282,9 @@ public class S3AOutputStream extends OutputStream {
     LOG.info("init new temp file {}", mFile);
   }
 
+  /**
+   * Waits for the submitted upload to finish and delete all the tmp files.
+   */
   private void waitForUploadResults() throws IOException {
     try {
       for (Map.Entry<Future<PartETag>, File> entry : mFutureTagsAndFile.entrySet()) {
