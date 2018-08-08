@@ -237,6 +237,7 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
     }
     if (oe.getOut() != null) {
       try {
+        LOG.info("should run oe.getOut().flush();");
         oe.getOut().flush();
       } catch (IOException e) {
         LOG.error("IOException on  {}", path, e);

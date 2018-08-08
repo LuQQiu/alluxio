@@ -12,6 +12,8 @@
 package alluxio.underfs.hdfs;
 
 import org.apache.hadoop.fs.FSDataOutputStream;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -26,6 +28,7 @@ import javax.annotation.concurrent.NotThreadSafe;
  */
 @NotThreadSafe
 public class HdfsUnderFileOutputStream extends OutputStream {
+  private static final Logger LOG = LoggerFactory.getLogger(HdfsUnderFileOutputStream.class);
   /** Underlying output stream. */
   private final FSDataOutputStream mOut;
 
@@ -45,6 +48,7 @@ public class HdfsUnderFileOutputStream extends OutputStream {
 
   @Override
   public void flush() throws IOException {
+    LOG.info("flush() in HdfsUnderFileOutputStream");
     // TODO(calvin): This functionality should be restricted to select output streams.
     //#ifdef HADOOP1
     mOut.sync();

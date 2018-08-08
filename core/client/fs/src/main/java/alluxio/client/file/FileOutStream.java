@@ -175,6 +175,7 @@ public class FileOutStream extends AbstractOutStream {
   public void flush() throws IOException {
     // TODO(yupeng): Handle flush for Alluxio storage stream as well.
     if (mUnderStorageType.isSyncPersist()) {
+      LOG.info("under storage type is sync persist, called under storage output stream flush()");
       mUnderStorageOutputStream.flush();
     }
   }
