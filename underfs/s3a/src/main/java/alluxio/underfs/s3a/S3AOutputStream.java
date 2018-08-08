@@ -218,13 +218,13 @@ public class S3AOutputStream extends OutputStream {
       }
 
       waitForUploadResults();
-
+      long beginComplete = System.currentTimeMillis();
       CompleteMultipartUploadRequest compRequest = new CompleteMultipartUploadRequest(mBucketName,
           mKey, mUploadId, mTags);
       mClient.completeMultipartUpload(compRequest);
 
-      LOG.info("Completed upload with {} tags, we have {} parts, the whole close takes {}",
-          mTags.size(), mPartNumber.get(), (System.currentTimeMillis() - start));
+      LOG.info("Completed upload with {} tags, we have {} parts, the whole close takes {}, the complete takes {}",
+          mTags.size(), mPartNumber.get(), (System.currentTimeMillis() - start), (System.currentTimeMillis() - beginComplete));
     } catch (Exception e) {
       LOG.error("Failed to upload {}: {}", mKey, e.toString());
       throw new IOException(e);

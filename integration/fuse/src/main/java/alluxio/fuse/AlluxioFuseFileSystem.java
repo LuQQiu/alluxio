@@ -225,6 +225,7 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
   @Override
   public int flush(String path, FuseFileInfo fi) {
     LOG.info("flush({})", path);
+    long start = System.currentTimeMillis();
     final long fd = fi.fh.get();
     OpenFileEntry oe;
     synchronized (mOpenFiles) {
@@ -244,6 +245,7 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
     } else {
       LOG.debug("Not flushing: {} was not open for writing", path);
     }
+    LOG.info("flush({}) takes {} ms", path, System.currentTimeMillis() - start);
     return 0;
   }
 
@@ -545,6 +547,7 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
   @Override
   public int release(String path, FuseFileInfo fi) {
     LOG.info("release({})", path);
+    long start = System.currentTimeMillis();
     final long fd = fi.fh.get();
     OpenFileEntry oe;
     synchronized (mOpenFiles) {
@@ -560,7 +563,7 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
     } catch (IOException e) {
       LOG.error("Failed closing {} [in]", path, e);
     }
-
+    LOG.info("release({}) takes {} ms", path, System.currentTimeMillis() - start);
     return 0;
   }
 
