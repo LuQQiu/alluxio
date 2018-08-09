@@ -410,6 +410,7 @@ public final class CpCommand extends AbstractFileSystemCommand {
             new Class[] {}, new Object[] {});
         os = closer.register(mFileSystem.createFile(dstPath,
             CreateFileOptions.defaults().setLocationPolicy(locationPolicy)));
+        os.flush();
         FileInputStream in = closer.register(new FileInputStream(src));
         FileChannel channel = closer.register(in.getChannel());
         ByteBuffer buf = ByteBuffer.allocate(8 * Constants.MB);

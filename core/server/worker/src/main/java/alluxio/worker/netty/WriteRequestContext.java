@@ -45,7 +45,7 @@ public class WriteRequestContext<T extends WriteRequest> {
    * 1. When mPacketWriterActive is true, it is guaranteed that mPackets is polled at least
    *    once after the lock is released. This is guaranteed even when there is an exception
    *    thrown when writing the packet.
-   * 2. When mPacketWriterActive is false, it is guaranteed that mPackets won't be polled before
+   * 2. When mPacketWriterActive is false, it is guaranteed that mPackets won't be polled
    *    before someone sets it to true again.
    *
    * The above are achieved by protecting it with "mLock". It is set to true when a new packet

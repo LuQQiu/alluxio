@@ -215,7 +215,7 @@ public final class NettyPacketWriter implements PacketWriter {
     Protocol.WriteRequest writeRequest = mPartialRequest.toBuilder().setOffset(offset).build();
     DataBuffer dataBuffer = new DataNettyBufferV2(buf);
     mChannel.writeAndFlush(new RPCProtoMessage(new ProtoMessage(writeRequest), dataBuffer))
-        .addListener(new FlushListener());
+        .addListener(new WriteListener(offset + len));
   }
 
   @Override
@@ -543,18 +543,13 @@ public final class NettyPacketWriter implements PacketWriter {
       if (!future.isSuccess()) {
         future.channel().close();
       }
-      boolean shouldSendEOF = false;
       try (LockResource lr = new LockResource(mLock)) {
-        updateException(future.cause());
-        mDoneOrFailed.signal();
-        mBufferNotFullOrFailed.signal();
-        mBufferEmptyOrFailed.signal();
-        if (mPosToWrite == mLength) {
-          shouldSendEOF = true;
+        if (future.cause() != null) {
+          updateException(future.cause());
+          mDoneOrFailed.signal();
+          mBufferNotFullOrFailed.signal();
+          mBufferEmptyOrFailed.signal();
         }
-      }
-      if (shouldSendEOF) {
-        sendEof();
       }
     }
   }

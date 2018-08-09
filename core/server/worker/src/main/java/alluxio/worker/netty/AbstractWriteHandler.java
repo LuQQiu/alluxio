@@ -291,10 +291,14 @@ abstract class AbstractWriteHandler<T extends WriteRequestContext<?>>
         }
 
         try {
-          int readableBytes = buf.readableBytes();
-          mContext.setPosToWrite(mContext.getPosToWrite() + readableBytes);
-          writeBuf(mContext, mChannel, buf, mContext.getPosToWrite());
-          incrementMetrics(readableBytes);
+          if (buf == FLUSH) {
+            flushRequest(mContext, mChannel);
+          } else {
+            int readableBytes = buf.readableBytes();
+            mContext.setPosToWrite(mContext.getPosToWrite() + readableBytes);
+            writeBuf(mContext, mChannel, buf, mContext.getPosToWrite());
+            incrementMetrics(readableBytes);
+          }
         } catch (Exception e) {
           LOG.error("Failed to write packet for request {}", mContext.getRequest(), e);
           Throwables.propagateIfPossible(e);
@@ -351,6 +355,14 @@ abstract class AbstractWriteHandler<T extends WriteRequestContext<?>>
      * @param context context of the request to complete
      */
     protected abstract void cleanupRequest(T context) throws Exception;
+
+    /**
+     * Flushes this write. This is called when the client calls flush.
+     *
+     * @param context context of the request to complete
+     * @param channel netty channel
+     */
+    protected abstract void flushRequest(T context, Channel channel) throws Exception;
 
     /**
      * Writes the buffer.

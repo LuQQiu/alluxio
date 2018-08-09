@@ -185,9 +185,8 @@ public class S3AOutputStream extends OutputStream {
       uploadPart();
     }
     waitForUploadResults();
-    LOG.info("flush() : get tags {}", mTags);
+    LOG.info("flush() : get tags {}", mTags.size());
     mFutureTagsAndFile = new HashMap<>();
-    mLocalOutputStream.flush();
   }
 
   @Override
@@ -224,7 +223,7 @@ public class S3AOutputStream extends OutputStream {
       mClient.completeMultipartUpload(compRequest);
 
       LOG.info("Completed upload with {} tags, we have {} parts, the whole close takes {}, the complete takes {}",
-          mTags.size(), mPartNumber.get(), (System.currentTimeMillis() - start), (System.currentTimeMillis() - beginComplete));
+          mTags.size(), mPartNumber.get() - 1, (System.currentTimeMillis() - start), (System.currentTimeMillis() - beginComplete));
     } catch (Exception e) {
       LOG.error("Failed to upload {}: {}", mKey, e.toString());
       throw new IOException(e);
@@ -249,18 +248,19 @@ public class S3AOutputStream extends OutputStream {
       return;
     }
     mLocalOutputStream.close();
+    int partNumber = mPartNumber.getAndIncrement();
     final UploadPartRequest uploadRequest = new UploadPartRequest()
         .withBucketName(mBucketName)
         .withKey(mKey)
         .withUploadId(mUploadId)
-        .withPartNumber(mPartNumber.getAndIncrement())
+        .withPartNumber(partNumber)
         .withFile(mFile)
         .withPartSize(mFile.length());
     Future<PartETag> futureETag = mExecutor.submit(()
         -> mClient.uploadPart(uploadRequest).getPartETag());
     mFutureTagsAndFile.put(futureETag, new File(mFile.getPath()));
     LOG.info("submit upload part {} with File {} and size {}",
-        mPartNumber.get(), mFile.toString(), mFile.length());
+        partNumber, mFile.toString(), mFile.length());
     mFileClosed = true;
     mLocalOutputStream = null;
     mFile = null;
