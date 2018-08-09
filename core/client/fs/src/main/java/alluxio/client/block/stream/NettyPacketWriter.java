@@ -86,7 +86,9 @@ public final class NettyPacketWriter implements PacketWriter {
   private boolean mClosed;
 
   private final ReentrantLock mLock = new ReentrantLock();
-  /** The next pos to write to the channel. */
+  /**
+   * The next pos to write to the channel.
+   */
   @GuardedBy("mLock")
   private long mPosToWrite;
   /**
@@ -103,19 +105,25 @@ public final class NettyPacketWriter implements PacketWriter {
   private boolean mEOFSent;
   @GuardedBy("mLock")
   private boolean mCancelSent;
-  /** This condition is met if mPacketWriteException != null or mDone = true. */
+  /**
+   * This condition is met if mPacketWriteException != null or mDone = true.
+   */
   private final Condition mDoneOrFailed = mLock.newCondition();
-  /** This condition is met if mPacketWriteException != null or the buffer is not full. */
+  /**
+   * This condition is met if mPacketWriteException != null or the buffer is not full.
+   */
   private final Condition mBufferNotFullOrFailed = mLock.newCondition();
-  /** This condition is met if there is nothing in the netty buffer. */
+  /**
+   * This condition is met if there is nothing in the netty buffer.
+   */
   private final Condition mBufferEmptyOrFailed = mLock.newCondition();
 
   /**
    * @param context the file system context
    * @param address the data server address
-   * @param id the block or UFS ID
-   * @param length the length of the block or file to write, set to Long.MAX_VALUE if unknown
-   * @param type type of the write request
+   * @param id      the block or UFS ID
+   * @param length  the length of the block or file to write, set to Long.MAX_VALUE if unknown
+   * @param type    type of the write request
    * @param options the options of the output stream
    * @return an instance of {@link NettyPacketWriter}
    */
@@ -132,14 +140,14 @@ public final class NettyPacketWriter implements PacketWriter {
   /**
    * Creates an instance of {@link NettyPacketWriter}.
    *
-   * @param context the file system context
-   * @param address the data server address
-   * @param id the block or UFS file Id
-   * @param length the length of the block or file to write, set to Long.MAX_VALUE if unknown
+   * @param context    the file system context
+   * @param address    the data server address
+   * @param id         the block or UFS file Id
+   * @param length     the length of the block or file to write, set to Long.MAX_VALUE if unknown
    * @param packetSize the packet size
-   * @param type type of the write request
-   * @param options details of the write request which are constant for all requests
-   * @param channel netty channel
+   * @param type       type of the write request
+   * @param options    details of the write request which are constant for all requests
+   * @param channel    netty channel
    */
   private NettyPacketWriter(FileSystemContext context, final WorkerNetAddress address, long id,
       long length, long packetSize, Protocol.RequestType type, OutStreamOptions options,
@@ -207,7 +215,7 @@ public final class NettyPacketWriter implements PacketWriter {
     Protocol.WriteRequest writeRequest = mPartialRequest.toBuilder().setOffset(offset).build();
     DataBuffer dataBuffer = new DataNettyBufferV2(buf);
     mChannel.writeAndFlush(new RPCProtoMessage(new ProtoMessage(writeRequest), dataBuffer))
-        .addListener(new WriteListener(offset + len));
+        .addListener(new FlushListener());
   }
 
   @Override
@@ -222,6 +230,17 @@ public final class NettyPacketWriter implements PacketWriter {
   @Override
   public void flush() throws IOException {
     LOG.info("flush() inside NettyPacketWriter.class");
+    final long pos;
+    try (LockResource lr = new LockResource(mLock)) {
+      Preconditions.checkState(!mClosed && !mEOFSent && !mCancelSent);
+      pos = mPosToQueue;
+    }
+
+    Protocol.WriteRequest writeRequest =
+        mPartialRequest.toBuilder().setOffset(pos).setFlush(true).build();
+    mChannel.writeAndFlush(new RPCProtoMessage(new ProtoMessage(writeRequest), null))
+        .addListener(new FlushListener());
+
     mChannel.flush();
 
     try (LockResource lr = new LockResource(mLock)) {
@@ -377,7 +396,8 @@ public final class NettyPacketWriter implements PacketWriter {
     /**
      * Default constructor.
      */
-    PacketWriteResponseHandler() {}
+    PacketWriteResponseHandler() {
+    }
 
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws IOException {
@@ -491,7 +511,8 @@ public final class NettyPacketWriter implements PacketWriter {
     /**
      * Constructor.
      */
-    EofOrCancelListener() {}
+    EofOrCancelListener() {
+    }
 
     @Override
     public void operationComplete(ChannelFuture future) {
@@ -506,5 +527,35 @@ public final class NettyPacketWriter implements PacketWriter {
       }
     }
   }
-}
 
+  /**
+   * The netty channel future listener that is called when a FLUSH is complete.
+   */
+  private final class FlushListener implements ChannelFutureListener {
+    /**
+     * Constructor.
+     */
+    FlushListener() {
+    }
+
+    @Override
+    public void operationComplete(ChannelFuture future) {
+      if (!future.isSuccess()) {
+        future.channel().close();
+      }
+      boolean shouldSendEOF = false;
+      try (LockResource lr = new LockResource(mLock)) {
+        updateException(future.cause());
+        mDoneOrFailed.signal();
+        mBufferNotFullOrFailed.signal();
+        mBufferEmptyOrFailed.signal();
+        if (mPosToWrite == mLength) {
+          shouldSendEOF = true;
+        }
+      }
+      if (shouldSendEOF) {
+        sendEof();
+      }
+    }
+  }
+}

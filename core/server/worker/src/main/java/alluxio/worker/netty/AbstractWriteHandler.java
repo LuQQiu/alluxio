@@ -89,6 +89,7 @@ abstract class AbstractWriteHandler<T extends WriteRequestContext<?>>
   private static final ByteBuf EOF = Unpooled.buffer(0);
   private static final ByteBuf CANCEL = Unpooled.buffer(0);
   private static final ByteBuf ABORT = Unpooled.buffer(0);
+  private static final ByteBuf FLUSH = Unpooled.buffer(0);
 
   private ReentrantLock mLock = new ReentrantLock();
 
@@ -169,6 +170,8 @@ abstract class AbstractWriteHandler<T extends WriteRequestContext<?>>
         buf = EOF;
       } else if (writeRequest.getCancel()) {
         buf = CANCEL;
+      } else if (writeRequest.getFlush()) {
+        buf = FLUSH;
       } else {
         DataBuffer dataBuffer = msg.getPayloadDataBuffer();
         Preconditions.checkState(dataBuffer != null && dataBuffer.getLength() > 0);
@@ -424,7 +427,7 @@ abstract class AbstractWriteHandler<T extends WriteRequestContext<?>>
    * @param buf the netty byte buffer
    */
   private static void release(ByteBuf buf) {
-    if (buf != null && buf != EOF && buf != CANCEL && buf != ABORT) {
+    if (buf != null && buf != EOF && buf != CANCEL && buf != ABORT && buf != FLUSH) {
       buf.release();
     }
   }
