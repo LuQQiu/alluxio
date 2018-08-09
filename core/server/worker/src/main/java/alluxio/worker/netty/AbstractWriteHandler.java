@@ -127,6 +127,7 @@ abstract class AbstractWriteHandler<T extends WriteRequestContext<?>>
 
     try (LockResource lr = new LockResource(mLock)) {
       boolean isNewContextCreated = false;
+
       if (mContext == null || mContext.isDoneUnsafe()) {
         // We create a new context if the previous request completes (done flag is true) or the
         // context is still null (an empty channel so far). And in this case, we create a new one as
@@ -137,6 +138,7 @@ abstract class AbstractWriteHandler<T extends WriteRequestContext<?>>
         mContext = createRequestContext(writeRequest);
         isNewContextCreated = true;
       }
+
       // Only initialize (open the writers) if this is the first packet in the block/file.
       if (writeRequest.getOffset() == 0) {
         // Expected state: context equals null as this handler is new for request, or the previous

@@ -69,15 +69,18 @@ public class S3AOutputStream extends OutputStream {
   /** Key of the file when it is uploaded to S3. */
   private final String mKey;
 
+  private final AmazonS3 mClient;
+
+  private final ExecutorService mExecutor;
+
+  /** The upload id of this multipart upload. */
+  private final String mUploadId;
+
   /** Flag to indicate the this stream has been closed, to ensure close is only done once. */
   private boolean mClosed = false;
 
   /** The MD5 hash of the file. */
   private MessageDigest mHash;
-
-  private final AmazonS3 mClient;
-
-  private final ExecutorService mExecutor;
 
   /** The local file that will be uploaded when the stream is closed. */
   private File mFile;
@@ -87,9 +90,6 @@ public class S3AOutputStream extends OutputStream {
 
   /** The output stream to a local file where the file will be buffered until closed. */
   private OutputStream mLocalOutputStream;
-
-  /** The upload id of this multipart upload. */
-  private final String mUploadId;
 
   private Map<Future<PartETag>, File> mFutureTagsAndFile = new HashMap<>();
 

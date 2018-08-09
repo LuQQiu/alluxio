@@ -83,6 +83,7 @@ public final class NettyPacketWriter implements PacketWriter {
   private final Protocol.WriteRequest mPartialRequest;
   private final long mPacketSize;
 
+  private boolean mWrote = false;
   private boolean mClosed;
 
   private final ReentrantLock mLock = new ReentrantLock();
@@ -216,6 +217,7 @@ public final class NettyPacketWriter implements PacketWriter {
     DataBuffer dataBuffer = new DataNettyBufferV2(buf);
     mChannel.writeAndFlush(new RPCProtoMessage(new ProtoMessage(writeRequest), dataBuffer))
         .addListener(new WriteListener(offset + len));
+    mWrote = true;
   }
 
   @Override
@@ -230,6 +232,9 @@ public final class NettyPacketWriter implements PacketWriter {
   @Override
   public void flush() throws IOException {
     LOG.info("flush() inside NettyPacketWriter.class");
+    if (!mWrote) {
+      return;
+    }
     final long pos;
     try (LockResource lr = new LockResource(mLock)) {
       Preconditions.checkState(!mClosed && !mEOFSent && !mCancelSent);
