@@ -218,6 +218,14 @@ public final class Status {
      * </pre>
      */
     DATA_LOSS(16, 15),
+    /**
+     * <code>FLUSHED = 17;</code>
+     *
+     * <pre>
+     * Flushed indicates flush is completed.
+     * </pre>
+     */
+    FLUSHED(17, 17),
     ;
 
     /**
@@ -421,6 +429,14 @@ public final class Status {
      * </pre>
      */
     public static final int DATA_LOSS_VALUE = 15;
+    /**
+     * <code>FLUSHED = 17;</code>
+     *
+     * <pre>
+     * Flushed indicates flush is completed.
+     * </pre>
+     */
+    public static final int FLUSHED_VALUE = 17;
 
 
     public final int getNumber() { return value; }
@@ -444,6 +460,7 @@ public final class Status {
         case 13: return INTERNAL;
         case 14: return UNAVAILABLE;
         case 15: return DATA_LOSS;
+        case 17: return FLUSHED;
         default: return null;
       }
     }
@@ -505,7 +522,7 @@ public final class Status {
   static {
     java.lang.String[] descriptorData = {
       "\n\027dataserver/status.proto\022\024alluxio.proto" +
-      ".status*\271\002\n\007PStatus\022\006\n\002OK\020\000\022\014\n\010CANCELED\020" +
+      ".status*\306\002\n\007PStatus\022\006\n\002OK\020\000\022\014\n\010CANCELED\020" +
       "\001\022\013\n\007UNKNOWN\020\002\022\024\n\020INVALID_ARGUMENT\020\003\022\025\n\021" +
       "DEADLINE_EXCEEDED\020\004\022\r\n\tNOT_FOUND\020\005\022\022\n\016AL" +
       "READY_EXISTS\020\006\022\025\n\021PERMISSION_DENIED\020\007\022\023\n" +
@@ -513,7 +530,7 @@ public final class Status {
       "\020\010\022\027\n\023FAILED_PRECONDITION\020\t\022\013\n\007ABORTED\020\n" +
       "\022\020\n\014OUT_OF_RANGE\020\013\022\021\n\rUNIMPLEMENTED\020\014\022\014\n" +
       "\010INTERNAL\020\r\022\017\n\013UNAVAILABLE\020\016\022\r\n\tDATA_LOS" +
-      "S\020\017"
+      "S\020\017\022\013\n\007FLUSHED\020\021"
     };
     com.google.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner assigner =
       new com.google.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner() {

@@ -295,6 +295,7 @@ abstract class AbstractWriteHandler<T extends WriteRequestContext<?>>
         try {
           if (buf == FLUSH) {
             flushRequest(mContext, mChannel);
+            replyFlush();
           } else {
             int readableBytes = buf.readableBytes();
             mContext.setPosToWrite(mContext.getPosToWrite() + readableBytes);
@@ -410,6 +411,13 @@ abstract class AbstractWriteHandler<T extends WriteRequestContext<?>>
         mChannel.writeAndFlush(RPCProtoMessage.createResponse(error.getCause()))
             .addListener(ChannelFutureListener.CLOSE);
       }
+    }
+
+    /**
+     * Writes a flushed response to the channel.
+     */
+    private void replyFlush() {
+      mChannel.writeAndFlush(RPCProtoMessage.createFlushedResponse());
     }
   }
 

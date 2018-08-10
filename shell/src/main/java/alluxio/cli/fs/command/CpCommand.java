@@ -40,6 +40,8 @@ import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang.RandomStringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -57,7 +59,6 @@ import javax.annotation.concurrent.ThreadSafe;
  */
 @ThreadSafe
 public final class CpCommand extends AbstractFileSystemCommand {
-
   private static final Option RECURSIVE_OPTION =
       Option.builder("R")
           .required(false)

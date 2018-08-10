@@ -73,6 +73,10 @@ public final class NettyPacketWriter implements PacketWriter {
       Configuration.getInt(PropertyKey.USER_NETWORK_NETTY_WRITER_BUFFER_SIZE_PACKETS);
   private static final long WRITE_TIMEOUT_MS =
       Configuration.getMs(PropertyKey.USER_NETWORK_NETTY_TIMEOUT_MS);
+
+  private static final long FLUSH_TIMEOUT_MS =
+      Configuration.getMs(PropertyKey.USER_NETWORK_NETTY_FLUSH_TIMEOUT_MS);
+
   private static final long CLOSE_TIMEOUT_MS =
       Configuration.getMs(PropertyKey.USER_NETWORK_NETTY_WRITER_CLOSE_TIMEOUT_MS);
 
@@ -118,6 +122,10 @@ public final class NettyPacketWriter implements PacketWriter {
    * This condition is met if there is nothing in the netty buffer.
    */
   private final Condition mBufferEmptyOrFailed = mLock.newCondition();
+  /**
+   * This condition is met if there is nothing in the netty buffer.
+   */
+  private final Condition mFlushed = mLock.newCondition();
 
   /**
    * @param context the file system context
@@ -180,7 +188,6 @@ public final class NettyPacketWriter implements PacketWriter {
 
   @Override
   public void writePacket(final ByteBuf buf) throws IOException {
-    LOG.info("writePacket() inside NettyPacketWriter.class");
     final long len;
     final long offset;
     try (LockResource lr = new LockResource(mLock)) {
@@ -232,6 +239,7 @@ public final class NettyPacketWriter implements PacketWriter {
   @Override
   public void flush() throws IOException {
     LOG.info("flush() inside NettyPacketWriter.class");
+    long start = System.currentTimeMillis();
     if (!mWrote) {
       return;
     }
@@ -245,28 +253,18 @@ public final class NettyPacketWriter implements PacketWriter {
         mPartialRequest.toBuilder().setOffset(pos).setFlush(true).build();
     mChannel.writeAndFlush(new RPCProtoMessage(new ProtoMessage(writeRequest), null))
         .addListener(new FlushListener());
-
     mChannel.flush();
-
     try (LockResource lr = new LockResource(mLock)) {
-      while (true) {
-        if (mPosToWrite == mPosToQueue) {
-          return;
-        }
-        if (mPacketWriteException != null) {
-          Throwables.propagateIfPossible(mPacketWriteException, IOException.class);
-          throw AlluxioStatusException.fromCheckedException(mPacketWriteException);
-        }
-        if (!mBufferEmptyOrFailed.await(WRITE_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
-          throw new DeadlineExceededException(
-              String.format("Timeout flushing to %s for request %s after %dms.",
-                  mAddress, mPartialRequest, WRITE_TIMEOUT_MS));
-        }
+      if (!mFlushed.await(FLUSH_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
+        throw new DeadlineExceededException(
+            String.format("Timeout flush to %s for request %s after %dms.",
+                mAddress, mPartialRequest, FLUSH_TIMEOUT_MS));
       }
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
       throw new CanceledException(e);
     }
+    LOG.info("flush() completed, takes {}", (System.currentTimeMillis() - start));
   }
 
   @Override
@@ -408,6 +406,12 @@ public final class NettyPacketWriter implements PacketWriter {
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws IOException {
       Preconditions.checkState(acceptMessage(msg), "Incorrect response type %s.", msg);
       RPCProtoMessage response = (RPCProtoMessage) msg;
+      if (response.getMessage().asResponse().getStatus() == PStatus.FLUSHED) {
+        try (LockResource lr = new LockResource(mLock)) {
+          mFlushed.signal();
+        }
+        return;
+      }
       // Canceled is considered a valid status and handled in the writer. We avoid creating a
       // CanceledException as an optimization.
       if (response.getMessage().asResponse().getStatus() != PStatus.CANCELED) {

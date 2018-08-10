@@ -28,7 +28,8 @@ public enum TStatus implements org.apache.thrift.TEnum {
   UNIMPLEMENTED(12),
   INTERNAL(13),
   UNAVAILABLE(14),
-  DATA_LOSS(15);
+  DATA_LOSS(15),
+  FLUSHED(17);
 
   private final int value;
 
@@ -83,6 +84,8 @@ public enum TStatus implements org.apache.thrift.TEnum {
         return UNAVAILABLE;
       case 15:
         return DATA_LOSS;
+      case 17:
+        return FLUSHED;
       default:
         return null;
     }

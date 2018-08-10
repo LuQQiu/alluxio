@@ -116,6 +116,9 @@ enum TStatus {
 
   // DataLoss indicates unrecoverable data loss or corruption.
   DATA_LOSS = 15,
+
+  // Flushed indicates the flush is completed.
+  FLUSHED = 17,
 }
 
 // Next available id: 5

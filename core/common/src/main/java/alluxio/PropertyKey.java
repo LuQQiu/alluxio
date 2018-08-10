@@ -2562,6 +2562,15 @@ public final class PropertyKey implements Comparable<PropertyKey> {
           .setConsistencyCheckLevel(ConsistencyCheckLevel.WARN)
           .setScope(Scope.CLIENT)
           .build();
+  public static final PropertyKey USER_NETWORK_NETTY_FLUSH_TIMEOUT_MS =
+      new Builder(Name.USER_NETWORK_NETTY_FLUSH_TIMEOUT_MS)
+          .setAlias(new String[]{"alluxio.user.network.netty.flush.timeout.ms"})
+          .setDefaultValue("1day")
+          .setDescription("The maximum time for a netty client "
+              + "to wait for a flush response from the data server.")
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.WARN)
+          .setScope(Scope.CLIENT)
+          .build();
   public static final PropertyKey USER_NETWORK_NETTY_WORKER_THREADS =
       new Builder(Name.USER_NETWORK_NETTY_WORKER_THREADS)
           .setDefaultValue(0)
@@ -3512,6 +3521,8 @@ public final class PropertyKey implements Comparable<PropertyKey> {
     public static final String USER_NETWORK_NETTY_CHANNEL = "alluxio.user.network.netty.channel";
     public static final String USER_NETWORK_NETTY_TIMEOUT_MS =
         "alluxio.user.network.netty.timeout";
+    public static final String USER_NETWORK_NETTY_FLUSH_TIMEOUT_MS =
+        "alluxio.user.network.netty.flush.timeout";
     public static final String USER_NETWORK_NETTY_WRITER_CLOSE_TIMEOUT_MS =
         "alluxio.user.network.netty.writer.close.timeout";
     public static final String USER_NETWORK_NETTY_WORKER_THREADS =

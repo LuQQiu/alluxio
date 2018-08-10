@@ -222,6 +222,15 @@ public final class RPCProtoMessage extends RPCMessage {
   }
 
   /**
+   * Creates an Flushed response.
+   *
+   * @return the message created
+   */
+  public static RPCProtoMessage createFlushedResponse() {
+    return createResponse(Status.FLUSHED, "flushed", null);
+  }
+
+  /**
    * Creates a response in CANCELLED state.
    *
    * @return the message created

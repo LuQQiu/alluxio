@@ -119,4 +119,7 @@ enum PStatus {
 
   // DataLoss indicates unrecoverable data loss or corruption.
   DATA_LOSS = 15;
+
+  // Flushed indicates flush is completed.
+  FLUSHED = 17;
 }

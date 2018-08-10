@@ -133,7 +133,10 @@ public enum Status {
   UNAVAILABLE,
 
   // DataLoss indicates unrecoverable data loss or corruption.
-  DATA_LOSS;
+  DATA_LOSS,
+
+  // Flushed indicates the flush is completed.
+  FLUSHED;
 
   /**
    * Converts an internal exception status to a Thrift type status.
@@ -155,6 +158,8 @@ public enum Status {
         return TStatus.DEADLINE_EXCEEDED;
       case FAILED_PRECONDITION:
         return TStatus.FAILED_PRECONDITION;
+      case FLUSHED:
+        return TStatus.FLUSHED;
       case INTERNAL:
         return TStatus.INTERNAL;
       case INVALID_ARGUMENT:
@@ -202,6 +207,8 @@ public enum Status {
         return PStatus.DEADLINE_EXCEEDED;
       case FAILED_PRECONDITION:
         return PStatus.FAILED_PRECONDITION;
+      case FLUSHED:
+        return PStatus.FLUSHED;
       case INTERNAL:
         return PStatus.INTERNAL;
       case INVALID_ARGUMENT:
@@ -249,6 +256,8 @@ public enum Status {
         return Status.DEADLINE_EXCEEDED;
       case FAILED_PRECONDITION:
         return Status.FAILED_PRECONDITION;
+      case FLUSHED:
+        return Status.FLUSHED;
       case INTERNAL:
         return Status.INTERNAL;
       case INVALID_ARGUMENT:
@@ -296,6 +305,8 @@ public enum Status {
         return Status.DEADLINE_EXCEEDED;
       case FAILED_PRECONDITION:
         return Status.FAILED_PRECONDITION;
+      case FLUSHED:
+        return Status.FLUSHED;
       case INTERNAL:
         return Status.INTERNAL;
       case INVALID_ARGUMENT:
