@@ -19,6 +19,7 @@ import alluxio.util.io.PathUtils;
 
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.internal.Mimetypes;
+import com.amazonaws.services.s3.model.AbortMultipartUploadRequest;
 import com.amazonaws.services.s3.model.CompleteMultipartUploadRequest;
 import com.amazonaws.services.s3.model.InitiateMultipartUploadRequest;
 import com.amazonaws.services.s3.model.ObjectMetadata;
@@ -98,6 +99,8 @@ public class S3AOutputStream extends OutputStream {
   private AtomicInteger mPartNumber;
 
   private long mOffset;
+
+  private boolean mAborted = false;
 
   /**
    * Constructs a new stream for writing a file.
@@ -191,7 +194,7 @@ public class S3AOutputStream extends OutputStream {
 
   @Override
   public void close() throws IOException {
-    if (mClosed) {
+    if (mClosed || mAborted) {
       return;
     }
     try {
@@ -226,6 +229,8 @@ public class S3AOutputStream extends OutputStream {
           mTags.size(), mPartNumber.get() - 1, (System.currentTimeMillis() - start), (System.currentTimeMillis() - beginComplete));
     } catch (Exception e) {
       LOG.error("Failed to upload {}: {}", mKey, e.toString());
+      mClient.abortMultipartUpload(new AbortMultipartUploadRequest(mBucketName, mKey, mUploadId));
+      mAborted = true;
       throw new IOException(e);
     }
 
@@ -256,9 +261,16 @@ public class S3AOutputStream extends OutputStream {
         .withPartNumber(partNumber)
         .withFile(mFile)
         .withPartSize(mFile.length());
-    Future<PartETag> futureETag = mExecutor.submit(()
-        -> mClient.uploadPart(uploadRequest).getPartETag());
-    mFutureTagsAndFile.put(futureETag, new File(mFile.getPath()));
+    try {
+      Future<PartETag> futureETag = mExecutor.submit(()
+          -> mClient.uploadPart(uploadRequest).getPartETag());
+      mFutureTagsAndFile.put(futureETag, new File(mFile.getPath()));
+    } catch (Exception e) {
+      LOG.error("Failed to upload {}: {}", mKey, e.toString());
+      mClient.abortMultipartUpload(new AbortMultipartUploadRequest(mBucketName, mKey, mUploadId));
+      mAborted = true;
+      throw new IOException(e);
+    }
     LOG.info("submit upload part {} with File {} and size {}",
         partNumber, mFile.toString(), mFile.length());
     mFileClosed = true;
@@ -296,6 +308,8 @@ public class S3AOutputStream extends OutputStream {
       }
     } catch (Exception e) {
       LOG.error("Failed to upload {}: {}", getUploadPath(), e.toString());
+      mClient.abortMultipartUpload(new AbortMultipartUploadRequest(mBucketName, mKey, mUploadId));
+      mAborted = true;
       throw new IOException(e);
     }
     LOG.info("wait for upload results takes {}", (System.currentTimeMillis() - start));

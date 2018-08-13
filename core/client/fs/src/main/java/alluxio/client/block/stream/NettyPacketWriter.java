@@ -123,7 +123,7 @@ public final class NettyPacketWriter implements PacketWriter {
    */
   private final Condition mBufferEmptyOrFailed = mLock.newCondition();
   /**
-   * This condition is met if there is nothing in the netty buffer.
+   * This condition is met if the worker side flush finished.
    */
   private final Condition mFlushed = mLock.newCondition();
 
