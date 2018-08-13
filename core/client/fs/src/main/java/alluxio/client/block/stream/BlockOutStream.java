@@ -125,7 +125,6 @@ public class BlockOutStream extends OutputStream implements BoundedStream, Cance
 
   @Override
   public void flush() throws IOException {
-    LOG.info("Blockoutstream flush()");
     if (mClosed) {
       return;
     }

@@ -43,13 +43,11 @@ public class HdfsUnderFileOutputStream extends OutputStream {
 
   @Override
   public void close() throws IOException {
-    LOG.info("close() in HdfsUnderFileOutputStream");
     mOut.close();
   }
 
   @Override
   public void flush() throws IOException {
-    LOG.info("flush() in HdfsUnderFileOutputStream");
     // TODO(calvin): This functionality should be restricted to select output streams.
     //#ifdef HADOOP1
     mOut.sync();
@@ -62,19 +60,16 @@ public class HdfsUnderFileOutputStream extends OutputStream {
 
   @Override
   public void write(int b) throws IOException {
-    LOG.info("write(int b) in HdfsUnderFileOutputStream");
     mOut.write(b);
   }
 
   @Override
   public void write(byte[] b) throws IOException {
-    LOG.info("write(byte[] b) in HdfsUnderFileOutputStream");
     mOut.write(b);
   }
 
   @Override
   public void write(byte[] b, int off, int len) throws IOException {
-    LOG.info("write(byte[] b, int off, int len) in HdfsUnderFileOutputStream");
     mOut.write(b, off, len);
   }
 }
