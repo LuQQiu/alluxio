@@ -59,7 +59,7 @@ import javax.annotation.concurrent.NotThreadSafe;
 @NotThreadSafe
 public class S3AOutputStream extends OutputStream {
   private static final Logger LOG = LoggerFactory.getLogger(S3AOutputStream.class);
-  private static final long PARTITION_SIZE = 50 * Constants.MB;
+  private static final long PARTITION_SIZE = 5 * Constants.MB;
   private static final long UPLOAD_THRESHOLD = 5 * Constants.MB;
   private static final boolean SSE_ENABLED =
       Configuration.getBoolean(PropertyKey.UNDERFS_S3A_SERVER_SIDE_ENCRYPTION_ENABLED);
