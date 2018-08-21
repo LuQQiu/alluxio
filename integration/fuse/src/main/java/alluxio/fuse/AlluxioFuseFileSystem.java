@@ -22,9 +22,13 @@ import alluxio.exception.DirectoryNotEmptyException;
 import alluxio.exception.FileAlreadyExistsException;
 import alluxio.exception.FileDoesNotExistException;
 import alluxio.exception.InvalidPathException;
+import alluxio.exception.status.UnavailableException;
 import alluxio.security.authorization.Mode;
 import alluxio.security.group.provider.ShellBasedUnixGroupsMapping;
 
+import alluxio.util.CommonUtils;
+import alluxio.util.WaitForOptions;
+import alluxio.wire.MasterInfo;
 import com.google.common.base.Preconditions;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
@@ -372,7 +376,19 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
     final int flags = fi.flags.get();
     LOG.trace("open({}, 0x{}) [Alluxio: {}]", path, Integer.toHexString(flags), uri);
 
+    long start = System.currentTimeMillis();
     try {
+      CommonUtils.waitFor("opening file", () -> {
+        try {
+          LOG.info("see if the uri exists.");
+          return mFileSystem.exists(uri);
+        } catch (Exception e) {
+          LOG.info("catch an exception in seeing if the uri exists." + e);
+          return false;
+        }
+      }, WaitForOptions.defaults().setInterval(200).setTimeoutMs(20000));
+      LOG.info("waiting for file to exist takes {}", (System.currentTimeMillis() - start));
+
       if (!mFileSystem.exists(uri)) {
         LOG.error("File {} does not exist", uri);
         return -ErrorCodes.ENOENT();
@@ -429,7 +445,7 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
    */
   @Override
   public int read(String path, Pointer buf, @size_t long size, @off_t long offset,
-      FuseFileInfo fi) {
+                  FuseFileInfo fi) {
 
     if (size > Integer.MAX_VALUE) {
       LOG.error("Cannot read more than Integer.MAX_VALUE");
@@ -491,7 +507,7 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
    */
   @Override
   public int readdir(String path, Pointer buff, FuseFillDir filter,
-      @off_t long offset, FuseFileInfo fi) {
+                     @off_t long offset, FuseFileInfo fi) {
     final AlluxioURI turi = mPathResolverCache.getUnchecked(path);
     LOG.trace("readdir({}) [Alluxio: {}]", path, turi);
 
