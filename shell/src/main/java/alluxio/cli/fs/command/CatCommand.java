@@ -22,9 +22,13 @@ import alluxio.exception.ExceptionMessage;
 import alluxio.exception.FileDoesNotExistException;
 import alluxio.exception.status.InvalidArgumentException;
 
+import alluxio.exception.status.UnavailableException;
+import alluxio.util.CommonUtils;
+import alluxio.util.WaitForOptions;
 import org.apache.commons.cli.CommandLine;
 
 import java.io.IOException;
+import java.util.concurrent.TimeoutException;
 
 import javax.annotation.concurrent.ThreadSafe;
 
@@ -54,8 +58,25 @@ public final class CatCommand extends AbstractFileSystemCommand {
     if (status.isFolder()) {
       throw new FileDoesNotExistException(ExceptionMessage.PATH_MUST_BE_FILE.getMessage(path));
     }
+    try {
+      CommonUtils.waitFor("File completed", () -> {
+        try {
+          // Make sure the leader is serving.
+          System.out.print("Trying");
+          return mFileSystem.getStatus(path).isCompleted();
+        } catch (Exception e) {
+          throw new RuntimeException(e);
+        }
+      }, WaitForOptions.defaults().setInterval(5000).setTimeoutMs(30000));
+    } catch (InterruptedException ie) {
+      throw new IOException("Interrupted", ie);
+    } catch (TimeoutException te) {
+      throw new IOException("Timeout", te);
+    }
+
     OpenFileOptions options = OpenFileOptions.defaults();
     byte[] buf = new byte[512];
+
     try (FileInStream is = mFileSystem.openFile(path, options)) {
       int read = is.read(buf);
       while (read != -1) {

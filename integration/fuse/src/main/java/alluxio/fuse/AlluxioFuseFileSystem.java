@@ -22,13 +22,12 @@ import alluxio.exception.DirectoryNotEmptyException;
 import alluxio.exception.FileAlreadyExistsException;
 import alluxio.exception.FileDoesNotExistException;
 import alluxio.exception.InvalidPathException;
-import alluxio.exception.status.UnavailableException;
+import alluxio.exception.status.CanceledException;
 import alluxio.security.authorization.Mode;
 import alluxio.security.group.provider.ShellBasedUnixGroupsMapping;
 
 import alluxio.util.CommonUtils;
 import alluxio.util.WaitForOptions;
-import alluxio.wire.MasterInfo;
 import com.google.common.base.Preconditions;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
@@ -54,6 +53,7 @@ import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeoutException;
 
 import javax.annotation.concurrent.ThreadSafe;
 
@@ -374,29 +374,23 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
     // (see {@code man 2 open} for the structure of the flags bitfield)
     // File creation flags are the last two bits of flags
     final int flags = fi.flags.get();
-    LOG.trace("open({}, 0x{}) [Alluxio: {}]", path, Integer.toHexString(flags), uri);
+    LOG.info("open({}, 0x{}) [Alluxio: {}]", path, Integer.toHexString(flags), uri);
 
-    long start = System.currentTimeMillis();
     try {
-      CommonUtils.waitFor("opening file", () -> {
-        try {
-          LOG.info("see if the uri exists.");
-          return mFileSystem.exists(uri);
-        } catch (Exception e) {
-          LOG.info("catch an exception in seeing if the uri exists." + e);
-          return false;
-        }
-      }, WaitForOptions.defaults().setInterval(200).setTimeoutMs(20000));
-      LOG.info("waiting for file to exist takes {}", (System.currentTimeMillis() - start));
-
       if (!mFileSystem.exists(uri)) {
         LOG.error("File {} does not exist", uri);
         return -ErrorCodes.ENOENT();
       }
       final URIStatus status = mFileSystem.getStatus(uri);
+      LOG.info("File system exists file {}, status {}", path, status.toString());
       if (status.isFolder()) {
         LOG.error("File {} is a directory", uri);
         return -ErrorCodes.EISDIR();
+      }
+
+      if (!status.isCompleted() && !waitForFileCompleted(uri, 30000)) {
+        LOG.error("File {} has not completed", uri);
+        return -ErrorCodes.EFAULT();
       }
 
       synchronized (mOpenFiles) {
@@ -405,6 +399,7 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
           return ErrorCodes.EMFILE();
         }
         final OpenFileEntry ofe = new OpenFileEntry(mFileSystem.openFile(uri), null);
+        LOG.info("Opened the file.");
         mOpenFiles.put(mNextOpenFileId, ofe);
         fi.fh.set(mNextOpenFileId);
 
@@ -776,6 +771,25 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
     }
 
     return 0;
+  }
+
+  private boolean waitForFileCompleted(AlluxioURI uri, int timeoutMs) {
+    try {
+      CommonUtils.waitFor("file completed", () -> {
+        try {
+          LOG.info("Trying...");
+          return mFileSystem.getStatus(uri).isCompleted();
+        } catch (Exception e) {
+          throw new RuntimeException(e);
+        }
+      }, WaitForOptions.defaults().setInterval(1000).setTimeoutMs(timeoutMs));
+      return true;
+    } catch (InterruptedException ie) {
+      Thread.currentThread().interrupt();
+      return false;
+    } catch (TimeoutException te) {
+      return false;
+    }
   }
 
   /**
