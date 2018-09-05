@@ -351,6 +351,7 @@ public class S3ALowLevelOutputStream extends OutputStream {
    * Waits for the submitted upload tasks to finish.
    */
   private void waitForAllPartsUpload() throws IOException {
+    int beforeSize = mTags.size();
     try {
       for (ListenableFuture<PartETag> future : mFutureTags) {
         mTags.add(future.get());
@@ -369,7 +370,9 @@ public class S3ALowLevelOutputStream extends OutputStream {
       Thread.currentThread().interrupt();
     }
     mFutureTags = new ArrayList<>();
-    LOG.debug("Uploaded {} partitions of id '{}' to {}.", mTags.size(), mUploadId, mKey);
+    if (mTags.size() != beforeSize) {
+      LOG.debug("Uploaded {} partitions of id '{}' to {}.", mTags.size(), mUploadId, mKey);
+    }
   }
 
   /**
