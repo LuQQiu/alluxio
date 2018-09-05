@@ -12,6 +12,7 @@
 package alluxio.client.block.stream;
 
 import alluxio.Configuration;
+import alluxio.Constants;
 import alluxio.PropertyKey;
 import alluxio.client.file.FileSystemContext;
 import alluxio.client.file.options.OutStreamOptions;
@@ -75,6 +76,9 @@ public final class NettyPacketWriter implements PacketWriter {
       Configuration.getMs(PropertyKey.USER_NETWORK_NETTY_TIMEOUT_MS);
   private static final long CLOSE_TIMEOUT_MS =
       Configuration.getMs(PropertyKey.USER_NETWORK_NETTY_WRITER_CLOSE_TIMEOUT_MS);
+  /** Uses a long flush timeout since flush in S3 streaming upload may take a long time. */
+  private static final long FLUSH_TIMEOUT_MS =
+      Configuration.getMs(PropertyKey.USER_NETWORK_NETTY_WRITER_FLUSH_TIMEOUT_MS);
 
   private final FileSystemContext mContext;
   private final Channel mChannel;
@@ -109,6 +113,11 @@ public final class NettyPacketWriter implements PacketWriter {
   private final Condition mBufferNotFullOrFailed = mLock.newCondition();
   /** This condition is met if there is nothing in the netty buffer. */
   private final Condition mBufferEmptyOrFailed = mLock.newCondition();
+  /**
+   * This condition is met if mPacketWriteException != null or mDone = true
+   * or flush is completed.
+   */
+  private final Condition mFlushedOrDoneOrFailed = mLock.newCondition();
 
   /**
    * @param context the file system context
@@ -220,12 +229,12 @@ public final class NettyPacketWriter implements PacketWriter {
   @Override
   public void flush() throws IOException {
     mChannel.flush();
-
+    long pos;
     try (LockResource lr = new LockResource(mLock)) {
-      while (true) {
-        if (mPosToWrite == mPosToQueue) {
-          return;
-        }
+      if (mPosToQueue == 0) {
+        return;
+      }
+      while (mPosToWrite != mPosToQueue) {
         if (mPacketWriteException != null) {
           Throwables.propagateIfPossible(mPacketWriteException, IOException.class);
           throw AlluxioStatusException.fromCheckedException(mPacketWriteException);
@@ -235,6 +244,24 @@ public final class NettyPacketWriter implements PacketWriter {
               String.format("Timeout flushing to %s for request %s after %dms.",
                   mAddress, mPartialRequest, WRITE_TIMEOUT_MS));
         }
+      }
+      pos = mPosToQueue;
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new CanceledException(e);
+    }
+    if (mEOFSent || mCancelSent) {
+      return;
+    }
+    Protocol.WriteRequest writeRequest =
+        mPartialRequest.toBuilder().setOffset(pos).setFlush(true).build();
+    mChannel.writeAndFlush(new RPCProtoMessage(new ProtoMessage(writeRequest), null))
+        .addListener(new FlushListener());
+    try (LockResource lr = new LockResource(mLock)) {
+      if (!mFlushedOrDoneOrFailed.await(FLUSH_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
+        throw new DeadlineExceededException(
+            String.format("Timeout flush to %s for request %s after %dms.",
+                mAddress, mPartialRequest, FLUSH_TIMEOUT_MS));
       }
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
@@ -378,16 +405,19 @@ public final class NettyPacketWriter implements PacketWriter {
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws IOException {
       Preconditions.checkState(acceptMessage(msg), "Incorrect response type %s.", msg);
-      RPCProtoMessage response = (RPCProtoMessage) msg;
+      RPCProtoMessage message = (RPCProtoMessage) msg;
+      Protocol.Response response = message.getMessage().asResponse();
       // Canceled is considered a valid status and handled in the writer. We avoid creating a
       // CanceledException as an optimization.
-      if (response.getMessage().asResponse().getStatus() != PStatus.CANCELED) {
-        CommonUtils.unwrapResponseFrom(response.getMessage().asResponse(), ctx.channel());
+      if (response.getStatus() != PStatus.CANCELED) {
+        CommonUtils.unwrapResponseFrom(response, ctx.channel());
       }
-
       try (LockResource lr = new LockResource(mLock)) {
-        mDone = true;
-        mDoneOrFailed.signal();
+        mFlushedOrDoneOrFailed.signal();
+        if (!response.getMessage().equals(Constants.FLUSHED_SIGNAL)) {
+          mDone = true;
+          mDoneOrFailed.signal();
+        }
       }
     }
 
@@ -400,6 +430,7 @@ public final class NettyPacketWriter implements PacketWriter {
         mBufferNotFullOrFailed.signal();
         mDoneOrFailed.signal();
         mBufferEmptyOrFailed.signal();
+        mFlushedOrDoneOrFailed.signal();
       }
       ctx.close();
     }
@@ -415,6 +446,7 @@ public final class NettyPacketWriter implements PacketWriter {
           mBufferNotFullOrFailed.signal();
           mDoneOrFailed.signal();
           mBufferEmptyOrFailed.signal();
+          mFlushedOrDoneOrFailed.signal();
         }
       }
       ctx.fireChannelUnregistered();
@@ -462,6 +494,7 @@ public final class NettyPacketWriter implements PacketWriter {
           mDoneOrFailed.signal();
           mBufferNotFullOrFailed.signal();
           mBufferEmptyOrFailed.signal();
+          mFlushedOrDoneOrFailed.signal();
           return;
         }
         if (mPosToWrite == mPosToQueue) {
@@ -498,6 +531,33 @@ public final class NettyPacketWriter implements PacketWriter {
           mDoneOrFailed.signal();
           mBufferNotFullOrFailed.signal();
           mBufferEmptyOrFailed.signal();
+          mFlushedOrDoneOrFailed.signal();
+        }
+      }
+    }
+  }
+
+  /**
+   * The netty channel future listener that is called when a FLUSH is complete.
+   */
+  private final class FlushListener implements ChannelFutureListener {
+    /**
+     * Constructor.
+     */
+    FlushListener() {}
+
+    @Override
+    public void operationComplete(ChannelFuture future) {
+      if (!future.isSuccess()) {
+        future.channel().close();
+      }
+      try (LockResource lr = new LockResource(mLock)) {
+        if (future.cause() != null) {
+          updateException(future.cause());
+          mDoneOrFailed.signal();
+          mBufferNotFullOrFailed.signal();
+          mBufferEmptyOrFailed.signal();
+          mFlushedOrDoneOrFailed.signal();
         }
       }
     }
