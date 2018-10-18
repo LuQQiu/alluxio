@@ -141,6 +141,7 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
    */
   @Override
   public int chown(String path, @uid_t long uid, @gid_t long gid) {
+    LOG.info("chown {} with uid {} and gid {}", path, uid, gid);
     if (!mIsUserGroupTranslation) {
       LOG.info("Cannot change the owner of path {}. Please set {} to be true to enable "
           + "user group translation in Alluxio-Fuse.",
@@ -159,6 +160,7 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
         LOG.error("Failed to get group name from gid {}.", gid);
         return -ErrorCodes.EFAULT();
       }
+      System.out.println("chown to user " + userName + " and group " + groupName);
       SetAttributeOptions options =
           SetAttributeOptions.defaults().setGroup(groupName).setOwner(userName);
       final AlluxioURI uri = mPathResolverCache.getUnchecked(path);
@@ -286,8 +288,11 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
         // Translate the file owner/group to unix uid/gid
         // Show as uid==-1 (nobody) if owner does not exist in unix
         // Show as gid==-1 (nogroup) if group does not exist in unix
-        stat.st_uid.set(AlluxioFuseUtils.getUid(status.getOwner()));
-        stat.st_gid.set(AlluxioFuseUtils.getGidFromGroupName(status.getGroup()));
+        long uid = AlluxioFuseUtils.getUid(status.getOwner());
+        long gid = AlluxioFuseUtils.getGidFromGroupName(status.getGroup());
+        stat.st_uid.set(uid);
+        stat.st_gid.set(gid);
+        LOG.info("getattr {} with uid {}, gid {}", path, uid, gid);
       } else {
         stat.st_uid.set(UID);
         stat.st_gid.set(GID);
