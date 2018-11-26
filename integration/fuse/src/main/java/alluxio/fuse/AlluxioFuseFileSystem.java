@@ -282,7 +282,9 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
         return -ErrorCodes.ENOENT();
       }
       final URIStatus status = mFileSystem.getStatus(turi);
-      stat.st_size.set(status.getLength());
+      long size = status.getLength();
+      stat.st_size.set(size);
+      stat.st_blocks.set(size / 512);
 
       final long ctime_sec = status.getLastModificationTimeMs() / 1000;
       //keeps only the "residual" nanoseconds not caputred in
