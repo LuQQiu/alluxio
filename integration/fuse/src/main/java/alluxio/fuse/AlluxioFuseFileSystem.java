@@ -308,9 +308,9 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
       long blockSize = status.getBlockSizeBytes();
       stat.st_size.set(size);
       // Sets block number and block size to fulfill du command needs
-      stat.st_blksize.set(blockSize);
+      // stat.st_blksize.set(blockSize);
       // Does not consider replications
-      // stat.st_blocks.set((int) Math.ceil((double) size / blockSize));
+      stat.st_blocks.set((int) Math.ceil((double) size / blockSize));
 
       final long ctime_sec = status.getLastModificationTimeMs() / 1000;
       // Keeps only the "residual" nanoseconds not caputred in citme_sec
