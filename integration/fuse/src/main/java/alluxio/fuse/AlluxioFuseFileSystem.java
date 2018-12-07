@@ -217,7 +217,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
   public int create(String path, @mode_t long mode, FuseFileInfo fi) {
     final AlluxioURI uri = mPathResolverCache.getUnchecked(path);
     final int flags = fi.flags.get();
-    LOG.trace("create({}, {}) [Alluxio: {}]", path, Integer.toHexString(flags), uri);
+    LOG.info("create({}, {}) [Alluxio: {}]", path, Integer.toHexString(flags), uri);
 
     try {
       synchronized (mOpenFiles) {
@@ -264,7 +264,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
    */
   @Override
   public int flush(String path, FuseFileInfo fi) {
-    LOG.trace("flush({})", path);
+    LOG.info("flush({})", path);
     final long fd = fi.fh.get();
     OpenFileEntry oe;
     synchronized (mOpenFiles) {
@@ -404,7 +404,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
   /**
    * Opens an existing file for reading.
    *
-   * Note that the opening an existing file would fail, because of Alluxio's write-once semantics.
+   * If open() happens after create() and before write(), this is an no-ops.
    *
    * @param path the FS path of the file to open
    * @param fi FileInfo data structure kept by FUSE
@@ -416,7 +416,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
     // (see {@code man 2 open} for the structure of the flags bitfield)
     // File creation flags are the last two bits of flags
     final int flags = fi.flags.get();
-    LOG.trace("open({}, 0x{}) [Alluxio: {}]", path, Integer.toHexString(flags), uri);
+    LOG.info("open({}, 0x{}) [Alluxio: {}]", path, Integer.toHexString(flags), uri);
 
     try {
       if (!mFileSystem.exists(uri)) {
@@ -429,9 +429,17 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
         return -ErrorCodes.EISDIR();
       }
 
-      if (!status.isCompleted() && !waitForFileCompleted(uri)) {
-        LOG.error("File {} has not completed", uri);
-        return -ErrorCodes.EFAULT();
+      if (!status.isCompleted()) {
+        if (status.getLength() == 0) {
+          // In wget and tar xvfz commands, we have the following workflow:
+          // Create() - open() - write() - flush() -release()
+          // open() here should do nothing
+          return 0;
+        } else if (!waitForFileCompleted(uri)) {
+          // Write operation starts but not finished
+          LOG.error("File {} has not completed", uri);
+          return -ErrorCodes.EFAULT();
+        }
       }
 
       synchronized (mOpenFiles) {
@@ -485,7 +493,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
       LOG.error("Cannot read more than Integer.MAX_VALUE");
       return -ErrorCodes.EINVAL();
     }
-    LOG.trace("read({}, {}, {})", path, size, offset);
+    LOG.info("read({}, {}, {})", path, size, offset);
     final int sz = (int) size;
     final long fd = fi.fh.get();
     OpenFileEntry oe;
@@ -593,7 +601,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
    */
   @Override
   public int release(String path, FuseFileInfo fi) {
-    LOG.trace("release({})", path);
+    LOG.info("release({})", path);
     final long fd = fi.fh.get();
     OpenFileEntry oe;
     synchronized (mOpenFiles) {
@@ -666,16 +674,22 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
   }
 
   /**
-   * Changes the size of a file. This operation would not succeed because of Alluxio's write-once
+   * Changes the size of a file. This operation would not succeed if some write operations already start because of Alluxio's write-once
    * model.
    */
   @Override
   public int truncate(String path, long size) {
+    LOG.info("truncate {} to size {}", path, size);
     final AlluxioURI uri = mPathResolverCache.getUnchecked(path);
     try {
       if (!mFileSystem.exists(uri)) {
         LOG.error("File {} does not exist", uri);
         return -ErrorCodes.ENOENT();
+      }
+      final URIStatus status = mFileSystem.getStatus(uri);
+      if (status.getLength() == 0) {
+        // tar xvfz command will set the file size before writing data into the file
+        return 0;
       }
     } catch (IOException e) {
       LOG.error("IOException encountered at path {}", path, e);
@@ -687,6 +701,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
       LOG.error("Unexpected exception at path {}", path, e);
       return -ErrorCodes.EFAULT();
     }
+
     LOG.error("File {} exists and cannot be overwritten. Please delete the file first", uri);
     return -ErrorCodes.EEXIST();
   }
@@ -732,7 +747,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
       LOG.error("Cannot write more than Integer.MAX_VALUE");
       return ErrorCodes.EIO();
     }
-    LOG.trace("write({}, {}, {})", path, size, offset);
+    LOG.info("write({}, {}, {})", path, size, offset);
     final int sz = (int) size;
     final long fd = fi.fh.get();
     OpenFileEntry oe;
