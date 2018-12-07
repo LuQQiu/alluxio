@@ -128,7 +128,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
   @Override
   public int chmod(String path, @mode_t long mode) {
     AlluxioURI uri = mPathResolverCache.getUnchecked(path);
-
+    LOG.info("chmod {} to mode {}", path, mode);
     SetAttributeOptions options = SetAttributeOptions.defaults().setMode(new Mode((short) mode));
     try {
       mFileSystem.setAttribute(uri, options);
@@ -378,7 +378,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
   @Override
   public int mkdir(String path, @mode_t long mode) {
     final AlluxioURI turi = mPathResolverCache.getUnchecked(path);
-    LOG.trace("mkdir({}) [Alluxio: {}]", path, turi);
+    LOG.info("mkdir({}) [Alluxio: {}]", path, turi);
     try {
       mFileSystem.createDirectory(turi);
     } catch (FileAlreadyExistsException e) {
@@ -429,13 +429,14 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
         return -ErrorCodes.EISDIR();
       }
 
-      if (!status.isCompleted()) {
+      if (!status.isCompleted() && !waitForFileCompleted(uri)) {
         if (status.getLength() == 0) {
           // In wget and tar xvfz commands, we have the following workflow:
           // Create() - open() - write() - flush() -release()
           // open() here should do nothing
+          LOG.error("file {} has length 0, we thought it may be fine...", path);
           return 0;
-        } else if (!waitForFileCompleted(uri)) {
+        } else {
           // Write operation starts but not finished
           LOG.error("File {} has not completed", uri);
           return -ErrorCodes.EFAULT();
@@ -551,7 +552,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
   public int readdir(String path, Pointer buff, FuseFillDir filter,
       @off_t long offset, FuseFileInfo fi) {
     final AlluxioURI turi = mPathResolverCache.getUnchecked(path);
-    LOG.trace("readdir({}) [Alluxio: {}]", path, turi);
+    LOG.info("readdir({}) [Alluxio: {}]", path, turi);
 
     try {
       if (!mFileSystem.exists(turi)) {
@@ -632,7 +633,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
   public int rename(String oldPath, String newPath) {
     final AlluxioURI oldUri = mPathResolverCache.getUnchecked(oldPath);
     final AlluxioURI newUri = mPathResolverCache.getUnchecked(newPath);
-    LOG.trace("rename({}, {}) [Alluxio: {}, {}]", oldPath, newPath, oldUri, newUri);
+    LOG.info("rename({}, {}) [Alluxio: {}, {}]", oldPath, newPath, oldUri, newUri);
 
     try {
       if (!mFileSystem.exists(oldUri)) {
@@ -669,7 +670,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
    */
   @Override
   public int rmdir(String path) {
-    LOG.trace("rmdir({})", path);
+    LOG.info("rmdir({})", path);
     return rmInternal(path, false);
   }
 
@@ -714,7 +715,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
    */
   @Override
   public int unlink(String path) {
-    LOG.trace("unlink({})", path);
+    LOG.info("unlink({})", path);
     return rmInternal(path, true);
   }
 
