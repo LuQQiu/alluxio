@@ -297,16 +297,24 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
   @Override
   public int getattr(String path, FileStat stat) {
     final AlluxioURI turi = mPathResolverCache.getUnchecked(path);
-    LOG.trace("getattr({}) [Alluxio: {}]", path, turi);
     try {
       if (!mFileSystem.exists(turi)) {
         return -ErrorCodes.ENOENT();
       }
       final URIStatus status = mFileSystem.getStatus(turi);
 
+      if (!status.isCompleted() && !waitForFileCompleted(turi)) {
+        if (status.getLength() == 0) {
+          LOG.error("file {} has length 0, we thought it may be fine...", path);
+        } else {
+          LOG.error("File {} has not completed", turi);
+        }
+      }
+
       long size = status.getLength();
       long blockSize = status.getBlockSizeBytes();
       stat.st_size.set(size);
+      LOG.info("getattr({}) size={}", path, size);
       // Sets block number and block size to fulfill du command needs
       stat.st_blksize.set(blockSize);
       // Does not consider replications
