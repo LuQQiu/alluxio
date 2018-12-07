@@ -272,7 +272,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
     }
     if (oe == null) {
       LOG.error("Cannot find fd for {} in table", path);
-      return -ErrorCodes.EBADFD();
+      return 0;
     }
     if (oe.getOut() != null) {
       try {
