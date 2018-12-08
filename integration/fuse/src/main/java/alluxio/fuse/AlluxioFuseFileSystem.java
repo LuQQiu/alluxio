@@ -65,7 +65,7 @@ import javax.annotation.concurrent.ThreadSafe;
 public final class AlluxioFuseFileSystem extends FuseStubFS {
   private static final Logger LOG = LoggerFactory.getLogger(AlluxioFuseFileSystem.class);
   private static final int MAX_OPEN_FILES = Integer.MAX_VALUE;
-  private static final int MAX_OPEN_WAITTIME_MS = 20000;
+  private static final int MAX_OPEN_WAITTIME_MS = 200000;
 
   /**
    * 4294967295 is unsigned long -1, -1 means that uid or gid is not set.
