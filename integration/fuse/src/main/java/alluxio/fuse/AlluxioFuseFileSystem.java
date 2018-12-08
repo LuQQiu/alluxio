@@ -438,17 +438,8 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
       }
 
       if (!status.isCompleted() && !waitForFileCompleted(uri)) {
-        if (status.getLength() == 0) {
-          // In wget and tar xvfz commands, we have the following workflow:
-          // Create() - open() - write() - flush() -release()
-          // open() here should do nothing
-          LOG.error("file {} has length 0, we thought it may be fine...", path);
-          return 0;
-        } else {
-          // Write operation starts but not finished
-          LOG.error("File {} has not completed", uri);
-          return -ErrorCodes.EFAULT();
-        }
+         LOG.error("File {} has not completed", uri);
+         return -ErrorCodes.EFAULT();
       }
 
       synchronized (mOpenFiles) {
@@ -502,7 +493,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
       LOG.error("Cannot read more than Integer.MAX_VALUE");
       return -ErrorCodes.EINVAL();
     }
-    LOG.info("read({}, {}, {})", path, size, offset);
+    LOG.trace("read({}, {}, {})", path, size, offset);
     final int sz = (int) size;
     final long fd = fi.fh.get();
     OpenFileEntry oe;
@@ -695,11 +686,6 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
         LOG.error("File {} does not exist", uri);
         return -ErrorCodes.ENOENT();
       }
-      final URIStatus status = mFileSystem.getStatus(uri);
-      if (status.getLength() == 0) {
-        // tar xvfz command will set the file size before writing data into the file
-        return 0;
-      }
     } catch (IOException e) {
       LOG.error("IOException encountered at path {}", path, e);
       return -ErrorCodes.EIO();
@@ -756,7 +742,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
       LOG.error("Cannot write more than Integer.MAX_VALUE");
       return ErrorCodes.EIO();
     }
-    LOG.info("write({}, {}, {})", path, size, offset);
+    LOG.trace("write({}, {}, {})", path, size, offset);
     final int sz = (int) size;
     final long fd = fi.fh.get();
     OpenFileEntry oe;
