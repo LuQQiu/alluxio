@@ -217,6 +217,9 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
   public int create(String path, @mode_t long mode, FuseFileInfo fi) {
     final AlluxioURI uri = mPathResolverCache.getUnchecked(path);
     final int flags = fi.flags.get();
+    if (path.contains(".fuse_hidden")) {
+      LOG.info("create({}, {}) [Alluxio: {}]", path, Integer.toHexString(flags), uri);
+    }
     LOG.trace("create({}, {}) [Alluxio: {}]", path, Integer.toHexString(flags), uri);
 
     try {
@@ -264,6 +267,9 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
    */
   @Override
   public int flush(String path, FuseFileInfo fi) {
+    if (path.contains(".fuse_hidden")) {
+      LOG.info("flush({})", path);
+    }
     LOG.trace("flush({})", path);
     final long fd = fi.fh.get();
     OpenFileEntry oe;
@@ -385,6 +391,9 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
   @Override
   public int mkdir(String path, @mode_t long mode) {
     final AlluxioURI turi = mPathResolverCache.getUnchecked(path);
+    if (path.contains(".fuse_hidden")) {
+      LOG.info("mkdir({}) [Alluxio: {}]", path, turi);
+    }
     LOG.trace("mkdir({}) [Alluxio: {}]", path, turi);
     try {
       mFileSystem.createDirectory(turi);
@@ -423,6 +432,9 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
     // (see {@code man 2 open} for the structure of the flags bitfield)
     // File creation flags are the last two bits of flags
     final int flags = fi.flags.get();
+    if (path.contains(".fuse_hidden")) {
+      LOG.info("open({}, 0x{}) [Alluxio: {}]", path, Integer.toHexString(flags), uri);
+    }
     LOG.trace("open({}, 0x{}) [Alluxio: {}]", path, Integer.toHexString(flags), uri);
 
     try {
@@ -600,6 +612,9 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
    */
   @Override
   public int release(String path, FuseFileInfo fi) {
+    if (path.contains(".fuse_hidden")) {
+      LOG.info("release({})", path);
+    }
     LOG.trace("release({})", path);
     final long fd = fi.fh.get();
     OpenFileEntry oe;
@@ -668,6 +683,9 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
    */
   @Override
   public int rmdir(String path) {
+    if (path.contains(".fuse_hidden")) {
+      LOG.info("rmdir({})", path);
+    }
     LOG.trace("rmdir({})", path);
     return rmInternal(path, false);
   }
@@ -706,6 +724,9 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
    */
   @Override
   public int unlink(String path) {
+    if (path.contains(".fuse_hidden")) {
+      LOG.info("unlink({})", path);
+    }
     LOG.trace("unlink({})", path);
     return rmInternal(path, true);
   }
