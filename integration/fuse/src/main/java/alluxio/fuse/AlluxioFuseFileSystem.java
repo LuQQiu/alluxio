@@ -217,7 +217,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
   public int create(String path, @mode_t long mode, FuseFileInfo fi) {
     final AlluxioURI uri = mPathResolverCache.getUnchecked(path);
     final int flags = fi.flags.get();
-    if (path.contains(".fuse_hidden")) {
+    if (path.contains(".fuse_hidden") || path.contains("00000001")) {
       LOG.info("create({}, {}) [Alluxio: {}]", path, Integer.toHexString(flags), uri);
     }
     LOG.trace("create({}, {}) [Alluxio: {}]", path, Integer.toHexString(flags), uri);
@@ -311,7 +311,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
       URIStatus status = mFileSystem.getStatus(turi);
       if (!status.isCompleted()) {
         if (!waitForFileCompleted(turi)) {
-          LOG.error("File {} is not completed", path);
+          // LOG.error("File {} is not completed", path);
         }
         status = mFileSystem.getStatus(turi);
       }
@@ -432,7 +432,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
     // (see {@code man 2 open} for the structure of the flags bitfield)
     // File creation flags are the last two bits of flags
     final int flags = fi.flags.get();
-    if (path.contains(".fuse_hidden")) {
+    if (path.contains(".fuse_hidden") || path.contains("00000001")) {
       LOG.info("open({}, 0x{}) [Alluxio: {}]", path, Integer.toHexString(flags), uri);
     }
     LOG.trace("open({}, 0x{}) [Alluxio: {}]", path, Integer.toHexString(flags), uri);
@@ -612,7 +612,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
    */
   @Override
   public int release(String path, FuseFileInfo fi) {
-    if (path.contains(".fuse_hidden")) {
+    if (path.contains(".fuse_hidden") || path.contains("00000001")) {
       LOG.info("release({})", path);
     }
     LOG.trace("release({})", path);
@@ -724,7 +724,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
    */
   @Override
   public int unlink(String path) {
-    if (path.contains(".fuse_hidden")) {
+    if (path.contains(".fuse_hidden") || path.contains("00000001")) {
       LOG.info("unlink({})", path);
     }
     LOG.trace("unlink({})", path);
