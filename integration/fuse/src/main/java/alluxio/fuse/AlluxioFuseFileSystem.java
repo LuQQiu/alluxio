@@ -309,12 +309,6 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
         return -ErrorCodes.ENOENT();
       }
       URIStatus status = mFileSystem.getStatus(turi);
-      if (!status.isCompleted()) {
-        if (!waitForFileCompleted(turi)) {
-          // LOG.error("File {} is not completed", path);
-        }
-        status = mFileSystem.getStatus(turi);
-      }
       long size = status.getLength();
       stat.st_size.set(size);
 
