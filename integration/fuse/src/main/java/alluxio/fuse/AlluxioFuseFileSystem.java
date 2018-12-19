@@ -14,6 +14,7 @@ package alluxio.fuse;
 import alluxio.AlluxioURI;
 import alluxio.Configuration;
 import alluxio.PropertyKey;
+import alluxio.client.file.FileInStream;
 import alluxio.client.file.FileSystem;
 import alluxio.client.file.URIStatus;
 import alluxio.client.file.options.SetAttributeOptions;
@@ -23,9 +24,14 @@ import alluxio.exception.FileAlreadyExistsException;
 import alluxio.exception.FileDoesNotExistException;
 import alluxio.exception.InvalidPathException;
 import alluxio.security.authorization.Mode;
+import alluxio.underfs.UfsStatus;
+import alluxio.underfs.UnderFileSystem;
+import alluxio.underfs.UnderFileSystemConfiguration;
+import alluxio.underfs.options.CreateOptions;
 import alluxio.util.CommonUtils;
 import alluxio.util.WaitForOptions;
 
+import alluxio.util.io.FileUtils;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.cache.CacheBuilder;
@@ -46,9 +52,16 @@ import ru.serce.jnrfuse.struct.FileStat;
 import ru.serce.jnrfuse.struct.FuseFileInfo;
 import ru.serce.jnrfuse.struct.Timespec;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.attribute.PosixFileAttributes;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -94,6 +107,8 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
 
   private long mNextOpenFileId;
 
+  private final File mTmpDir;
+
   /**
    * Creates a new instance of {@link AlluxioFuseFileSystem}.
    *
@@ -114,6 +129,12 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
         .maximumSize(maxCachedPaths)
         .build(new PathCacheLoader());
 
+    mTmpDir = new File("/tmp/mnt/fuse/");
+
+    if (!mTmpDir.mkdirs()) {
+      LOG.error("cannot create fuse tmp directory for writing hidden files");
+    }
+
     Preconditions.checkArgument(mAlluxioRootPath.isAbsolute(),
         "alluxio root path should be absolute");
   }
@@ -127,6 +148,26 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
    */
   @Override
   public int chmod(String path, @mode_t long mode) {
+    if (isHiddenFile(path)) {
+      return chmodLocal(path, mode);
+    } else {
+      return chmodInternal(path, mode);
+    }
+  }
+
+  private int chmodLocal(String path, @mode_t long mode) {
+    File file = generateTmpPath(path);
+    try {
+      String posixPerm = new Mode((short) mode).toString();
+      FileUtils.changeLocalFilePermission(file.getAbsolutePath(), posixPerm);
+    } catch (IOException e) {
+      LOG.error("Exception on {} of changing mode to {}", file.getAbsolutePath(), mode, e);
+      return -ErrorCodes.EIO();
+    }
+    return 0;
+  }
+
+  private int chmodInternal(String path, @mode_t long mode) {
     AlluxioURI uri = mPathResolverCache.getUnchecked(path);
 
     SetAttributeOptions options = SetAttributeOptions.defaults().setMode(new Mode((short) mode));
@@ -136,7 +177,6 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
       LOG.error("Exception on {} of changing mode to {}", path, mode, e);
       return -ErrorCodes.EIO();
     }
-
     return 0;
   }
 
@@ -158,11 +198,9 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
       return -ErrorCodes.ENOSYS();
     }
 
+    String userName = "";
+    String groupName = "";
     try {
-      SetAttributeOptions options = SetAttributeOptions.defaults();
-      final AlluxioURI uri = mPathResolverCache.getUnchecked(path);
-
-      String userName = "";
       if (uid != ID_NOT_SET_VALUE && uid != ID_NOT_SET_VALUE_UNSIGNED) {
         userName = AlluxioFuseUtils.getUserName(uid);
         if (userName.isEmpty()) {
@@ -170,10 +208,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
           LOG.error("Failed to get user name from uid {}", uid);
           return -ErrorCodes.EFAULT();
         }
-        options.setOwner(userName);
       }
-
-      String groupName = "";
       if (gid != ID_NOT_SET_VALUE && gid != ID_NOT_SET_VALUE_UNSIGNED) {
         groupName = AlluxioFuseUtils.getGroupName(gid);
         if (groupName.isEmpty()) {
@@ -181,26 +216,66 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
           LOG.error("Failed to get group name from gid {}", gid);
           return -ErrorCodes.EFAULT();
         }
-        options.setGroup(groupName);
       } else if (!userName.isEmpty()) {
         groupName = AlluxioFuseUtils.getGroupName(userName);
-        options.setGroup(groupName);
       }
 
       if (userName.isEmpty() && groupName.isEmpty()) {
         // This should never be reached
         LOG.info("Unable to change owner and group of file {} when uid is {} and gid is {}",
             path, userName, groupName);
-      } else if (userName.isEmpty()) {
-        LOG.info("Change group of file {} to {}", path, groupName);
-        mFileSystem.setAttribute(uri, options);
-      } else {
-        LOG.info("Change owner of file {} to {}", path, groupName);
-        mFileSystem.setAttribute(uri, options);
       }
+    } catch (IOException e) {
+      LOG.error("Exception on {}", path, e);
+      return -ErrorCodes.EIO();
+    }
+
+    if (isHiddenFile(path)) {
+      return chownLocal(path, userName, groupName);
+    } else {
+      return chownInternal(path, userName, groupName);
+    }
+  }
+
+
+  private int chownLocal(String path, String userName, String groupName) {
+    File file = generateTmpPath(path);
+    try {
+      if (!userName.isEmpty()) {
+        FileUtils.changeLocalFileUser(file.getAbsolutePath(), userName);
+      }
+      if (!groupName.isEmpty()) {
+        FileUtils.changeLocalFileGroup(file.getAbsolutePath(), groupName);
+      }
+    } catch (IOException e) {
+      LOG.error("Exception on {}", path, e);
+      return -ErrorCodes.EIO();
+    }
+    return 0;
+  }
+
+  private int chownInternal(String path, String userName, String groupName) {
+    SetAttributeOptions options = SetAttributeOptions.defaults();
+    final AlluxioURI uri = mPathResolverCache.getUnchecked(path);
+    if (!userName.isEmpty()) {
+      options.setOwner(userName);
+      LOG.info("Change owner of file {} to {}", path, groupName);
+    }
+    if (!groupName.isEmpty()) {
+      options.setGroup(groupName);
+      LOG.info("Change group of file {} to {}", path, groupName);
+    }
+    try {
+      mFileSystem.setAttribute(uri, options);
     } catch (IOException | AlluxioException e) {
       LOG.error("Exception on {}", path, e);
       return -ErrorCodes.EIO();
+    }
+    if (!userName.isEmpty()) {
+      LOG.info("Change owner of file {} to {}", path, groupName);
+    }
+    if (!groupName.isEmpty()) {
+      LOG.info("Change group of file {} to {}", path, groupName);
     }
     return 0;
   }
@@ -226,14 +301,22 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
               MAX_OPEN_FILES);
           return -ErrorCodes.EMFILE();
         }
-
-        final OpenFileEntry ofe = new OpenFileEntry(null, mFileSystem.createFile(uri));
+        OutputStream os;
+        if (isHiddenFile(path)) {
+          os = new FileOutputStream(generateTmpPath(path).getAbsolutePath());
+        } else {
+          os = mFileSystem.createFile(uri);
+        }
+        final OpenFileEntry ofe = new OpenFileEntry(null, os);
         LOG.debug("Alluxio OutStream created for {}", path);
         mOpenFiles.put(mNextOpenFileId, ofe);
         fi.fh.set(mNextOpenFileId);
 
         // Assuming I will never wrap around (2^64 open files are quite a lot anyway)
         mNextOpenFileId += 1;
+      }
+      if (isHiddenFile(path)) {
+        chmodLocal(path, mode);
       }
       LOG.debug("{} created and opened", path);
     } catch (FileAlreadyExistsException e) {
@@ -296,6 +379,61 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
    */
   @Override
   public int getattr(String path, FileStat stat) {
+    if (isHiddenFile(path)) {
+      return getattrLocal(path, stat);
+    } else {
+      return getattrInternal(path, stat);
+    }
+  }
+
+  private int getattrLocal(String path, FileStat stat) {
+    File file = generateTmpPath(path);
+    String pathInTmpDir = file.getAbsolutePath();
+    try {
+      if (!file.exists()) {
+        return -ErrorCodes.ENOENT();
+      }
+      long size = file.length();
+      stat.st_size.set(file.length());
+      stat.st_blocks.set((int) Math.ceil((double) size / 512));
+
+      final long ctime_sec = file.lastModified() / 1000;
+      // Keeps only the "residual" nanoseconds not caputred in citme_sec
+      final long ctime_nsec = (file.lastModified() % 1000) * 1000;
+
+      stat.st_ctim.tv_sec.set(ctime_sec);
+      stat.st_ctim.tv_nsec.set(ctime_nsec);
+      stat.st_mtim.tv_sec.set(ctime_sec);
+      stat.st_mtim.tv_nsec.set(ctime_nsec);
+
+      if (mIsUserGroupTranslation) {
+        // Translate the file owner/group to unix uid/gid
+        // Show as uid==-1 (nobody) if owner does not exist in unix
+        // Show as gid==-1 (nogroup) if group does not exist in unix
+        stat.st_uid.set(AlluxioFuseUtils.getUid(FileUtils.getLocalFileOwner(pathInTmpDir)));
+        stat.st_gid.set(AlluxioFuseUtils.getGidFromGroupName(FileUtils.getLocalFileGroup(pathInTmpDir)));
+      } else {
+        stat.st_uid.set(UID);
+        stat.st_gid.set(GID);
+      }
+      int mode = FileUtils.getLocalFileMode(pathInTmpDir);
+      if (file.isDirectory()) {
+        mode |= FileStat.S_IFDIR;
+      } else {
+        mode |= FileStat.S_IFREG;
+      }
+      stat.st_mode.set(mode);
+      stat.st_nlink.set(1);
+    } catch (IOException e) {
+      LOG.error("IOException on {}", path, e);
+      return -ErrorCodes.EIO();
+    }
+
+    return 0;
+  }
+
+  private int getattrInternal(String path, FileStat stat) {
+
     final AlluxioURI turi = mPathResolverCache.getUnchecked(path);
     LOG.trace("getattr({}) [Alluxio: {}]", path, turi);
     try {
@@ -384,6 +522,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
    */
   @Override
   public int mkdir(String path, @mode_t long mode) {
+
     final AlluxioURI turi = mPathResolverCache.getUnchecked(path);
     LOG.trace("mkdir({}) [Alluxio: {}]", path, turi);
     try {
@@ -425,6 +564,54 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
     final int flags = fi.flags.get();
     LOG.trace("open({}, 0x{}) [Alluxio: {}]", path, Integer.toHexString(flags), uri);
 
+    if (isHiddenFile(path)) {
+      return openLocal(path, fi);
+    } else {
+      return openInternal(path, fi);
+    }
+  }
+
+  private int openLocal(String path, FuseFileInfo fi) {
+    File file = generateTmpPath(path);
+    String pathInTmpDir = file.getAbsolutePath();
+    if (!file.exists()) {
+      LOG.error("File {} does not exist", pathInTmpDir);
+      return -ErrorCodes.ENOENT();
+    }
+    if (file.isDirectory()) {
+      LOG.error("File {} is a directory", pathInTmpDir);
+      return -ErrorCodes.EISDIR();
+    }
+    if (!file.canRead()) {
+      LOG.error("File {} cannot be read", pathInTmpDir);
+      return -ErrorCodes.EFAULT();
+    }
+    if (file.length() == 0) {
+      LOG.error("Empty file {} cannot be read", pathInTmpDir);
+      return -ErrorCodes.EFAULT();
+    }
+    try {
+      synchronized (mOpenFiles) {
+        if (mOpenFiles.size() == MAX_OPEN_FILES) {
+          LOG.error("Cannot open {}: too many open files", pathInTmpDir);
+          return ErrorCodes.EMFILE();
+        }
+        final OpenFileEntry ofe = new OpenFileEntry(new FileInputStream(pathInTmpDir), null);
+        mOpenFiles.put(mNextOpenFileId, ofe);
+        fi.fh.set(mNextOpenFileId);
+
+        // Assuming I will never wrap around (2^64 open files are quite a lot anyway)
+        mNextOpenFileId += 1;
+      }
+    } catch (IOException e) {
+      LOG.error("IOException on {}", pathInTmpDir, e);
+      return -ErrorCodes.EIO();
+    }
+    return 0;
+  }
+
+  private int openInternal(String path, FuseFileInfo fi) {
+    final AlluxioURI uri = mPathResolverCache.getUnchecked(path);
     try {
       if (!mFileSystem.exists(uri)) {
         LOG.error("File {} does not exist", uri);
@@ -506,17 +693,28 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
 
     int rd = 0;
     int nread = 0;
-    if (oe.getIn() == null) {
+    InputStream is = oe.getIn();
+    if (is == null) {
       LOG.error("{} was not open for reading", path);
       return -ErrorCodes.EBADFD();
     }
     try {
-      oe.getIn().seek(offset);
       final byte[] dest = new byte[sz];
-      while (rd >= 0 && nread < size) {
-        rd = oe.getIn().read(dest, nread, sz - nread);
-        if (rd >= 0) {
-          nread += rd;
+      if (is instanceof FileInStream) {
+        FileInStream fileInStream = (FileInStream) is;
+        fileInStream.seek(offset);
+        while (rd >= 0 && nread < size) {
+          rd = fileInStream.read(dest, nread, sz - nread);
+          if (rd >= 0) {
+            nread += rd;
+          }
+        }
+      } else {
+        while (rd >= 0 && nread < size) {
+          rd = is.read(dest, nread, sz - nread);
+          if (rd >= 0) {
+            nread += rd;
+          }
         }
       }
 
@@ -549,6 +747,16 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
   @Override
   public int readdir(String path, Pointer buff, FuseFillDir filter,
       @off_t long offset, FuseFileInfo fi) {
+    if (isHiddenFile(path)) {
+      return readDirLocal(path, buff, filter, offset, fi);
+    } else {
+      return readDirInternal(path, buff, filter, offset, fi);
+    }
+  }
+
+  private int readDirInternal(String path, Pointer buff, FuseFillDir filter,
+      @off_t long offset, FuseFileInfo fi) {
+
     final AlluxioURI turi = mPathResolverCache.getUnchecked(path);
     LOG.trace("readdir({}) [Alluxio: {}]", path, turi);
 
@@ -585,6 +793,26 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
       return -ErrorCodes.EFAULT();
     }
 
+    return 0;
+  }
+
+  private int readDirLocal(String path, Pointer buff, FuseFillDir filter,
+      @off_t long offset, FuseFileInfo fi) {
+    File file = generateTmpPath(path);
+    if (!file.exists()) {
+      return -ErrorCodes.ENOENT();
+    }
+    if (!file.isDirectory()) {
+      return -ErrorCodes.ENOTDIR();
+    }
+    File[] files = file.listFiles();
+    // standard . and .. entries
+    filter.apply(buff, ".", null, 0);
+    filter.apply(buff, "..", null, 0);
+
+    for (File f : files) {
+      filter.apply(buff, f.getName(), null, 0);
+    }
     return 0;
   }
 
@@ -629,10 +857,46 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
    */
   @Override
   public int rename(String oldPath, String newPath) {
+    // Old is hidden
+    // New is hidden
+    // Old and new is hidden
+    // Old and new is not
+    boolean oldIsHidden = isHiddenFile(oldPath);
+    boolean newIsHidden = isHiddenFile(newPath);
+    if (oldIsHidden && newIsHidden) {
+      return renameLocal(oldPath, newPath);
+    } else if (!oldIsHidden && !newIsHidden) {
+      return renameInternal(oldPath, newPath);
+    } else {
+      LOG.error("Cannot rename between hidden file and actual file");
+      return -ErrorCodes.EFAULT();
+    }
+  }
+
+  private int renameLocal(String oldPath, String newPath) {
+    File oldFile = generateTmpPath(oldPath);
+    String oldPathInTmp = oldFile.getAbsolutePath();
+    if (!oldFile.exists()) {
+      LOG.error("File {} does not exist", oldPathInTmp);
+      return -ErrorCodes.ENOENT();
+    }
+    File newFile = generateTmpPath(newPath);
+    String newPathInTmp = newFile.getAbsolutePath();
+    if (newFile.exists()) {
+      LOG.error("File {} already exists, please delete the destination file first", newPathInTmp);
+      return -ErrorCodes.EEXIST();
+    }
+    if (!oldFile.renameTo(newFile)) {
+      LOG.error("Failed to rename {} to {}", oldPathInTmp, newPathInTmp);
+      return  -ErrorCodes.EFAULT();
+    }
+    return 0;
+  }
+
+  private int renameInternal(String oldPath, String newPath) {
     final AlluxioURI oldUri = mPathResolverCache.getUnchecked(oldPath);
     final AlluxioURI newUri = mPathResolverCache.getUnchecked(newPath);
     LOG.trace("rename({}, {}) [Alluxio: {}, {}]", oldPath, newPath, oldUri, newUri);
-
     try {
       if (!mFileSystem.exists(oldUri)) {
         LOG.error("File {} does not exist", oldPath);
@@ -669,7 +933,11 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
   @Override
   public int rmdir(String path) {
     LOG.trace("rmdir({})", path);
-    return rmInternal(path, false);
+    if (isHiddenFile(path)) {
+      return rmLocal(path, false);
+    } else {
+      return rmInternal(path, false);
+    }
   }
 
   /**
@@ -707,7 +975,11 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
   @Override
   public int unlink(String path) {
     LOG.trace("unlink({})", path);
-    return rmInternal(path, true);
+    if (isHiddenFile(path)) {
+      return rmLocal(path, true);
+    } else {
+      return rmInternal(path, true);
+    }
   }
 
   /**
@@ -818,6 +1090,26 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
     return 0;
   }
 
+  private int rmLocal(String path, boolean mustBeFile) {
+    File file = generateTmpPath(path);
+    if (mustBeFile && file.isDirectory()) {
+      LOG.error("File {} is a directory", file.getAbsolutePath());
+      return -ErrorCodes.EISDIR();
+    }
+    boolean deleteRes;
+    if (file.exists()) {
+      deleteRes = file.delete();
+    } else {
+      LOG.error("The file {} to delete does not exist", file.getAbsolutePath());
+      return -ErrorCodes.ENOENT();
+    }
+    if (!deleteRes) {
+      LOG.error("Failed to delete {}", file.getAbsolutePath());
+      return -ErrorCodes.EIO();
+    }
+    return 0;
+  }
+
   /**
    * Waits for the file to complete before opening it.
    *
@@ -840,6 +1132,16 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
     } catch (TimeoutException te) {
       return false;
     }
+  }
+
+  private boolean isHiddenFile(String path) {
+    // get the file name of the path
+    File file = new File(path);
+    return file.getName().startsWith(".");
+  }
+
+  private File generateTmpPath(String path) {
+    return new File(mTmpDir, path);
   }
 
   /**

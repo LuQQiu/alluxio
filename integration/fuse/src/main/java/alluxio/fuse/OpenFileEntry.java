@@ -11,11 +11,10 @@
 
 package alluxio.fuse;
 
-import alluxio.client.file.FileInStream;
-import alluxio.client.file.FileOutStream;
-
 import java.io.Closeable;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
@@ -31,12 +30,12 @@ import javax.annotation.concurrent.NotThreadSafe;
  */
 @NotThreadSafe
 final class OpenFileEntry implements Closeable {
-  private final FileInStream mIn;
-  private final FileOutStream mOut;
+  private final InputStream mIn;
+  private final OutputStream mOut;
   /** the next write offset.  */
   private long mOffset;
 
-  public OpenFileEntry(FileInStream in, FileOutStream out) {
+  public OpenFileEntry(InputStream in, OutputStream out) {
     mIn = in;
     mOut = out;
     mOffset = -1;
@@ -48,7 +47,7 @@ final class OpenFileEntry implements Closeable {
    *
    * @return an opened input stream for the open alluxio file, or null
    */
-  public FileInStream getIn() {
+  public InputStream getIn() {
     return mIn;
   }
 
@@ -58,7 +57,7 @@ final class OpenFileEntry implements Closeable {
    *
    * @return an opened input stream for the open alluxio file, or null
    */
-  public FileOutStream getOut() {
+  public OutputStream getOut() {
     return mOut;
   }
 
