@@ -235,7 +235,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
   public int create(String path, @mode_t long mode, FuseFileInfo fi) {
     final AlluxioURI uri = mPathResolverCache.getUnchecked(path);
     final int flags = fi.flags.get();
-    LOG.trace("create({}, {}) [Alluxio: {}]", path, Integer.toHexString(flags), uri);
+    LOG.info("create({}, {}) [Alluxio: {}]", path, Integer.toHexString(flags), uri);
 
     try {
       synchronized (mOpenFiles) {
@@ -282,7 +282,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
    */
   @Override
   public int flush(String path, FuseFileInfo fi) {
-    LOG.trace("flush({})", path);
+    LOG.info("flush({})", path);
     final long fd = fi.fh.get();
     OpenFileEntry oe;
     synchronized (mOpenFiles) {
@@ -448,7 +448,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
     // (see {@code man 2 open} for the structure of the flags bitfield)
     // File creation flags are the last two bits of flags
     final int flags = fi.flags.get();
-    LOG.trace("open({}, 0x{}) [Alluxio: {}]", path, Integer.toHexString(flags), uri);
+    LOG.info("open({}, 0x{}) [Alluxio: {}]", path, Integer.toHexString(flags), uri);
 
     try {
       if (!mFileSystem.exists(uri)) {
@@ -518,7 +518,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
       LOG.error("Cannot read more than Integer.MAX_VALUE");
       return -ErrorCodes.EINVAL();
     }
-    LOG.trace("read({}, {}, {})", path, size, offset);
+    LOG.info("read({}, {}, {})", path, size, offset);
     final int sz = (int) size;
     final long fd = fi.fh.get();
     OpenFileEntry oe;
@@ -626,7 +626,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
    */
   @Override
   public int release(String path, FuseFileInfo fi) {
-    LOG.trace("release({})", path);
+    LOG.info("release({})", path);
     OpenFileEntry oe;
     synchronized (mOpenFiles) {
       // Synchronized as earlier as possible so that hopefully the following getattr()
@@ -658,7 +658,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
   public int rename(String oldPath, String newPath) {
     final AlluxioURI oldUri = mPathResolverCache.getUnchecked(oldPath);
     final AlluxioURI newUri = mPathResolverCache.getUnchecked(newPath);
-    LOG.trace("rename({}, {}) [Alluxio: {}, {}]", oldPath, newPath, oldUri, newUri);
+    LOG.info("rename({}, {}) [Alluxio: {}, {}]", oldPath, newPath, oldUri, newUri);
 
     try {
       if (!mFileSystem.exists(oldUri)) {
@@ -739,7 +739,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
    */
   @Override
   public int unlink(String path) {
-    LOG.trace("unlink({})", path);
+    LOG.info("unlink({})", path);
     return rmInternal(path, true);
   }
 
