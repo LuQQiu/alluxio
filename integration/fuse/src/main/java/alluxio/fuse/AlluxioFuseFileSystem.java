@@ -145,6 +145,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
    */
   @Override
   public int chmod(String path, @mode_t long mode) {
+    LOG.info("chmod {} to mode {}", path, mode);
     AlluxioURI uri = mPathResolverCache.getUnchecked(path);
 
     SetAttributeOptions options = SetAttributeOptions.defaults().setMode(new Mode((short) mode));
@@ -169,6 +170,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
    */
   @Override
   public int chown(String path, @uid_t long uid, @gid_t long gid) {
+    LOG.info("chown {} to {} and {}", path, uid, gid);
     if (!mIsUserGroupTranslation) {
       LOG.info("Cannot change the owner of path {}. Please set {} to be true to enable "
           + "user group translation in Alluxio-Fuse.",
