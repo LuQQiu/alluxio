@@ -233,9 +233,9 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
    */
   @Override
   public int create(String path, @mode_t long mode, FuseFileInfo fi) {
+    long begin = System.currentTimeMillis();
     final AlluxioURI uri = mPathResolverCache.getUnchecked(path);
     final int flags = fi.flags.get();
-    LOG.trace("create({}, {}) [Alluxio: {}]", path, Integer.toHexString(flags), uri);
 
     try {
       if (mOpenFiles.size() >= MAX_OPEN_FILES) {
@@ -266,6 +266,8 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
       return -ErrorCodes.EFAULT();
     }
 
+    LOG.info("create({}, {}) [Alluxio: {}] time {}", path, Integer.toHexString(flags), uri,
+        System.currentTimeMillis() - begin);
     return 0;
   }
 
@@ -280,6 +282,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
    */
   @Override
   public int flush(String path, FuseFileInfo fi) {
+    long begin = System.currentTimeMillis();
     LOG.trace("flush({})", path);
     final long fd = fi.fh.get();
     OpenFileEntry oe = mOpenFiles.getFirstByField(ID_INDEX, fd);
@@ -297,6 +300,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
     } else {
       LOG.debug("Not flushing: {} was not open for writing", path);
     }
+    LOG.info("flush({}) time {}", path, System.currentTimeMillis() - begin);
     return 0;
   }
 
@@ -309,6 +313,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
    */
   @Override
   public int getattr(String path, FileStat stat) {
+    long begin = System.currentTimeMillis();
     final AlluxioURI turi = mPathResolverCache.getUnchecked(path);
     LOG.trace("getattr({}) [Alluxio: {}]", path, turi);
     try {
@@ -376,6 +381,8 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
       return -ErrorCodes.EFAULT();
     }
 
+    LOG.info("getattr({}) [Alluxio: {}] with time {}", path, turi,
+        System.currentTimeMillis() - begin);
     return 0;
   }
 
@@ -396,6 +403,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
    */
   @Override
   public int mkdir(String path, @mode_t long mode) {
+    long begin = System.currentTimeMillis();
     final AlluxioURI turi = mPathResolverCache.getUnchecked(path);
     LOG.trace("mkdir({}) [Alluxio: {}]", path, turi);
     try {
@@ -417,6 +425,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
       return -ErrorCodes.EFAULT();
     }
 
+    LOG.info("mkdir({}) [Alluxio: {}] time {}", path, turi, System.currentTimeMillis() - begin);
     return 0;
   }
 
@@ -431,11 +440,11 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
    */
   @Override
   public int open(String path, FuseFileInfo fi) {
+    long begin = System.currentTimeMillis();
     final AlluxioURI uri = mPathResolverCache.getUnchecked(path);
     // (see {@code man 2 open} for the structure of the flags bitfield)
     // File creation flags are the last two bits of flags
     final int flags = fi.flags.get();
-    LOG.trace("open({}, 0x{}) [Alluxio: {}]", path, Integer.toHexString(flags), uri);
 
     try {
       final URIStatus status = mFileSystem.getStatus(uri);
@@ -475,6 +484,8 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
       return -ErrorCodes.EFAULT();
     }
 
+    LOG.info("open({}, 0x{}) [Alluxio: {}] time {}", path, Integer.toHexString(flags), uri,
+        System.currentTimeMillis() - begin);
     return 0;
   }
 
@@ -554,6 +565,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
   @Override
   public int readdir(String path, Pointer buff, FuseFillDir filter,
       @off_t long offset, FuseFileInfo fi) {
+    long begin = System.currentTimeMillis();
     final AlluxioURI turi = mPathResolverCache.getUnchecked(path);
     LOG.trace("readdir({}) [Alluxio: {}]", path, turi);
 
@@ -583,6 +595,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
       return -ErrorCodes.EFAULT();
     }
 
+    LOG.info("readdir({}) [Alluxio: {}] time {}", path, turi, System.currentTimeMillis() - begin);
     return 0;
   }
 
@@ -598,6 +611,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
    */
   @Override
   public int release(String path, FuseFileInfo fi) {
+    long begin = System.currentTimeMillis();
     LOG.trace("release({})", path);
     OpenFileEntry oe;
     final long fd = fi.fh.get();
@@ -614,6 +628,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
     } catch (IOException e) {
       LOG.error("Failed closing {} [in]", path, e);
     }
+    LOG.info("release({}) time {}", path, System.currentTimeMillis() - begin);
     return 0;
   }
 
@@ -626,6 +641,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
    */
   @Override
   public int rename(String oldPath, String newPath) {
+    long begin = System.currentTimeMillis();
     final AlluxioURI oldUri = mPathResolverCache.getUnchecked(oldPath);
     final AlluxioURI newUri = mPathResolverCache.getUnchecked(newPath);
     LOG.trace("rename({}, {}) [Alluxio: {}, {}]", oldPath, newPath, oldUri, newUri);
@@ -654,6 +670,9 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
       LOG.error("Unexpected exception on mv {} {}", oldPath, newPath, e);
       return -ErrorCodes.EFAULT();
     }
+
+    LOG.info("rename({}, {}) [Alluxio: {}, {}] time {}", oldPath, newPath, oldUri, newUri,
+        System.currentTimeMillis() - begin);
 
     return 0;
   }
@@ -761,6 +780,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
    * @return 0 on success, a negative value on error
    */
   private int rmInternal(String path) {
+    long begin = System.currentTimeMillis();
     final AlluxioURI turi = mPathResolverCache.getUnchecked(path);
 
     try {
@@ -781,7 +801,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
       LOG.error("Unexpected exception on {}", path, e);
       return -ErrorCodes.EFAULT();
     }
-
+    LOG.info("rmInternal {}, {}", path, System.currentTimeMillis() - begin);
     return 0;
   }
 
