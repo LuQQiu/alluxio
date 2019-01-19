@@ -524,22 +524,14 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
       return -ErrorCodes.EBADFD();
     }
 
-    int rd = 0;
-    int nread = 0;
+    int nread;
     if (oe.getIn() == null) {
       LOG.error("{} was not open for reading", path);
       return -ErrorCodes.EBADFD();
     }
     try {
-      oe.getIn().seek(offset);
       final byte[] dest = new byte[sz];
-      while (rd >= 0 && nread < size) {
-        rd = oe.getIn().read(dest, nread, sz - nread);
-        if (rd >= 0) {
-          nread += rd;
-        }
-      }
-
+      nread = oe.getIn().positionedRead(offset, dest, 0, sz);
       if (nread == -1) { // EOF
         nread = 0;
       } else if (nread > 0) {
@@ -553,7 +545,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
       return -ErrorCodes.EFAULT();
     }
 
-    LOG.trace("read({}, {}, {}) use {}", path, size, offset, System.currentTimeMillis() - begin);
+    LOG.info("read({}, {}, {}) use {}", path, size, offset, System.currentTimeMillis() - begin);
     return nread;
   }
 
