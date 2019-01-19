@@ -510,6 +510,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
   public int read(String path, Pointer buf, @size_t long size, @off_t long offset,
       FuseFileInfo fi) {
 
+    long begin = System.currentTimeMillis();
     if (size > Integer.MAX_VALUE) {
       LOG.error("Cannot read more than Integer.MAX_VALUE");
       return -ErrorCodes.EINVAL();
@@ -552,6 +553,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
       return -ErrorCodes.EFAULT();
     }
 
+    LOG.trace("read({}, {}, {}) use {}", path, size, offset, System.currentTimeMillis() - begin);
     return nread;
   }
 
