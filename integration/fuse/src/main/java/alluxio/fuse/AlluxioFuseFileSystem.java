@@ -553,7 +553,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
       return -ErrorCodes.EFAULT();
     }
 
-    LOG.trace("read({}, {}, {}) use {}", path, size, offset, System.currentTimeMillis() - begin);
+    LOG.info("read({}, {}, {}) use {}", path, size, offset, System.currentTimeMillis() - begin);
     return nread;
   }
 
