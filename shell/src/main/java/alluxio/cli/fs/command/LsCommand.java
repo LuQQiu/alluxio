@@ -232,8 +232,12 @@ public final class LsCommand extends AbstractFileSystemCommand {
       options.setLoadMetadataType(LoadMetadataType.Always);
     }
     options.setRecursive(recursive);
+    long start = System.currentTimeMillis();
     List<URIStatus> statuses = mFileSystem.listStatus(path, options);
+    long mid = System.currentTimeMillis();
+    System.out.println("listStatus takes " + (mid - start));
     List<URIStatus> sorted = sortByFieldAndOrder(statuses, sortField, reverse);
+    System.out.println("Sort takes " + (System.currentTimeMillis() - mid));
     for (URIStatus status : sorted) {
       if (!pinnedOnly || status.isPinned()) {
         printLsString(status, hSize);
