@@ -86,7 +86,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
       };
 
   private static final IndexDefinition<OpenFileEntry, String> PATH_INDEX =
-      new IndexDefinition<OpenFileEntry, String>(true) {
+      new IndexDefinition<OpenFileEntry, String>(false) {
         @Override
         public String getFieldValue(OpenFileEntry o) {
           return o.getPath();
@@ -577,7 +577,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
     try {
       mFileSystem.rename(oldUri, newUri);
       synchronized (mOpenFiles) {
-        if (mOpenFiles.contains(PATH_INDEX, oldPath)) {
+        while (mOpenFiles.contains(PATH_INDEX, oldPath)) {
           OpenFileEntry oe = mOpenFiles.getFirstByField(PATH_INDEX, oldPath);
           oe.setPath(newPath);
         }
