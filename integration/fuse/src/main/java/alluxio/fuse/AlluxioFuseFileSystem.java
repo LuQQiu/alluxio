@@ -233,9 +233,9 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
    */
   @Override
   public int create(String path, @mode_t long mode, FuseFileInfo fi) {
+    long start = System.currentTimeMillis();
     final AlluxioURI uri = mPathResolverCache.getUnchecked(path);
     final int flags = fi.flags.get();
-    LOG.trace("create({}, {}) [Alluxio: {}]", path, Integer.toHexString(flags), uri);
 
     try {
       if (mOpenFiles.size() >= MAX_OPEN_FILES) {
@@ -258,6 +258,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
       return AlluxioFuseUtils.getErrorCode(t);
     }
 
+    LOG.info("create({}) [Alluxio: {}] takes {}", path, uri, System.currentTimeMillis() - start);
     return 0;
   }
 
@@ -399,6 +400,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
    */
   @Override
   public int open(String path, FuseFileInfo fi) {
+    long start = System.currentTimeMillis();
     final AlluxioURI uri = mPathResolverCache.getUnchecked(path);
     // (see {@code man 2 open} for the structure of the flags bitfield)
     // File creation flags are the last two bits of flags
@@ -433,6 +435,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
       LOG.error("Failed to open file {}", path, t);
       return AlluxioFuseUtils.getErrorCode(t);
     }
+    LOG.info("open({}) [Alluxio: {}] takes {}", path, uri, (System.currentTimeMillis() - start));
 
     return 0;
   }
@@ -454,12 +457,11 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
   @Override
   public int read(String path, Pointer buf, @size_t long size, @off_t long offset,
       FuseFileInfo fi) {
-
+    long start = System.currentTimeMillis();
     if (size > Integer.MAX_VALUE) {
       LOG.error("Cannot read more than Integer.MAX_VALUE");
       return -ErrorCodes.EINVAL();
     }
-    LOG.trace("read({}, {}, {})", path, size, offset);
     final int sz = (int) size;
     final long fd = fi.fh.get();
     OpenFileEntry oe = mOpenFiles.getFirstByField(ID_INDEX, fd);
@@ -493,7 +495,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
       LOG.error("Failed to read file {}", path, t);
       return AlluxioFuseUtils.getErrorCode(t);
     }
-
+    LOG.info("read({}, {}, {}) takes {}", path, size, offset, System.currentTimeMillis() - start);
     return nread;
   }
 
@@ -542,7 +544,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
    */
   @Override
   public int release(String path, FuseFileInfo fi) {
-    LOG.trace("release({})", path);
+    long start = System.currentTimeMillis();
     OpenFileEntry oe;
     final long fd = fi.fh.get();
     synchronized (mOpenFiles) {
@@ -558,6 +560,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
     } catch (IOException e) {
       LOG.error("Failed closing {} [in]", path, e);
     }
+    LOG.info("release({}) takes {}", path, (System.currentTimeMillis() - start));
     return 0;
   }
 
