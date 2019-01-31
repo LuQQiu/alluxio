@@ -273,7 +273,6 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
    */
   @Override
   public int flush(String path, FuseFileInfo fi) {
-    LOG.trace("flush({})", path);
     final long fd = fi.fh.get();
     OpenFileEntry oe = mOpenFiles.getFirstByField(ID_INDEX, fd);
     if (oe == null) {
@@ -400,7 +399,6 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
    */
   @Override
   public int open(String path, FuseFileInfo fi) {
-    long start = System.currentTimeMillis();
     final AlluxioURI uri = mPathResolverCache.getUnchecked(path);
     // (see {@code man 2 open} for the structure of the flags bitfield)
     // File creation flags are the last two bits of flags
@@ -435,8 +433,6 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
       LOG.error("Failed to open file {}", path, t);
       return AlluxioFuseUtils.getErrorCode(t);
     }
-    LOG.info("open({}) [Alluxio: {}] takes {}", path, uri, (System.currentTimeMillis() - start));
-
     return 0;
   }
 
@@ -457,7 +453,9 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
   @Override
   public int read(String path, Pointer buf, @size_t long size, @off_t long offset,
       FuseFileInfo fi) {
-    long start = System.currentTimeMillis();
+    if (offset == 0L) {
+      return readWithLogging(path, buf, size, offset,fi);
+    }
     if (size > Integer.MAX_VALUE) {
       LOG.error("Cannot read more than Integer.MAX_VALUE");
       return -ErrorCodes.EINVAL();
@@ -495,7 +493,60 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
       LOG.error("Failed to read file {}", path, t);
       return AlluxioFuseUtils.getErrorCode(t);
     }
-    LOG.info("read({}, {}, {}) takes {}", path, size, offset, System.currentTimeMillis() - start);
+    return nread;
+  }
+
+  private int readWithLogging(String path, Pointer buf, @size_t long size, @off_t long offset,
+      FuseFileInfo fi) {
+    long start = System.currentTimeMillis();
+    if (size > Integer.MAX_VALUE) {
+      LOG.error("Cannot read more than Integer.MAX_VALUE");
+      return -ErrorCodes.EINVAL();
+    }
+    final int sz = (int) size;
+    final long fd = fi.fh.get();
+    OpenFileEntry oe = mOpenFiles.getFirstByField(ID_INDEX, fd);
+    if (oe == null) {
+      LOG.error("Cannot find fd for {} in table", path);
+      return -ErrorCodes.EBADFD();
+    }
+
+    int rd = 0;
+    int nread = 0;
+    long two = System.currentTimeMillis();
+    LOG.info("{} getFirstByField {}", fd, two - start);
+    FileInStream is = oe.getIn();
+    long third = System.currentTimeMillis();
+    LOG.info("{} FileInStream is = oe.getIn() takes {}", fd, third - two);
+    if (is == null) {
+      LOG.error("{} was not open for reading", path);
+      return -ErrorCodes.EBADFD();
+    }
+    try {
+      long forth = System.currentTimeMillis();
+      LOG.info("{}, is == null takes {}", fd, forth - third);
+      is.seek(offset);
+      long fifth = System.currentTimeMillis();
+      LOG.info("{} seek takes {}", fd, fifth - forth);
+      final byte[] dest = new byte[sz];
+      while (rd >= 0 && nread < size) {
+        rd = is.read(dest, nread, sz - nread);
+        if (rd >= 0) {
+          nread += rd;
+        }
+      }
+
+      if (nread == -1) { // EOF
+        nread = 0;
+      } else if (nread > 0) {
+        buf.put(0, dest, 0, nread);
+      }
+      long sixth = System.currentTimeMillis();
+      LOG.info("{} read takes {}", fd, sixth - fifth);
+    } catch (Throwable t) {
+      LOG.error("Failed to read file {}", path, t);
+      return AlluxioFuseUtils.getErrorCode(t);
+    }
     return nread;
   }
 
