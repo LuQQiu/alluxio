@@ -166,12 +166,15 @@ public class BlockInStream extends InputStream implements BoundedStream, Seekabl
   private static BlockInStream createGrpcBlockInStream(FileSystemContext context,
       WorkerNetAddress address, BlockInStreamSource blockSource,
       ReadRequest readRequestPartial, long blockSize, InStreamOptions options) {
+    long start = System.nanoTime();
     long chunkSize = context.getConf()
         .getBytes(PropertyKey.USER_NETWORK_READER_CHUNK_SIZE_BYTES);
     DataReader.Factory factory = new GrpcDataReader.Factory(context, address,
         readRequestPartial.toBuilder().setChunkSize(chunkSize).buildPartial());
-    return new BlockInStream(factory, address, blockSource, readRequestPartial.getBlockId(),
+    BlockInStream is = new BlockInStream(factory, address, blockSource, readRequestPartial.getBlockId(),
         blockSize);
+    LOG.info("createGrpcBlockInStream takes {}", System.nanoTime() - start);
+    return is;
   }
 
   /**
