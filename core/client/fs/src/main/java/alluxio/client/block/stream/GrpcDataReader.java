@@ -96,7 +96,9 @@ public final class GrpcDataReader implements DataReader {
     Preconditions.checkState(!mClient.isShutdown(),
         "Data reader is closed while reading data chunks.");
     ByteString buf;
+    long start = System.currentTimeMillis();
     ReadResponse response = mStream.receive(mDataTimeoutMs);
+    LOG.info("mStream.receive takes {}", System.currentTimeMillis() - start);
     if (response == null) {
       return null;
     }
