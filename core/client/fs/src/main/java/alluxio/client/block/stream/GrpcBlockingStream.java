@@ -23,6 +23,8 @@ import io.grpc.StatusRuntimeException;
 import io.grpc.stub.ClientCallStreamObserver;
 import io.grpc.stub.ClientResponseObserver;
 import io.grpc.stub.StreamObserver;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -43,6 +45,7 @@ import javax.annotation.concurrent.NotThreadSafe;
  */
 @NotThreadSafe
 public class GrpcBlockingStream<ReqT, ResT> {
+  private static final Logger LOG = LoggerFactory.getLogger(GrpcBlockingStream.class);
   private final StreamObserver<ResT> mResponseObserver;
   private final ClientCallStreamObserver<ReqT> mRequestObserver;
   /** Buffer that stores responses to be consumed by {@link GrpcBlockingStream#receive(long)}. */
@@ -129,7 +132,10 @@ public class GrpcBlockingStream<ReqT, ResT> {
       throw new CanceledException(formatErrorMessage("Stream is already canceled."));
     }
     try {
+      long start = System.currentTimeMillis();
       Object response = mResponses.poll(timeoutMs, TimeUnit.MILLISECONDS);
+      long mid = System.currentTimeMillis();
+      LOG.info("GrpcBlockingStream mResponse.poll takes {}", mid - start);
       if (response == null) {
         throw new DeadlineExceededException(
             formatErrorMessage("Timeout waiting for response after %dms.", timeoutMs));
@@ -139,6 +145,7 @@ public class GrpcBlockingStream<ReqT, ResT> {
         return null;
       }
       checkError();
+      LOG.info("GrpcBlockingStream checkError {}", System.currentTimeMillis() - mid);
       return (ResT) response;
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
