@@ -99,13 +99,17 @@ public final class BlockReadHandler extends AbstractReadHandler<BlockReadRequest
     @Override
     protected DataBuffer getDataBuffer(BlockReadRequestContext context,
         StreamObserver<ReadResponse> response, long offset, int len) throws Exception {
+      long start = System.currentTimeMillis();
       openBlock(context, response);
+      long mid = System.currentTimeMillis();
+      LOG.info("open Block takes {}", mid - start);
       BlockReader blockReader = context.getBlockReader();
       Preconditions.checkState(blockReader != null);
       ByteBuf buf = PooledByteBufAllocator.DEFAULT.buffer(len, len);
       try {
         while (buf.writableBytes() > 0 && blockReader.transferTo(buf) != -1) {
         }
+        LOG.info("blockReader.transferTo(buf) takes {}", System.currentTimeMillis() - mid);
         return new NettyDataBuffer(buf);
       } catch (Throwable e) {
         buf.release();
