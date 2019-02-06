@@ -264,7 +264,8 @@ abstract class AbstractReadHandler<T extends ReadRequestContext<?>>
     }
 
     private void runInternal() {
-      long start = System.currentTimeMillis();
+      long timeStart = System.currentTimeMillis();
+      long start;
       boolean eof;  // End of file. Everything requested has been read.
       boolean cancel;
       Error error;  // error occurred, abort requested.
@@ -338,7 +339,7 @@ abstract class AbstractReadHandler<T extends ReadRequestContext<?>>
           replyCancel();
         }
       }
-      LOG.info("DataReader runInternal takes {}", System.currentTimeMillis() - start);
+      LOG.info("DataReader runInternal takes {}", System.currentTimeMillis() - timeStart);
     }
 
     /**
@@ -365,7 +366,6 @@ abstract class AbstractReadHandler<T extends ReadRequestContext<?>>
      * Writes an error read response to the channel and closes the channel after that.
      */
     private void replyError(Error error) {
-      long start = System.currentTimeMillis();
       try {
         mResponse.onError(GrpcExceptionUtils.toGrpcStatusException(error.getCause()));
       } catch (StatusRuntimeException e) {
@@ -374,14 +374,12 @@ abstract class AbstractReadHandler<T extends ReadRequestContext<?>>
           throw e;
         }
       }
-      LOG.info("AbstractReadHandler replyError takes {}", System.currentTimeMillis() - start);
     }
 
     /**
      * Writes a success response.
      */
     private void replyEof() {
-      long start = System.currentTimeMillis();
       try {
         Preconditions.checkState(!mContext.isDoneUnsafe());
         mContext.setDoneUnsafe(true);
@@ -391,7 +389,6 @@ abstract class AbstractReadHandler<T extends ReadRequestContext<?>>
           throw e;
         }
       }
-      LOG.info("replyEof takes {}", System.currentTimeMillis() - start);
     }
 
     /**
