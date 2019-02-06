@@ -270,6 +270,7 @@ abstract class AbstractReadHandler<T extends ReadRequestContext<?>>
       while (true) {
         final long start;
         final int chunkSize;
+        long timestart = System.currentTimeMillis();
         try (LockResource lr = new LockResource(mLock)) {
           start = mContext.getPosToQueue();
           eof = mContext.isEof();
@@ -285,6 +286,8 @@ abstract class AbstractReadHandler<T extends ReadRequestContext<?>>
           // chunkSize should always be > 0 here when reaches here.
           Preconditions.checkState(chunkSize > 0);
         }
+        long secondTime = System.currentTimeMillis();
+        LOG.info("first locked try takes {}", secondTime - start);
 
         DataBuffer chunk = null;
         try {
@@ -300,7 +303,8 @@ abstract class AbstractReadHandler<T extends ReadRequestContext<?>>
             // block or file starting from the given offset.
             setEof();
           }
-
+          long thirdTime = System.currentTimeMillis();
+          LOG.info("second getDataBuffer takes {}", thirdTime - secondTime);
           if (chunk != null) {
             ReadResponse response = ReadResponse.newBuilder().setChunk(Chunk.newBuilder()
                 .setData(UnsafeByteOperations.unsafeWrap(chunk.getReadOnlyByteBuffer())).build())
@@ -308,6 +312,8 @@ abstract class AbstractReadHandler<T extends ReadRequestContext<?>>
             mResponse.onNext(response);
             incrementMetrics(chunk.getLength());
           }
+          long forthTime = System.currentTimeMillis();
+          LOG.info("third onNext takes {}", forthTime - thirdTime);
         } catch (Exception e) {
           LOG.error("Failed to read data.", e);
           setError(new Error(AlluxioStatusException.fromThrowable(e), true));
@@ -318,7 +324,7 @@ abstract class AbstractReadHandler<T extends ReadRequestContext<?>>
           }
         }
       }
-
+      long fifthTime = System.currentTimeMillis();
       if (error != null) {
         try {
           // mRequest is null if an exception is thrown when initializing mRequest.
@@ -341,6 +347,7 @@ abstract class AbstractReadHandler<T extends ReadRequestContext<?>>
           replyCancel();
         }
       }
+      LOG.info("error takes {}", System.currentTimeMillis() - fifthTime);
     }
 
     /**
