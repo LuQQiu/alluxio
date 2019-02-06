@@ -264,13 +264,12 @@ abstract class AbstractReadHandler<T extends ReadRequestContext<?>>
     }
 
     private void runInternal() {
+      long start = System.currentTimeMillis();
       boolean eof;  // End of file. Everything requested has been read.
       boolean cancel;
       Error error;  // error occurred, abort requested.
       while (true) {
-        final long start;
         final int chunkSize;
-        long timestart = System.currentTimeMillis();
         try (LockResource lr = new LockResource(mLock)) {
           start = mContext.getPosToQueue();
           eof = mContext.isEof();
@@ -286,8 +285,6 @@ abstract class AbstractReadHandler<T extends ReadRequestContext<?>>
           // chunkSize should always be > 0 here when reaches here.
           Preconditions.checkState(chunkSize > 0);
         }
-        long secondTime = System.currentTimeMillis();
-        LOG.info("first locked try takes {}", secondTime - start);
 
         DataBuffer chunk = null;
         try {
@@ -303,8 +300,6 @@ abstract class AbstractReadHandler<T extends ReadRequestContext<?>>
             // block or file starting from the given offset.
             setEof();
           }
-          long thirdTime = System.currentTimeMillis();
-          LOG.info("second getDataBuffer takes {}", thirdTime - secondTime);
           if (chunk != null) {
             ReadResponse response = ReadResponse.newBuilder().setChunk(Chunk.newBuilder()
                 .setData(UnsafeByteOperations.unsafeWrap(chunk.getReadOnlyByteBuffer())).build())
@@ -312,10 +307,7 @@ abstract class AbstractReadHandler<T extends ReadRequestContext<?>>
             mResponse.onNext(response);
             incrementMetrics(chunk.getLength());
           }
-          long forthTime = System.currentTimeMillis();
-          LOG.info("third onNext takes {}", forthTime - thirdTime);
         } catch (Exception e) {
-          LOG.error("Failed to read data.", e);
           setError(new Error(AlluxioStatusException.fromThrowable(e), true));
           continue;
         } finally {
@@ -324,7 +316,6 @@ abstract class AbstractReadHandler<T extends ReadRequestContext<?>>
           }
         }
       }
-      long fifthTime = System.currentTimeMillis();
       if (error != null) {
         try {
           // mRequest is null if an exception is thrown when initializing mRequest.
@@ -347,7 +338,7 @@ abstract class AbstractReadHandler<T extends ReadRequestContext<?>>
           replyCancel();
         }
       }
-      LOG.info("error takes {}", System.currentTimeMillis() - fifthTime);
+      LOG.info("DataReader runInternal takes {}", System.currentTimeMillis() - start);
     }
 
     /**
@@ -374,6 +365,7 @@ abstract class AbstractReadHandler<T extends ReadRequestContext<?>>
      * Writes an error read response to the channel and closes the channel after that.
      */
     private void replyError(Error error) {
+      long start = System.currentTimeMillis();
       try {
         mResponse.onError(GrpcExceptionUtils.toGrpcStatusException(error.getCause()));
       } catch (StatusRuntimeException e) {
@@ -382,12 +374,14 @@ abstract class AbstractReadHandler<T extends ReadRequestContext<?>>
           throw e;
         }
       }
+      LOG.info("AbstractReadHandler replyError takes {}", System.currentTimeMillis() - start);
     }
 
     /**
      * Writes a success response.
      */
     private void replyEof() {
+      long start = System.currentTimeMillis();
       try {
         Preconditions.checkState(!mContext.isDoneUnsafe());
         mContext.setDoneUnsafe(true);
@@ -397,6 +391,7 @@ abstract class AbstractReadHandler<T extends ReadRequestContext<?>>
           throw e;
         }
       }
+      LOG.info("replyEof takes {}", System.currentTimeMillis() - start);
     }
 
     /**

@@ -58,11 +58,13 @@ public class BlockWorkerImpl extends BlockWorkerGrpc.BlockWorkerImplBase {
 
   @Override
   public StreamObserver<ReadRequest> readBlock(StreamObserver<ReadResponse> responseObserver) {
+    long start = System.currentTimeMillis();
     BlockReadHandler readHandler = new BlockReadHandler(GrpcExecutors.BLOCK_READER_EXECUTOR,
         mWorkerProcess.getWorker(BlockWorker.class), responseObserver);
     ServerCallStreamObserver<ReadResponse> serverCallStreamObserver =
         (ServerCallStreamObserver<ReadResponse>) responseObserver;
     serverCallStreamObserver.setOnReadyHandler(readHandler::onReady);
+    LOG.info("BlockWorkerImpl,readBlock takes {}", System.currentTimeMillis() - start);
     return readHandler;
   }
 
