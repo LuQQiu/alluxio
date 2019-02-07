@@ -493,7 +493,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
       LOG.error("Failed to read file {}", path, t);
       return AlluxioFuseUtils.getErrorCode(t);
     }
-    LOG.info("read takes {}", System.currentTimeMillis());
+    LOG.info("read takes {}", System.currentTimeMillis() - start);
     return nread;
   }
 
