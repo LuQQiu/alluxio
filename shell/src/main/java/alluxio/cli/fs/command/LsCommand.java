@@ -237,11 +237,19 @@ public final class LsCommand extends AbstractFileSystemCommand {
         @Override
         public void run() {
           System.out.printf("Getting directory status of %s files or sub-directories "
+<<<<<<< HEAD
               + "may take a while.", pathStatus.getLength());
         }
       }, 10000);
     }
     List<URIStatus> statuses = mFileSystem.listStatus(path, options);
+=======
+              + "may taike a while.", pathStatus.getLength());
+        }
+      }, 10000);
+    }
+    List<URIStatus> statuses = mFileSystem.listStatus(path, optionsBuilder.build());
+>>>>>>> 34d1dadb1c... display detailed file number in slow fs ls command (#8364)
     timer.cancel();
 
     List<URIStatus> sorted = sortByFieldAndOrder(statuses, sortField, reverse);
