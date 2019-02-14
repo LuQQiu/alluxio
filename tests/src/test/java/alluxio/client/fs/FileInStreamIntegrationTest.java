@@ -67,7 +67,7 @@ public final class FileInStreamIntegrationTest extends BaseIntegrationTest {
   private String mTestPath;
 
   @Rule
-  public Timeout mGlobalTimeout = Timeout.seconds(60);
+  public Timeout mGlobalTimeout = Timeout.seconds(120);
 
   @Rule
   public ExpectedException mThrown = ExpectedException.none();
@@ -387,6 +387,62 @@ public final class FileInStreamIntegrationTest extends BaseIntegrationTest {
     service.shutdown();
     service.awaitTermination(Constants.MINUTE_MS, TimeUnit.MILLISECONDS);
     Assert.assertEquals(concurrency * 2, count.get());
+  }
+
+  @Test(timeout = 100000000)
+  @LocalAlluxioClusterResource.Config(
+      confParams = {PropertyKey.Name.USER_SHORT_CIRCUIT_ENABLED, "false"})
+  public void RemoteReadSmallFile() throws Exception {
+    int totalSize = Constants.MB;
+
+    // Create files of varying size and write type to later read from
+    final AlluxioURI path = new AlluxioURI(mTestPath + "/largeFile");
+    FileSystemTestUtils.createByteFile(mFileSystem, path,
+        CreateFilePOptions.newBuilder().setWriteType(WritePType.MUST_CACHE).build(), totalSize);
+
+    StringBuilder sb = new StringBuilder();
+    /**
+    for (int i = 0; i < 20; i++) {
+      try (FileInStream is = mFileSystem.openFile(path,
+          OpenFilePOptions.newBuilder().build())) {
+        int start = 0;
+        while (start < length) {
+          long s = System.currentTimeMillis();
+          byte[] buffer = new byte[bufferSize];
+          int bytesRead = is.read(buffer, 0, bufferSize);
+          long e = System.currentTimeMillis();
+          sb.append(String.format("%s takes %s%n", start, (e - s)));
+          start = bytesRead + start;
+        }
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+    }*/
+
+    int size = 128 * Constants.KB;
+    int number = (int) Math.ceil(totalSize / size);
+    for (int a = 0; a < 30; a++) {
+
+      try (FileInStream is = mFileSystem.openFile(path,
+          OpenFilePOptions.newBuilder().build())) {
+        for (int i = 0; i < number; i++) {
+          int offset = i * size;
+          long start = System.currentTimeMillis();
+          byte[] dest = new byte[size];
+          int rd = 0;
+          int nread = 0;
+          is.seek(offset);
+          while (rd >= 0 && nread < size) {
+            rd = is.read(dest, nread, size - nread);
+            if (rd >= 0) {
+              nread += rd;
+            }
+          }
+          System.out.printf("read %s part takes %s%n", i, (System.currentTimeMillis() - start));
+        }
+      }
+    }
+    Assert.assertEquals(1, 1);
   }
 
   /**
