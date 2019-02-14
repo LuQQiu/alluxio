@@ -107,7 +107,7 @@ public final class FooCommand extends AbstractFileSystemCommand {
             nread += rd;
           }
         }
-        System.out.printf("read {} part takes {}", i, (System.currentTimeMillis() - start));
+        System.out.printf("read %s part takes %s", i, (System.currentTimeMillis() - start));
       }
     }
   }
