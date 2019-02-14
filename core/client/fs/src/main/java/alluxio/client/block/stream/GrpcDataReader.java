@@ -84,9 +84,11 @@ public final class GrpcDataReader implements DataReader {
       if (alluxioConf.getBoolean(PropertyKey.USER_NETWORK_ZEROCOPY_ENABLED)) {
         mStream = new GrpcDataMessageBlockingStream<>(mClient::readBlock, mReaderBufferSizeMessages,
             address.toString(), mMarshaller);
+        LOG.info("create GrpcDataMessageBlockingStream");
       } else {
         mStream = new GrpcBlockingStream<>(mClient::readBlock, mReaderBufferSizeMessages,
             address.toString());
+        LOG.info("create GrpcBlockingStream");
       }
       mStream.send(mReadRequest, mDataTimeoutMs);
     } catch (Exception e) {
@@ -106,6 +108,7 @@ public final class GrpcDataReader implements DataReader {
         "Data reader is closed while reading data chunks.");
     DataBuffer buffer = null;
     ReadResponse response = null;
+    long start = System.currentTimeMillis();
     if (mStream instanceof GrpcDataMessageBlockingStream) {
       DataMessage<ReadResponse, DataBuffer> message =
           ((GrpcDataMessageBlockingStream<ReadRequest, ReadResponse>) mStream)
@@ -115,8 +118,10 @@ public final class GrpcDataReader implements DataReader {
         buffer = message.getBuffer();
         Preconditions.checkState(buffer != null, "response should always contain chunk");
       }
+      LOG.info("GrpcDataMessageBlockingStream get message takes {}", System.currentTimeMillis() - start);
     } else {
       response = mStream.receive(mDataTimeoutMs);
+      LOG.info("GrpcBlockingStream mStream.receive takes {}", System.currentTimeMillis() - start);
       if (response != null) {
         Preconditions.checkState(response.hasChunk() && response.getChunk().hasData(),
             "response should always contain chunk");

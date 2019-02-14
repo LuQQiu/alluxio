@@ -67,7 +67,7 @@ public final class FileInStreamIntegrationTest extends BaseIntegrationTest {
   private String mTestPath;
 
   @Rule
-  public Timeout mGlobalTimeout = Timeout.seconds(120);
+  public Timeout mGlobalTimeout = Timeout.seconds(1200);
 
   @Rule
   public ExpectedException mThrown = ExpectedException.none();
@@ -426,6 +426,9 @@ public final class FileInStreamIntegrationTest extends BaseIntegrationTest {
       try (FileInStream is = mFileSystem.openFile(path,
           OpenFilePOptions.newBuilder().build())) {
         for (int i = 0; i < number; i++) {
+          if (i == 0) {
+            System.out.println("0");
+          }
           int offset = i * size;
           long start = System.currentTimeMillis();
           byte[] dest = new byte[size];

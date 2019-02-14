@@ -275,6 +275,10 @@ public class GrpcBlockingStream<ReqT, ResT> {
       });
     }
 
+    public int getResponseSize() {
+      return mResponses.size();
+    }
+
     private void handleInterruptedException(InterruptedException e) {
       Thread.currentThread().interrupt();
       try (LockResource lr = new LockResource(mLock)) {
