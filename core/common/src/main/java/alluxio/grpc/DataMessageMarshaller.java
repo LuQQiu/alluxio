@@ -64,7 +64,7 @@ public abstract class DataMessageMarshaller<T> implements MethodDescriptor.Marsh
         CompositeReadableBuffer readableBuffer = new CompositeReadableBuffer();
         readableBuffer.addBuffer(rawBuffer);
         T indo = deserialize(readableBuffer);
-        LOG.info("parse takes {}", System.currentTimeMillis() - start);
+        LOG.info("RawBuffer != null parse takes {}", System.currentTimeMillis() - start);
         return indo;
       } else {
         // falls back to buffer copy
