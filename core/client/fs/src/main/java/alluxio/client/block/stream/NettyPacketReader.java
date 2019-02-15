@@ -145,8 +145,10 @@ public final class NettyPacketReader implements PacketReader {
     }
     ByteBuf buf;
     try {
+      long start = System.currentTimeMillis();
       while ((buf = mPackets.poll(READ_TIMEOUT_MS, TimeUnit.MILLISECONDS)) == UFS_READ_HEARTBEAT) {
       }
+      LOG.info("mPackets.poll takes {}, buffer size is {} ", System.currentTimeMillis() - start, buf.readableBytes());
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
       throw new CanceledException(e);

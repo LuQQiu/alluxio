@@ -370,7 +370,9 @@ public class BlockInStream extends InputStream implements BoundedStream, Seekabl
       mCurrentPacket = null;
     }
     if (mCurrentPacket == null) {
+      long start = System.currentTimeMillis();
       mCurrentPacket = mPacketReader.readPacket();
+      LOG.info("BlockInStream readPacket takes {}", System.currentTimeMillis() - start);
     }
   }
 
