@@ -163,7 +163,10 @@ public class FileInStream extends InputStream implements BoundedStream, Position
     IOException lastException = null;
     while (bytesLeft > 0 && mPosition != mLength && retry.attempt()) {
       try {
+        long start = System.currentTimeMillis();
         updateStream();
+        long mid = System.currentTimeMillis();
+        LOG.info("updateStream takes {}", mid - start);
         int bytesRead = mBlockInStream.read(b, currentOffset, bytesLeft);
         if (bytesRead > 0) {
           bytesLeft -= bytesRead;
