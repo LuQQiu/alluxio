@@ -22,6 +22,8 @@ import io.grpc.internal.ReadableBuffer;
 import io.grpc.internal.ReadableBuffers;
 import io.netty.buffer.ByteBuf;
 import org.jboss.netty.util.internal.ConcurrentIdentityHashMap;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -35,6 +37,7 @@ import java.util.Map;
  */
 public abstract class DataMessageMarshaller<T> implements MethodDescriptor.Marshaller<T>,
     BufferRepository<T, DataBuffer> {
+  private static final Logger LOG = LoggerFactory.getLogger(DataMessageMarshaller.class);
   private final MethodDescriptor.Marshaller<T> mOriginalMarshaller;
   private final Map<T, DataBuffer> mBufferMap = new ConcurrentIdentityHashMap<>();
 
@@ -54,17 +57,22 @@ public abstract class DataMessageMarshaller<T> implements MethodDescriptor.Marsh
 
   @Override
   public T parse(InputStream message) {
+    long start = System.currentTimeMillis();
     ReadableBuffer rawBuffer = GrpcSerializationUtils.getBufferFromStream(message);
     try {
       if (rawBuffer != null) {
         CompositeReadableBuffer readableBuffer = new CompositeReadableBuffer();
         readableBuffer.addBuffer(rawBuffer);
-        return deserialize(readableBuffer);
+        T indo = deserialize(readableBuffer);
+        LOG.info("parse takes {}", System.currentTimeMillis() - start);
+        return indo;
       } else {
         // falls back to buffer copy
         byte[] byteBuffer = new byte[message.available()];
         message.read(byteBuffer);
-        return deserialize(ReadableBuffers.wrap(byteBuffer));
+        T indo = deserialize(ReadableBuffers.wrap(byteBuffer));
+        LOG.info("parse takes {}", System.currentTimeMillis() - start);
+        return indo;
       }
     } catch (IOException e) {
       throw new RuntimeException(e);

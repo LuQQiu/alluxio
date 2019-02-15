@@ -17,6 +17,8 @@ import alluxio.grpc.DataMessageMarshaller;
 import alluxio.network.protocol.databuffer.DataBuffer;
 
 import io.grpc.stub.StreamObserver;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.function.Function;
@@ -31,6 +33,7 @@ import javax.annotation.concurrent.NotThreadSafe;
  */
 @NotThreadSafe
 public class GrpcDataMessageBlockingStream<ReqT, ResT> extends GrpcBlockingStream<ReqT, ResT> {
+  private static final Logger LOG = LoggerFactory.getLogger(GrpcDataMessageBlockingStream.class);
   private final DataMessageMarshaller<ResT> mMarshaller;
 
   /**
@@ -74,7 +77,9 @@ public class GrpcDataMessageBlockingStream<ReqT, ResT> extends GrpcBlockingStrea
     if (response == null) {
       return null;
     }
+    long start = System.currentTimeMillis();
     DataBuffer buffer = mMarshaller.pollBuffer(response);
+    LOG.info("mMarshaller.pollBuffer {}", System.currentTimeMillis() - start);
     return new DataMessage<>(response, buffer);
   }
 

@@ -203,6 +203,10 @@ public class GrpcBlockingStream<ReqT, ResT> {
     return mCanceled;
   }
 
+  public int getResponseSize() {
+    return mResponses.size();
+  }
+
   private void checkError() throws IOException {
     try (LockResource lr = new LockResource(mLock)) {
       if (mError != null) {
@@ -273,10 +277,6 @@ public class GrpcBlockingStream<ReqT, ResT> {
           mReadyOrFailed.signal();
         }
       });
-    }
-
-    public int getResponseSize() {
-      return mResponses.size();
     }
 
     private void handleInterruptedException(InterruptedException e) {

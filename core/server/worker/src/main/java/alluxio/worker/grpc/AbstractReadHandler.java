@@ -295,12 +295,14 @@ abstract class AbstractReadHandler<T extends ReadRequestContext<?>>
 
         DataBuffer chunk = null;
         try {
+          long s1 = System.currentTimeMillis();
           chunk = getDataBuffer(mContext, mResponse, start, chunkSize);
           if (chunk != null) {
             try (LockResource lr = new LockResource(mLock)) {
               mContext.setPosToQueue(mContext.getPosToQueue() + chunk.getLength());
             }
           }
+          LOG.info("GetDataBuffer takes {}", System.currentTimeMillis() - s1);
           if (chunk == null || chunk.getLength() < chunkSize || start + chunkSize == mRequest
               .getEnd()) {
             // This can happen if the requested read length is greater than the actual length of the
@@ -311,6 +313,7 @@ abstract class AbstractReadHandler<T extends ReadRequestContext<?>>
           if (chunk != null) {
             DataBuffer finalChunk = chunk;
             mSerializingExecutor.execute(() -> {
+              long s = System.currentTimeMillis();
               try {
                 ReadResponse response = ReadResponse.newBuilder().setChunk(Chunk.newBuilder()
                     .setData(UnsafeByteOperations.unsafeWrap(finalChunk.getReadOnlyByteBuffer()))
@@ -322,6 +325,7 @@ abstract class AbstractReadHandler<T extends ReadRequestContext<?>>
                   mResponse.onNext(response);
                 }
                 incrementMetrics(finalChunk.getLength());
+                LOG.info("mSerializingExecutor.execute takes {}", System.currentTimeMillis() - start);
               } catch (Exception e) {
                 LOG.error("Failed to read data.", e);
                 setError(new Error(AlluxioStatusException.fromThrowable(e), true));
