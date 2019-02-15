@@ -240,6 +240,7 @@ public class BlockInStream extends InputStream implements BoundedStream, Seekabl
 
   @Override
   public int read(byte[] b, int off, int len) throws IOException {
+    long start = System.currentTimeMillis();
     checkIfClosed();
     Preconditions.checkArgument(b != null, PreconditionMessage.ERR_READ_BUFFER_NULL);
     Preconditions.checkArgument(off >= 0 && len >= 0 && len + off <= b.length,
@@ -247,8 +248,8 @@ public class BlockInStream extends InputStream implements BoundedStream, Seekabl
     if (len == 0) {
       return 0;
     }
-
     readChunk();
+    LOG.info("readChunk takes {}", System.currentTimeMillis() - start);
     if (mCurrentChunk == null) {
       mEOF = true;
     }
@@ -262,6 +263,7 @@ public class BlockInStream extends InputStream implements BoundedStream, Seekabl
     int toRead = Math.min(len, mCurrentChunk.readableBytes());
     mCurrentChunk.readBytes(b, off, toRead);
     mPos += toRead;
+    LOG.info("whole read takes {}", System.currentTimeMillis() - start);
     return toRead;
   }
 
