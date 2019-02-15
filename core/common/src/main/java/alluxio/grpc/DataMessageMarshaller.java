@@ -57,21 +57,18 @@ public abstract class DataMessageMarshaller<T> implements MethodDescriptor.Marsh
 
   @Override
   public T parse(InputStream message) {
-    long start = System.currentTimeMillis();
     ReadableBuffer rawBuffer = GrpcSerializationUtils.getBufferFromStream(message);
     try {
       if (rawBuffer != null) {
         CompositeReadableBuffer readableBuffer = new CompositeReadableBuffer();
         readableBuffer.addBuffer(rawBuffer);
         T indo = deserialize(readableBuffer);
-        LOG.info("RawBuffer != null parse takes {}", System.currentTimeMillis() - start);
         return indo;
       } else {
         // falls back to buffer copy
         byte[] byteBuffer = new byte[message.available()];
         message.read(byteBuffer);
         T indo = deserialize(ReadableBuffers.wrap(byteBuffer));
-        LOG.info("parse takes {}", System.currentTimeMillis() - start);
         return indo;
       }
     } catch (IOException e) {

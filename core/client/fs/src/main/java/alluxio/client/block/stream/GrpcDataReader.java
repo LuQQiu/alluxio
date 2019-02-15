@@ -107,13 +107,15 @@ public final class GrpcDataReader implements DataReader {
     DataBuffer buffer = null;
     ReadResponse response = null;
     if (mStream instanceof GrpcDataMessageBlockingStream) {
-      LOG.info("mStream.responseSize {} ", mStream.getResponseSize());
+      long start = System.currentTimeMillis();
       DataMessage<ReadResponse, DataBuffer> message =
           ((GrpcDataMessageBlockingStream<ReadRequest, ReadResponse>) mStream)
               .receiveDataMessage(mDataTimeoutMs);
+      LOG.info("receive data message takes {}, mStream.responseSize {} ", System.currentTimeMillis() - start, mStream.getResponseSize());
       if (message != null) {
         response = message.getMessage();
         buffer = message.getBuffer();
+        LOG.info("buffer size is {}", buffer.getLength());
         Preconditions.checkState(buffer != null, "response should always contain chunk");
       }
     } else {
