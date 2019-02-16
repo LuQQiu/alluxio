@@ -94,6 +94,7 @@ public final class FooCommand extends AbstractFileSystemCommand {
       int totalSize = (int) uriStatus.getLength();
       int size = 128 * Constants.KB;
       int number = (int) Math.ceil(totalSize / size);
+      long time = 0;
       for (int i = 0; i < number; i++) {
         int offset = i * size;
         long start = System.currentTimeMillis();
@@ -107,8 +108,11 @@ public final class FooCommand extends AbstractFileSystemCommand {
             nread += rd;
           }
         }
-        System.out.printf("read %s part takes %s%n", i, (System.currentTimeMillis() - start));
+        long gap = System.currentTimeMillis() - start;
+        time += gap;
+        System.out.printf("read %s part takes %s%n", i, gap);
       }
+      System.out.printf("total time is %s%n", time);
     }
   }
 
