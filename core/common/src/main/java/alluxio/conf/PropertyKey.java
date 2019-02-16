@@ -2913,7 +2913,7 @@ public final class PropertyKey implements Comparable<PropertyKey> {
           .build();
   public static final PropertyKey USER_NETWORK_READER_CHUNK_SIZE_BYTES =
       new Builder(Name.USER_NETWORK_READER_CHUNK_SIZE_BYTES)
-          .setDefaultValue("1MB")
+          .setDefaultValue("64KB")
           .setDescription("When a client reads from a remote worker, the maximum chunk size.")
           .setConsistencyCheckLevel(ConsistencyCheckLevel.WARN)
           .setScope(Scope.CLIENT)
