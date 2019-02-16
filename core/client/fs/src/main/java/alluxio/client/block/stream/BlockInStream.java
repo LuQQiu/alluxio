@@ -362,7 +362,9 @@ public class BlockInStream extends InputStream implements BoundedStream, Seekabl
    */
   private void readChunk() throws IOException {
     if (mDataReader == null) {
+      long start = System.currentTimeMillis();
       mDataReader = mDataReaderFactory.create(mPos, mLength - mPos);
+      LOG.info("create GrpcDataReader takes {}", System.currentTimeMillis() - start);
     }
 
     if (mCurrentChunk != null && mCurrentChunk.readableBytes() == 0) {
@@ -370,7 +372,9 @@ public class BlockInStream extends InputStream implements BoundedStream, Seekabl
       mCurrentChunk = null;
     }
     if (mCurrentChunk == null) {
+      long start = System.currentTimeMillis();
       mCurrentChunk = mDataReader.readChunk();
+      LOG.info("GrpcDataReader.readChunk takes {}", System.currentTimeMillis() - start);
     }
   }
 

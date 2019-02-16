@@ -132,9 +132,7 @@ public class GrpcBlockingStream<ReqT, ResT> {
       throw new CanceledException(formatErrorMessage("Stream is already canceled."));
     }
     try {
-      long start = System.currentTimeMillis();
       Object response = mResponses.poll(timeoutMs, TimeUnit.MILLISECONDS);
-      LOG.info("mResponses.poll takes {}", System.currentTimeMillis() - start);
       if (response == null) {
         throw new DeadlineExceededException(
             formatErrorMessage("Timeout waiting for response after %dms.", timeoutMs));

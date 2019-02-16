@@ -498,6 +498,8 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
     }
     if (offset == 0) {
       LOG.info("first read of {} takes {}", fd, System.currentTimeMillis() - start);
+    } else {
+      LOG.info("read of fd{}, offset {}, takes {}", fd, offset, System.currentTimeMillis() - start);
     }
     return nread;
   }

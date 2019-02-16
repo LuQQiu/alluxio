@@ -73,12 +73,10 @@ public class GrpcDataMessageBlockingStream<ReqT, ResT> extends GrpcBlockingStrea
    * @throws IOException if any error occurs
    */
   public DataMessage<ResT, DataBuffer> receiveDataMessage(long timeoutMs) throws IOException {
-    long start = System.currentTimeMillis();
     ResT response = super.receive(timeoutMs);
     if (response == null) {
       return null;
     }
-    LOG.info("super.receive takes {}", System.currentTimeMillis() - start);
     DataBuffer buffer = mMarshaller.pollBuffer(response);
     return new DataMessage<>(response, buffer);
   }
