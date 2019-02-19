@@ -613,7 +613,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
         }
       }
     } catch (Throwable t) {
-      String message = String.format("Failed to rename %s", path);
+      String message = String.format("Failed to rename %s to %s", oldPath, newPath);
       int errorCode = AlluxioFuseUtils.getErrorCode(t);
       if (errorCode == -ErrorCodes.ENOENT() || errorCode == -ErrorCodes.EEXIST()) {
         LOG.debug(message, t);
