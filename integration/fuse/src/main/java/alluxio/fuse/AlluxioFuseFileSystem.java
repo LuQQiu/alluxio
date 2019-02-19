@@ -254,8 +254,14 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
       }
       LOG.debug("{} created and opened", path);
     } catch (Throwable t) {
-      LOG.error("Failed to create {}", path, t);
-      return AlluxioFuseUtils.getErrorCode(t);
+      String message = String.format("Failed to create %s", path);
+      int errorCode = AlluxioFuseUtils.getErrorCode(t);
+      if (errorCode == -ErrorCodes.EEXIST()) {
+        LOG.debug(message, t);
+      } else {
+        LOG.error(message, t);
+      }
+      return errorCode;
     }
 
     return 0;
@@ -352,8 +358,14 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
       stat.st_mode.set(mode);
       stat.st_nlink.set(1);
     } catch (Throwable t) {
-      LOG.error("Failed to get info of {}", path, t);
-      return AlluxioFuseUtils.getErrorCode(t);
+      String message = String.format("Failed to get info of %s", path);
+      int errorCode = AlluxioFuseUtils.getErrorCode(t);
+      if (errorCode == -ErrorCodes.ENOENT()) {
+        LOG.debug(message, t);
+      } else {
+        LOG.error(message, t);
+      }
+      return errorCode;
     }
 
     return 0;
@@ -381,8 +393,14 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
     try {
       mFileSystem.createDirectory(turi);
     } catch (Throwable t) {
-      LOG.error("Failed to create directory {}", path, t);
-      return AlluxioFuseUtils.getErrorCode(t);
+      String message = String.format("Failed to create directory %s", path);
+      int errorCode = AlluxioFuseUtils.getErrorCode(t);
+      if (errorCode == -ErrorCodes.ENOENT() || errorCode == -ErrorCodes.EEXIST()) {
+        LOG.debug(message, t);
+      } else {
+        LOG.error(message, t);
+      }
+      return errorCode;
     }
 
     return 0;
@@ -430,8 +448,14 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
         mNextOpenFileId += 1;
       }
     } catch (Throwable t) {
-      LOG.error("Failed to open file {}", path, t);
-      return AlluxioFuseUtils.getErrorCode(t);
+      String message = String.format("Failed to open file %s", path);
+      int errorCode = AlluxioFuseUtils.getErrorCode(t);
+      if (errorCode == -ErrorCodes.ENOENT()) {
+        LOG.debug(message, t);
+      } else {
+        LOG.error(message, t);
+      }
+      return errorCode;
     }
 
     return 0;
@@ -523,8 +547,14 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
         filter.apply(buff, file.getName(), null, 0);
       }
     } catch (Throwable t) {
-      LOG.error("Failed to read directory {}", path, t);
-      return AlluxioFuseUtils.getErrorCode(t);
+      String message = String.format("Failed to read directory %s", path);
+      int errorCode = AlluxioFuseUtils.getErrorCode(t);
+      if (errorCode == -ErrorCodes.ENOENT()) {
+        LOG.debug(message, t);
+      } else {
+        LOG.error(message, t);
+      }
+      return errorCode;
     }
 
     return 0;
@@ -583,8 +613,14 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
         }
       }
     } catch (Throwable t) {
-      LOG.error("Failed to rename {} to {}", oldPath, newPath, t);
-      return AlluxioFuseUtils.getErrorCode(t);
+      String message = String.format("Failed to rename %s", path);
+      int errorCode = AlluxioFuseUtils.getErrorCode(t);
+      if (errorCode == -ErrorCodes.ENOENT() || errorCode == -ErrorCodes.EEXIST()) {
+        LOG.debug(message, t);
+      } else {
+        LOG.error(message, t);
+      }
+      return errorCode;
     }
 
     return 0;
@@ -698,8 +734,14 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
     try {
       mFileSystem.delete(turi);
     } catch (Throwable t) {
-      LOG.error("Failed to remove {}", path, t);
-      return AlluxioFuseUtils.getErrorCode(t);
+      String message = String.format("Failed to remove %s", path);
+      int errorCode = AlluxioFuseUtils.getErrorCode(t);
+      if (errorCode == -ErrorCodes.ENOENT()) {
+        LOG.debug(message, t);
+      } else {
+        LOG.error(message, t);
+      }
+      return errorCode;
     }
 
     return 0;

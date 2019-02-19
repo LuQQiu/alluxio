@@ -193,7 +193,7 @@ public final class AlluxioFuseUtils {
     } catch (FileAlreadyExistsException ex) {
       return -ErrorCodes.EEXIST();
     } catch (InvalidPathException ex) {
-      return -ErrorCodes.EFAULT();
+      return -ErrorCodes.ENOENT();
     } catch (BlockDoesNotExistException ex) {
       return -ErrorCodes.ENODATA();
     } catch (DirectoryNotEmptyException ex) {
