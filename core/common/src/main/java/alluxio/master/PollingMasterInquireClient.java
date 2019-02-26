@@ -15,6 +15,7 @@ import static java.util.stream.Collectors.joining;
 
 import alluxio.conf.AlluxioConfiguration;
 import alluxio.exception.status.AlluxioStatusException;
+import alluxio.exception.status.NotFoundException;
 import alluxio.exception.status.UnavailableException;
 import alluxio.grpc.GetServiceVersionPRequest;
 import alluxio.grpc.GrpcChannel;
@@ -89,6 +90,7 @@ public class PollingMasterInquireClient implements MasterInquireClient {
 
   @Nullable
   private InetSocketAddress getAddress() {
+    LOG.info(mConnectDetails.getAddresses().toString());
     // Iterate over the masters and try to connect to each of their RPC ports.
     for (InetSocketAddress address : mConnectDetails.getAddresses()) {
       try {
@@ -96,7 +98,7 @@ public class PollingMasterInquireClient implements MasterInquireClient {
         pingMetaService(address);
         LOG.info("Successfully connected to {}", address);
         return address;
-      } catch (UnavailableException e) {
+      } catch (UnavailableException | NotFoundException e ) {
         LOG.info("Failed to connect to {}", address);
         continue;
       } catch (AlluxioStatusException e) {
