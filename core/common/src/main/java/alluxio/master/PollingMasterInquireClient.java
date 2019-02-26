@@ -92,12 +92,12 @@ public class PollingMasterInquireClient implements MasterInquireClient {
     // Iterate over the masters and try to connect to each of their RPC ports.
     for (InetSocketAddress address : mConnectDetails.getAddresses()) {
       try {
-        LOG.debug("Checking whether {} is listening for RPCs", address);
+        LOG.info("Checking whether {} is listening for RPCs", address);
         pingMetaService(address);
-        LOG.debug("Successfully connected to {}", address);
+        LOG.info("Successfully connected to {}", address);
         return address;
       } catch (UnavailableException e) {
-        LOG.debug("Failed to connect to {}", address);
+        LOG.info("Failed to connect to {}", address);
         continue;
       } catch (AlluxioStatusException e) {
         throw new RuntimeException(e);

@@ -19,6 +19,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * This class is a gRPC handler that serves Alluxio service versions.
@@ -40,7 +41,10 @@ public final class ServiceVersionClientServiceHandler
       StreamObserver<GetServiceVersionPResponse> responseObserver) {
 
     ServiceType serviceType = request.getServiceType();
+    LOG.warn("service Type is {}", serviceType);
+    LOG.warn("mServices include {}", mServices.stream().map(a -> String.valueOf(a.getNumber())).collect(Collectors.joining(",")));
     if (serviceType != ServiceType.UNKNOWN_SERVICE && !mServices.contains(serviceType)) {
+      LOG.warn("returning error NOT_FOUND");
       responseObserver.onError(Status.NOT_FOUND.asException());
       return;
     }

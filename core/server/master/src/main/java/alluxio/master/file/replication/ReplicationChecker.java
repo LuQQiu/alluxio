@@ -125,10 +125,12 @@ public final class ReplicationChecker implements HeartbeatExecutor {
 
     // Check the set of files that could possibly be under-replicated
     inodes = mInodeTree.getPinIdSet();
+    LOG.info("check if the files under-replicated");
     check(inodes, mReplicationHandler, Mode.REPLICATE);
 
     // Check the set of files that could possibly be over-replicated
     inodes = mInodeTree.getReplicationLimitedFileIds();
+    LOG.info("check if the files over-replicated");
     check(inodes, mReplicationHandler, Mode.EVICT);
   }
 
@@ -225,7 +227,7 @@ public final class ReplicationChecker implements HeartbeatExecutor {
             "Unexpected exception encountered when starting a replication / eviction job (uri={},"
                 + " block ID={}, num replicas={}) : {}",
             uri, blockId, numReplicas, e.getMessage());
-        LOG.debug("Exception: ", e);
+        LOG.warn("Exception: ", e);
       }
     }
   }
