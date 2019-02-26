@@ -80,12 +80,13 @@ public class PollingMasterInquireClient implements MasterInquireClient {
 
   @Nullable
   private InetSocketAddress getAddress() {
+    LOG.info("addresses is ", mConnectDetails.getAddresses().toString());
     // Iterate over the masters and try to connect to each of their RPC ports.
     for (InetSocketAddress address : mConnectDetails.getAddresses()) {
       try {
-        LOG.debug("Checking whether {} is listening for RPCs", address);
+        LOG.info("Checking whether {} is listening for RPCs", address);
         pingMetaService(address);
-        LOG.debug("Successfully connected to {}", address);
+        LOG.info("Successfully connected to {}", address);
         return address;
       } catch (TTransportException e) {
         LOG.debug("Failed to connect to {}", address);
@@ -99,6 +100,7 @@ public class PollingMasterInquireClient implements MasterInquireClient {
 
   private void pingMetaService(InetSocketAddress address)
       throws UnauthenticatedException, TTransportException {
+    LOG.info("address is {}, port is {}" + address.getHostName(), address.getPort());
     TTransport transport = TransportProvider.Factory.create().getClientTransport(address);
     TProtocol protocol =
         ThriftUtils.createThriftProtocol(transport, Constants.META_MASTER_CLIENT_SERVICE_NAME);
