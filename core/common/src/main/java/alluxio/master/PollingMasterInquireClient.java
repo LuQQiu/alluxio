@@ -120,7 +120,7 @@ public class PollingMasterInquireClient implements MasterInquireClient {
     // META_MASTER_CLIENT_SERVICE is master rpc (should with master port 19998), has this META_MASTER_CLIENT_SERVICE
     try {
       versionClient.getServiceVersion(GetServiceVersionPRequest.newBuilder()
-          .setServiceType(ServiceType.META_MASTER_CLIENT_SERVICE).build());
+          .setServiceType(ServiceType.JOB_MASTER_CLIENT_SERVICE).build());
     } catch (StatusRuntimeException e) {
       throw AlluxioStatusException.fromThrowable(e);
     }
