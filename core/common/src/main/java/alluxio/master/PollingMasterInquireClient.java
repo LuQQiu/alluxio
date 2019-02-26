@@ -14,6 +14,7 @@ package alluxio.master;
 import static java.util.stream.Collectors.joining;
 
 import alluxio.conf.AlluxioConfiguration;
+import alluxio.conf.PropertyKey;
 import alluxio.exception.status.AlluxioStatusException;
 import alluxio.exception.status.NotFoundException;
 import alluxio.exception.status.UnavailableException;
@@ -119,8 +120,10 @@ public class PollingMasterInquireClient implements MasterInquireClient {
     // JOB_MASTER_CLIENT_SERVICE and JOB_MASTER_WORKER_SERVICE
     // META_MASTER_CLIENT_SERVICE is master rpc (should with master port 19998), has this META_MASTER_CLIENT_SERVICE
     try {
+      ServiceType serviceType = address.getPort() == mConfiguration.getInt(PropertyKey.JOB_MASTER_RPC_PORT)
+          ? ServiceType.JOB_MASTER_CLIENT_SERVICE : ServiceType.META_MASTER_CLIENT_SERVICE;
       versionClient.getServiceVersion(GetServiceVersionPRequest.newBuilder()
-          .setServiceType(ServiceType.JOB_MASTER_CLIENT_SERVICE).build());
+          .setServiceType(serviceType).build());
     } catch (StatusRuntimeException e) {
       throw AlluxioStatusException.fromThrowable(e);
     }
