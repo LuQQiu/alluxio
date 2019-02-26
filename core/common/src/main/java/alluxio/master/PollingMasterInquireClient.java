@@ -115,6 +115,9 @@ public class PollingMasterInquireClient implements MasterInquireClient {
         .build();
     ServiceVersionClientServiceGrpc.ServiceVersionClientServiceBlockingStub versionClient =
         ServiceVersionClientServiceGrpc.newBlockingStub(channel);
+    // Address is job_master address (with job_master port 20001, but the service type job master have is
+    // JOB_MASTER_CLIENT_SERVICE and JOB_MASTER_WORKER_SERVICE
+    // META_MASTER_CLIENT_SERVICE is master rpc (should with master port 19998), has this META_MASTER_CLIENT_SERVICE
     try {
       versionClient.getServiceVersion(GetServiceVersionPRequest.newBuilder()
           .setServiceType(ServiceType.META_MASTER_CLIENT_SERVICE).build());
