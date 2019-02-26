@@ -91,6 +91,7 @@ public class PollingMasterInquireClient implements MasterInquireClient {
   @Nullable
   private InetSocketAddress getAddress() {
     LOG.info(mConnectDetails.getAddresses().toString());
+    // Why port is 20001
     // Iterate over the masters and try to connect to each of their RPC ports.
     for (InetSocketAddress address : mConnectDetails.getAddresses()) {
       try {

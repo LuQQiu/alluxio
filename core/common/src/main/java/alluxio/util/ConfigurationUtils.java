@@ -78,6 +78,7 @@ public final class ConfigurationUtils {
       return parseInetSocketAddresses(conf.getList(PropertyKey.MASTER_RPC_ADDRESSES, ","));
     } else {
       int rpcPort = NetworkAddressUtils.getPort(NetworkAddressUtils.ServiceType.MASTER_RPC, conf);
+      LOG.info("rpc Port is {}", rpcPort);
       return getRpcAddresses(PropertyKey.MASTER_EMBEDDED_JOURNAL_ADDRESSES, rpcPort, conf);
     }
   }
@@ -91,6 +92,7 @@ public final class ConfigurationUtils {
   public static List<InetSocketAddress> getJobMasterRpcAddresses(AlluxioConfiguration conf) {
     int jobRpcPort = NetworkAddressUtils.getPort(NetworkAddressUtils.ServiceType.JOB_MASTER_RPC,
         conf);
+    LOG.info("job RPC port is {}", jobRpcPort);
     if (conf.isSet(PropertyKey.JOB_MASTER_RPC_ADDRESSES)) {
       return parseInetSocketAddresses(
           conf.getList(PropertyKey.JOB_MASTER_RPC_ADDRESSES, ","));
