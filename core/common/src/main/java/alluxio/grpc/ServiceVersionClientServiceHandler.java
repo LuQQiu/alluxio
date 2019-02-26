@@ -41,7 +41,7 @@ public final class ServiceVersionClientServiceHandler
       StreamObserver<GetServiceVersionPResponse> responseObserver) {
 
     ServiceType serviceType = request.getServiceType();
-    LOG.warn("service Type is {}", serviceType);
+    LOG.warn("service Type is {}", serviceType.getNumber());
     LOG.warn("mServices include {}", mServices.stream().map(a -> String.valueOf(a.getNumber())).collect(Collectors.joining(",")));
     if (serviceType != ServiceType.UNKNOWN_SERVICE && !mServices.contains(serviceType)) {
       LOG.warn("returning error NOT_FOUND");
