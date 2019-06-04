@@ -459,7 +459,7 @@ public abstract class ObjectUnderFileSystem extends BaseUnderFileSystem {
     @Override
     protected int getBatchSize() {
       // Delete batch size is same as listing length
-      return getListingChunkLength(mUfsConf);
+      return getListingChunkLength();
     }
 
     @Override
@@ -840,9 +840,9 @@ public abstract class ObjectUnderFileSystem extends BaseUnderFileSystem {
    *
    * @return length of each list request
    */
-  protected int getListingChunkLength(AlluxioConfiguration conf) {
-    return conf.getInt(PropertyKey.UNDERFS_LISTING_LENGTH) > getListingChunkLengthMax()
-        ? getListingChunkLengthMax() : conf.getInt(PropertyKey.UNDERFS_LISTING_LENGTH);
+  protected int getListingChunkLength() {
+    return mUfsConf.getInt(PropertyKey.UNDERFS_LISTING_LENGTH) > getListingChunkLengthMax()
+        ? getListingChunkLengthMax() : mUfsConf.getInt(PropertyKey.UNDERFS_LISTING_LENGTH);
   }
 
   /**

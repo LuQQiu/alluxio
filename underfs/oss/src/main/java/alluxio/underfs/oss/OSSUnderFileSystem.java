@@ -168,7 +168,7 @@ public class OSSUnderFileSystem extends ObjectUnderFileSystem {
     key = key.equals(PATH_SEPARATOR) ? "" : key;
     ListObjectsRequest request = new ListObjectsRequest(mBucketName);
     request.setPrefix(key);
-    request.setMaxKeys(getListingChunkLength(mUfsConf));
+    request.setMaxKeys(getListingChunkLength());
     request.setDelimiter(delimiter);
 
     ObjectListing result = getObjectListingChunk(request);

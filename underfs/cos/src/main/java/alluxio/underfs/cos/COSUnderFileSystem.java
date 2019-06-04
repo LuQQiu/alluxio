@@ -179,7 +179,7 @@ public class COSUnderFileSystem extends ObjectUnderFileSystem {
     ListObjectsRequest request = new ListObjectsRequest();
     request.setBucketName(mBucketNameInternal);
     request.setPrefix(key);
-    request.setMaxKeys(getListingChunkLength(mUfsConf));
+    request.setMaxKeys(getListingChunkLength());
     request.setDelimiter(delimiter);
 
     ObjectListing result = getObjectListingChunk(request);

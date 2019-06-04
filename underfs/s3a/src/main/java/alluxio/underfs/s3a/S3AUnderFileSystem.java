@@ -396,7 +396,7 @@ public class S3AUnderFileSystem extends ObjectUnderFileSystem {
         .get(PropertyKey.UNDERFS_S3A_LIST_OBJECTS_VERSION_1).equals(Boolean.toString(true))) {
       ListObjectsRequest request =
           new ListObjectsRequest().withBucketName(mBucketName).withPrefix(key)
-              .withDelimiter(delimiter).withMaxKeys(getListingChunkLength(mUfsConf));
+              .withDelimiter(delimiter).withMaxKeys(getListingChunkLength());
       ObjectListing result = getObjectListingChunkV1(request);
       if (result != null) {
         return new S3AObjectListingChunkV1(request, result);
@@ -404,7 +404,7 @@ public class S3AUnderFileSystem extends ObjectUnderFileSystem {
     } else {
       ListObjectsV2Request request =
           new ListObjectsV2Request().withBucketName(mBucketName).withPrefix(key)
-              .withDelimiter(delimiter).withMaxKeys(getListingChunkLength(mUfsConf));
+              .withDelimiter(delimiter).withMaxKeys(getListingChunkLength());
       ListObjectsV2Result result = getObjectListingChunk(request);
       if (result != null) {
         return new S3AObjectListingChunk(request, result);

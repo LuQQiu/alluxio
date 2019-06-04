@@ -252,7 +252,7 @@ public class GCSUnderFileSystem extends ObjectUnderFileSystem {
     StorageObjectsChunk res;
     try {
       res = mClient.listObjectsChunked(mBucketName, key, delimiter,
-          getListingChunkLength(mUfsConf), priorLastKey);
+          getListingChunkLength(), priorLastKey);
     } catch (ServiceException e) {
       LOG.error("Failed to list path {}", key, e);
       res = null;

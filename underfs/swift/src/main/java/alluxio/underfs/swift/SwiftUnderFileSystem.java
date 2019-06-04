@@ -279,7 +279,7 @@ public class SwiftUnderFileSystem extends ObjectUnderFileSystem {
     // In case key is root (empty string) do not normalize prefix
     prefix = prefix.equals(PATH_SEPARATOR) ? "" : prefix;
     PaginationMap paginationMap = container.getPaginationMap(prefix,
-        getListingChunkLength(mUfsConf));
+        getListingChunkLength());
     if (paginationMap != null && paginationMap.getNumberOfPages() > 0) {
       return new SwiftObjectListingChunk(paginationMap, 0, recursive);
     }

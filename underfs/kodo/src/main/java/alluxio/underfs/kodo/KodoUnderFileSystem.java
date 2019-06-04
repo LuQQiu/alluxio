@@ -158,9 +158,9 @@ public class KodoUnderFileSystem extends ObjectUnderFileSystem {
     String delimiter = recursive ? "" : PATH_SEPARATOR;
     key = PathUtils.normalizePath(key, PATH_SEPARATOR);
     key = key.equals(PATH_SEPARATOR) ? "" : key;
-    FileListing result = getObjectListingChunk(key, getListingChunkLength(mUfsConf), delimiter);
+    FileListing result = getObjectListingChunk(key, getListingChunkLength(), delimiter);
     if (result != null) {
-      return new KodoObjectListingChunk(result, getListingChunkLength(mUfsConf), delimiter,
+      return new KodoObjectListingChunk(result, getListingChunkLength(), delimiter,
           key);
     }
     return null;
