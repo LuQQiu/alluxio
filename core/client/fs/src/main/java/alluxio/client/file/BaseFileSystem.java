@@ -177,10 +177,12 @@ public class BaseFileSystem implements FileSystem {
   public FileOutStream createFile(AlluxioURI path, CreateFilePOptions options)
       throws FileAlreadyExistsException, InvalidPathException, IOException, AlluxioException {
     checkUri(path);
-    return rpc(client -> {
+    FileOutStream os = rpc(client -> {
       CreateFilePOptions mergedOptions = FileSystemOptions.createFileDefaults(
           mFsContext.getPathConf(path)).toBuilder().mergeFrom(options).build();
+      long start = System.currentTimeMillis();
       URIStatus status = client.createFile(path, mergedOptions);
+      LOG.info("For debug, create file on client side takes {}", System.currentTimeMillis() - start);
       LOG.debug("Created file {}, options: {}", path.getPath(), mergedOptions);
       OutStreamOptions outStreamOptions =
           new OutStreamOptions(mergedOptions, mFsContext.getClientContext(),
@@ -195,6 +197,7 @@ public class BaseFileSystem implements FileSystem {
         throw e;
       }
     });
+    return os;
   }
 
   @Override

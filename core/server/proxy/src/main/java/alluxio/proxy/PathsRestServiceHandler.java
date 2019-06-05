@@ -36,6 +36,8 @@ import alluxio.web.ProxyWebServer;
 import com.google.common.base.Preconditions;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.InputStream;
 import java.util.HashMap;
@@ -64,6 +66,7 @@ import javax.ws.rs.core.Response;
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
 public final class PathsRestServiceHandler {
+  private static final Logger LOG = LoggerFactory.getLogger(PathsRestServiceHandler.class);
   public static final String SERVICE_PREFIX = "paths";
 
   public static final String PATH_PARAM = "{path:.*}/";
