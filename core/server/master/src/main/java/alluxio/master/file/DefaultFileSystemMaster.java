@@ -1296,6 +1296,7 @@ public final class DefaultFileSystemMaster extends AbstractMaster implements Fil
   public long createFile(AlluxioURI path, CreateFileOptions options)
       throws AccessControlException, InvalidPathException, FileAlreadyExistsException,
       BlockInfoException, IOException, FileDoesNotExistException {
+    long start = System.currentTimeMillis();
     Metrics.CREATE_FILES_OPS.inc();
     LockingScheme lockingScheme =
         createLockingScheme(path, options.getCommonOptions(), InodeTree.LockMode.WRITE);
@@ -1323,7 +1324,9 @@ public final class DefaultFileSystemMaster extends AbstractMaster implements Fil
       }
       createFileAndJournal(rpcContext, inodePath, options);
       auditContext.setSrcInode(inodePath.getInode()).setSucceeded(true);
-      return inodePath.getInode().getId();
+      long id = inodePath.getInode().getId();
+      LOG.info("For debug, create file on master side takes {}", System.currentTimeMillis() - start);
+      return id;
     }
   }
 

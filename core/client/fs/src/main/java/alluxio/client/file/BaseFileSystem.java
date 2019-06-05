@@ -120,7 +120,9 @@ public class BaseFileSystem implements FileSystem {
     FileSystemMasterClient masterClient = mFileSystemContext.acquireMasterClient();
     URIStatus status;
     try {
+      long start = System.currentTimeMillis();
       masterClient.createFile(path, options);
+      LOG.info("For debug, create file of path {} takes {}", path, System.currentTimeMillis() - start);
       // Do not sync before this getStatus, since the UFS file is expected to not exist.
       status = masterClient.getStatus(path,
           GetStatusOptions.defaults().setLoadMetadataType(LoadMetadataType.Never)

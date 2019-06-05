@@ -342,12 +342,14 @@ public class BlockInStream extends InputStream implements BoundedStream, Seekabl
 
   @Override
   public void close() throws IOException {
+    long start = System.currentTimeMillis();
     try {
       closePacketReader();
     } finally {
       mPacketReaderFactory.close();
     }
     mClosed = true;
+    LOG.info("For debug, close in blockInStream takes {}", System.currentTimeMillis() - start);
   }
 
   /**

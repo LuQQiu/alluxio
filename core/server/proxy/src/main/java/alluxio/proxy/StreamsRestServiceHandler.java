@@ -20,7 +20,10 @@ import alluxio.web.ProxyWebServer;
 import com.google.common.io.ByteStreams;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.io.Closeable;
 import java.io.InputStream;
 
 import javax.annotation.concurrent.NotThreadSafe;
@@ -43,6 +46,7 @@ import javax.ws.rs.core.Response;
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
 public final class StreamsRestServiceHandler {
+  private static final Logger LOG = LoggerFactory.getLogger(StreamsRestServiceHandler.class);
   public static final String SERVICE_PREFIX = "streams";
 
   public static final String ID_PARAM = "{id}/";
@@ -72,17 +76,21 @@ public final class StreamsRestServiceHandler {
   @Path(ID_PARAM + CLOSE)
   @ApiOperation(value = "Closes the stream associated with the id", response = java.lang.Void.class)
   public Response close(@PathParam("id") final Integer id) {
-    return RestUtils.call(new RestUtils.RestCallable<Void>() {
+    long start = System.currentTimeMillis();
+    Response response = RestUtils.call(new RestUtils.RestCallable<Void>() {
       @Override
       public Void call() throws Exception {
         // When a stream is invalidated from the cache, the removal listener of the cache will
         // automatically close the stream.
-        if (mStreamCache.invalidate(id) == null) {
+        Closeable closeable = mStreamCache.invalidate(id);
+        if (closeable == null) {
           throw new IllegalArgumentException("stream does not exist");
         }
         return null;
       }
     });
+    LOG.info("For debug, close file of id {} takes {}", id, System.currentTimeMillis() - start);
+    return response;
   }
 
   /**
@@ -121,7 +129,8 @@ public final class StreamsRestServiceHandler {
       response = java.lang.Integer.class)
   @Consumes(MediaType.APPLICATION_OCTET_STREAM)
   public Response write(@PathParam("id") final Integer id, final InputStream is) {
-    return RestUtils.call(new RestUtils.RestCallable<Long>() {
+    long start = System.currentTimeMillis();
+    Response response = RestUtils.call(new RestUtils.RestCallable<Long>() {
       @Override
       public Long call() throws Exception {
         FileOutStream os = mStreamCache.getOutStream(id);
@@ -131,5 +140,7 @@ public final class StreamsRestServiceHandler {
         throw new IllegalArgumentException("stream does not exist");
       }
     });
+    LOG.info("For debug, write file of id {} takes {}", id, System.currentTimeMillis() - start);
+    return response;
   }
 }
