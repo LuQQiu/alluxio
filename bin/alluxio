@@ -284,6 +284,11 @@ function main {
     shift
     runJavaClass "$@"
   ;;
+  "runOperation")
+    CLASS="alluxio.cli.RunOperation"
+    CLASSPATH=${ALLUXIO_CLIENT_CLASSPATH}
+    runJavaClass "$@"
+  ;;
   "runTest")
     CLASS="alluxio.cli.TestRunner"
     CLASSPATH=${ALLUXIO_CLIENT_CLASSPATH}
