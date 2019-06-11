@@ -138,13 +138,16 @@ public class RunOperation {
 
     private void applyOperation() throws IOException, AlluxioException {
       AlluxioURI uri = new AlluxioURI(PathUtils.concatPath(mDir, UUID.randomUUID()));
+      long start = System.nanoTime();
       switch (mOperation) {
         case CreateEmptyFile:
           mFileSystem.createFile(uri).close();
+          LOG.info("create empty file takes {}", System.nanoTime() - start);
           break;
         case CreateAndDeleteEmptyFile:
           mFileSystem.createFile(uri).close();
           mFileSystem.delete(uri);
+          LOG.info("create and delete empty file takes {}", System.nanoTime() - start);
           break;
         case CreateFile:
           try (FileOutStream file =
@@ -152,9 +155,9 @@ public class RunOperation {
                        CreateFileOptions.defaults().setRecursive(true))) {
             file.write(mFiledata);
           }
+          LOG.info("create file takes {}", System.nanoTime() - start);
           break;
         case ListStatus:
-          long start = System.nanoTime();
           mFileSystem.listStatus(new AlluxioURI(mDir));
           LOG.info("list status takes {}", System.nanoTime() - start);
           break;
