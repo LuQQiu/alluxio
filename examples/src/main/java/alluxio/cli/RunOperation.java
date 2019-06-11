@@ -45,6 +45,7 @@ public class RunOperation {
     CreateEmptyFile,
     CreateAndDeleteEmptyFile,
     ListStatus,
+    GetStatus
   }
 
   @Parameter(names = {"-op", "-operation"},
@@ -165,6 +166,10 @@ public class RunOperation {
         case ListStatus:
           mFileSystem.listStatus(new AlluxioURI(mDir));
           LOG.info("list status takes {}", System.nanoTime() - start);
+          break;
+        case GetStatus:
+          mFileSystem.getStatus(new AlluxioURI(mDir));
+          LOG.info("get status takes {}", System.nanoTime() - start);
           break;
         default:
           throw new IllegalStateException("Unknown operation: " + mOperation);
