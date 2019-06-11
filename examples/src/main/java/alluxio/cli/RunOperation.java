@@ -12,14 +12,20 @@
 package alluxio.cli;
 
 import alluxio.AlluxioURI;
+import alluxio.client.file.FileOutStream;
 import alluxio.client.file.FileSystem;
+import alluxio.client.file.options.CreateFileOptions;
 import alluxio.exception.AlluxioException;
+import alluxio.util.io.PathUtils;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -28,16 +34,19 @@ import java.util.concurrent.atomic.AtomicInteger;
  * Class for running an operation multiple times.
  */
 public class RunOperation {
+  private static final Logger LOG = LoggerFactory.getLogger(RunOperation.class);
   private static final String BASE_DIRECTORY = "/RunOperationDir";
 
   enum Operation {
+    CreateFile,
     CreateEmptyFile,
-    CreateAndDeleteEmptyFile;
+    CreateAndDeleteEmptyFile,
+    ListStatus,
   }
 
   @Parameter(names = {"-op", "-operation"},
       description = "the operation to perform. Options are [CreateEmptyFile, "
-          + "CreateAndDeleteEmptyFile]",
+          + "CreateAndDeleteEmptyFile, CreateFile, ListStatus]",
       required = true)
   private Operation mOperation;
   @Parameter(names = {"-n", "-num"},
@@ -45,6 +54,13 @@ public class RunOperation {
   private int mTimes = 1;
   @Parameter(names = {"-t", "-threads"}, description = "the number of threads to use")
   private int mThreads = 1;
+  @Parameter(names = {"-d", "-dir"}, description = "The directory to perform operations in")
+  private String mDir = BASE_DIRECTORY;
+  @Parameter(names = {"-s", "-size"},
+      description = "The size of a file to create")
+  private int mSize = 4096;
+
+  private byte[] mFiledata;
 
   private final FileSystem mFileSystem;
 
@@ -62,6 +78,7 @@ public class RunOperation {
 
   /**
    * Constructs a new {@link RunOperation} object.
+   *
    */
   public RunOperation() {
     mFileSystem = FileSystem.Factory.get();
@@ -83,6 +100,9 @@ public class RunOperation {
       return -1;
     }
     mRemainingOps = new AtomicInteger(mTimes);
+    mFiledata = new byte[mSize];
+    Arrays.fill(mFiledata, (byte) 0x7A);
+
     List<Thread> threads = new ArrayList<>();
     for (int i = 0; i < mThreads; i++) {
       threads.add(new OperationThread());
@@ -117,7 +137,7 @@ public class RunOperation {
     }
 
     private void applyOperation() throws IOException, AlluxioException {
-      AlluxioURI uri = new AlluxioURI(String.format("%s/%s", BASE_DIRECTORY, UUID.randomUUID()));
+      AlluxioURI uri = new AlluxioURI(PathUtils.concatPath(mDir, UUID.randomUUID()));
       switch (mOperation) {
         case CreateEmptyFile:
           mFileSystem.createFile(uri).close();
@@ -125,6 +145,18 @@ public class RunOperation {
         case CreateAndDeleteEmptyFile:
           mFileSystem.createFile(uri).close();
           mFileSystem.delete(uri);
+          break;
+        case CreateFile:
+          try (FileOutStream file =
+                   mFileSystem.createFile(uri,
+                       CreateFileOptions.defaults().setRecursive(true))) {
+            file.write(mFiledata);
+          }
+          break;
+        case ListStatus:
+          long start = System.nanoTime();
+          mFileSystem.listStatus(new AlluxioURI(mDir));
+          LOG.info("list status takes {}", System.nanoTime() - start);
           break;
         default:
           throw new IllegalStateException("Unknown operation: " + mOperation);
