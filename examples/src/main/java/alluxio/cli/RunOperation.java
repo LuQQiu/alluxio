@@ -23,6 +23,8 @@ import alluxio.util.io.PathUtils;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -35,6 +37,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * Class for running an operation multiple times.
  */
 public class RunOperation {
+  private static final Logger LOG = LoggerFactory.getLogger(RunOperation.class);
   private static final String BASE_DIRECTORY = "/RunOperationDir";
 
   enum Operation {
@@ -140,13 +143,16 @@ public class RunOperation {
 
     private void applyOperation() throws IOException, AlluxioException {
       AlluxioURI uri = new AlluxioURI(PathUtils.concatPath(mDir, UUID.randomUUID()));
+      long start = System.nanoTime();
       switch (mOperation) {
         case CreateEmptyFile:
           mFileSystem.createFile(uri).close();
+          LOG.info("Create file takes {}", System.nanoTime() - start);
           break;
         case CreateAndDeleteEmptyFile:
           mFileSystem.createFile(uri).close();
           mFileSystem.delete(uri);
+          LOG.info("Create and delete empty file takes {}", System.nanoTime() - start);
           break;
         case CreateFile:
           try (FileOutStream file =
@@ -154,9 +160,11 @@ public class RunOperation {
                   CreateFilePOptions.newBuilder().setRecursive(true).build())) {
             file.write(mFiledata);
           }
+          LOG.info("Create file takes {}", System.nanoTime() - start);
           break;
         case ListStatus:
           mFileSystem.listStatus(new AlluxioURI(mDir));
+          LOG.info("list status takes {}", System.nanoTime() - start);
           break;
         default:
           throw new IllegalStateException("Unknown operation: " + mOperation);
