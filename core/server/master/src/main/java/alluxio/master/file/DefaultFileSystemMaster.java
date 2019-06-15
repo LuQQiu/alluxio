@@ -4071,6 +4071,7 @@ public final class DefaultFileSystemMaster extends CoreMaster implements FileSys
                 job.getUri(), fileId, inode.getPersistenceState());
             break;
           case TO_BE_PERSISTED:
+            /**
             try (CloseableResource<UnderFileSystem> ufsResource = resolution.acquireUfsResource()) {
               UnderFileSystem ufs = ufsResource.get();
               String ufsPath = resolution.getUri().toString();
@@ -4080,7 +4081,7 @@ public final class DefaultFileSystemMaster extends CoreMaster implements FileSys
               }
               ufs.setOwner(ufsPath, inode.getOwner(), inode.getGroup());
               ufs.setMode(ufsPath, inode.getMode());
-            }
+            }*/
 
             mInodeTree.updateInodeFile(journalContext, UpdateInodeFileEntry.newBuilder()
                 .setId(inode.getId())
@@ -4106,22 +4107,24 @@ public final class DefaultFileSystemMaster extends CoreMaster implements FileSys
             e.getMessage());
         LOG.debug("Exception: ", e);
         // Cleanup the temporary file.
+        /**
         if (ufsClient != null) {
           try (CloseableResource<UnderFileSystem> ufsResource = ufsClient.acquireUfsResource()) {
             cleanup(ufsResource.get(), tempUfsPath);
           }
-        }
+        }*/
       } catch (Exception e) {
         LOG.warn(
             "Unexpected exception encountered when trying to complete persistence of a file {} "
                 + "(id={}) : {}",
             job.getUri(), fileId, e.getMessage());
         LOG.debug("Exception: ", e);
+        /**
         if (ufsClient != null) {
           try (CloseableResource<UnderFileSystem> ufsResource = ufsClient.acquireUfsResource()) {
             cleanup(ufsResource.get(), tempUfsPath);
           }
-        }
+        }*/
         mPersistRequests.put(fileId, job.getTimer());
       } finally {
         mPersistJobs.remove(fileId);

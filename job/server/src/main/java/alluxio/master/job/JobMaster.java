@@ -136,6 +136,8 @@ public final class JobMaster extends AbstractMaster implements NoopJournaled {
    */
   private final Map<Long, JobCoordinator> mIdToJobCoordinator;
 
+  private final Map<Long, alluxio.job.wire.JobInfo> mIdToJobInfo;
+
   /**
    * Used to keep track of finished jobs that are still within retention policy.
    * This member is accessed concurrently and its instance type is ConcurrentSkipListSet.
@@ -158,6 +160,7 @@ public final class JobMaster extends AbstractMaster implements NoopJournaled {
     mJobIdGenerator = new JobIdGenerator();
     mCommandManager = new CommandManager();
     mIdToJobCoordinator = new ConcurrentHashMap<>();
+    mIdToJobInfo = new ConcurrentHashMap<>();
     mFinishedJobs = new ConcurrentSkipListSet<>();
   }
 
@@ -205,6 +208,14 @@ public final class JobMaster extends AbstractMaster implements NoopJournaled {
    */
   public synchronized long run(JobConfig jobConfig)
       throws JobDoesNotExistException, ResourceExhaustedException {
+    long jobId = mJobIdGenerator.getNewJobId();
+    alluxio.job.wire.JobInfo jobInfo = new alluxio.job.wire.JobInfo();
+    jobInfo.setJobId(jobId);
+    jobInfo.setJobConfig(jobConfig);
+    jobInfo.setStatus(Status.COMPLETED);
+    mIdToJobInfo.put(jobId, jobInfo);
+    return jobId;
+    /**
     if (mIdToJobCoordinator.size() == mCapacity) {
       if (mFinishedJobs.isEmpty()) {
         // The job master is at full capacity and no job has finished.
@@ -244,7 +255,7 @@ public final class JobMaster extends AbstractMaster implements NoopJournaled {
           return null;
         });
     mIdToJobCoordinator.put(jobId, jobCoordinator);
-    return jobId;
+    return jobId; */
   }
 
   /**
@@ -254,18 +265,19 @@ public final class JobMaster extends AbstractMaster implements NoopJournaled {
    * @throws JobDoesNotExistException when the job does not exist
    */
   public void cancel(long jobId) throws JobDoesNotExistException {
+    /**
     JobCoordinator jobCoordinator = mIdToJobCoordinator.get(jobId);
     if (jobCoordinator == null) {
       throw new JobDoesNotExistException(ExceptionMessage.JOB_DOES_NOT_EXIST.getMessage(jobId));
     }
-    jobCoordinator.cancel();
+    jobCoordinator.cancel();*/
   }
 
   /**
    * @return list all the job ids
    */
   public List<Long> list() {
-    return Lists.newArrayList(mIdToJobCoordinator.keySet());
+    return Lists.newArrayList(mIdToJobInfo.keySet());
   }
 
   /**
@@ -276,11 +288,11 @@ public final class JobMaster extends AbstractMaster implements NoopJournaled {
    * @throws JobDoesNotExistException if the job does not exist
    */
   public alluxio.job.wire.JobInfo getStatus(long jobId) throws JobDoesNotExistException {
-    JobCoordinator jobCoordinator = mIdToJobCoordinator.get(jobId);
-    if (jobCoordinator == null) {
+    alluxio.job.wire.JobInfo jobInfo = mIdToJobInfo.get(jobId);
+    if (jobInfo == null) {
       throw new JobDoesNotExistException(ExceptionMessage.JOB_DOES_NOT_EXIST.getMessage(jobId));
     }
-    return jobCoordinator.getJobInfoWire();
+    return jobInfo;
   }
 
   /**
