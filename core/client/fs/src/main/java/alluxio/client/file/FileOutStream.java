@@ -184,7 +184,9 @@ public class FileOutStream extends AbstractOutStream {
       if (!mCanceled && mUnderStorageType.isAsyncPersist()
           && mOptions.getPersistenceWaitTime() != Constants.NO_AUTO_PERSIST) {
         // only schedule the persist for completed files.
+        long start = System.currentTimeMillis();
         scheduleAsyncPersist();
+        LOG.info("scheduleAsyncPersist takes {}", System.currentTimeMillis() - start);
       }
     } catch (Throwable e) { // must catch Throwable
       throw mCloser.rethrow(e); // IOException will be thrown as-is.

@@ -3093,6 +3093,7 @@ public final class DefaultFileSystemMaster extends CoreMaster implements FileSys
   @Override
   public void scheduleAsyncPersistence(AlluxioURI path, ScheduleAsyncPersistenceContext context)
       throws AlluxioException, UnavailableException {
+    long start = System.currentTimeMillis();
     try (RpcContext rpcContext = createRpcContext();
         LockedInodePath inodePath = mInodeTree.lockFullInodePath(path, LockPattern.WRITE_INODE)) {
       InodeFile inode = inodePath.getInodeFile();
@@ -3110,6 +3111,7 @@ public final class DefaultFileSystemMaster extends CoreMaster implements FileSys
           context.getPersistenceWaitTime(),
           ServerConfiguration.getMs(PropertyKey.MASTER_PERSISTENCE_MAX_TOTAL_WAIT_TIME_MS)));
     }
+    LOG.info("scheduleAsyncPersistence takes {}", System.currentTimeMillis() - start);
   }
 
   /**
