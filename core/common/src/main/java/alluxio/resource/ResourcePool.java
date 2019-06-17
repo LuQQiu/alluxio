@@ -12,6 +12,8 @@
 package alluxio.resource;
 
 import com.google.common.base.Preconditions;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -33,6 +35,7 @@ import javax.annotation.concurrent.ThreadSafe;
  */
 @ThreadSafe
 public abstract class ResourcePool<T> implements Pool<T> {
+  private static final Logger LOG = LoggerFactory.getLogger(ResourcePool.class);
   private static final long WAIT_INDEFINITELY = -1;
   private final ReentrantLock mTakeLock;
   private final Condition mNotEmpty;
@@ -100,6 +103,7 @@ public abstract class ResourcePool<T> implements Pool<T> {
     // Try to take a resource without blocking
     T resource = mResources.poll();
     if (resource != null) {
+      LOG.info("Debug: acquire without blocking");
       return resource;
     }
 
@@ -113,9 +117,11 @@ public abstract class ResourcePool<T> implements Pool<T> {
     try {
       mTakeLock.lockInterruptibly();
       try {
+        long start = System.currentTimeMillis();
         while (true) {
           resource = mResources.poll();
           if (resource != null) {
+            LOG.info("Debug: get resource takes {}", System.currentTimeMillis() - start);
             return resource;
           }
           if (time > 0) {

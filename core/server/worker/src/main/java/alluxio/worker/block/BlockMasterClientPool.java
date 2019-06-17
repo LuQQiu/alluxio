@@ -18,6 +18,8 @@ import alluxio.master.MasterClientContext;
 import alluxio.resource.ResourcePool;
 
 import com.google.common.io.Closer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Queue;
@@ -32,6 +34,7 @@ import javax.annotation.concurrent.ThreadSafe;
  */
 @ThreadSafe
 public final class BlockMasterClientPool extends ResourcePool<BlockMasterClient> {
+  private static final Logger LOG = LoggerFactory.getLogger(BlockMasterClientPool.class);
   private final Queue<BlockMasterClient> mClientList;
   private final MasterClientContext mMasterContext;
 
@@ -40,6 +43,7 @@ public final class BlockMasterClientPool extends ResourcePool<BlockMasterClient>
    */
   public BlockMasterClientPool() {
     super(ServerConfiguration.getInt(PropertyKey.WORKER_BLOCK_MASTER_CLIENT_POOL_SIZE));
+    LOG.info("Debug: block master client pool size is {}", ServerConfiguration.getInt(PropertyKey.WORKER_BLOCK_MASTER_CLIENT_POOL_SIZE));
     mClientList = new ConcurrentLinkedQueue<>();
     mMasterContext = MasterClientContext
         .newBuilder(ClientContext.create(ServerConfiguration.global())).build();
@@ -57,6 +61,7 @@ public final class BlockMasterClientPool extends ResourcePool<BlockMasterClient>
 
   @Override
   protected BlockMasterClient createNewResource() {
+    LOG.info("Debug: create new resource of block master client pool, mCapacity is {}", mCurrentCapacity.get());
     BlockMasterClient client = new BlockMasterClient(mMasterContext);
     mClientList.add(client);
     return client;

@@ -315,7 +315,9 @@ public final class DefaultBlockWorker extends AbstractWorker implements BlockWor
     // TODO(calvin): Reconsider how to do this without heavy locking.
     // Block successfully committed, update master with new block metadata
     Long lockId = mBlockStore.lockBlock(sessionId, blockId);
+    long start = System.currentTimeMillis();
     BlockMasterClient blockMasterClient = mBlockMasterClientPool.acquire();
+    LOG.info("Debug: acquire block master client in commitBlock takes {}", System.currentTimeMillis() - start);
     try {
       BlockMeta meta = mBlockStore.getBlockMeta(sessionId, blockId, lockId);
       BlockStoreLocation loc = meta.getBlockLocation();
@@ -328,13 +330,17 @@ public final class DefaultBlockWorker extends AbstractWorker implements BlockWor
     } catch (Exception e) {
       throw new IOException(ExceptionMessage.FAILED_COMMIT_BLOCK_TO_MASTER.getMessage(blockId), e);
     } finally {
+      long mid = System.currentTimeMillis();
+      LOG.info("Debug: hold the block master client for {}", mid - start);
       mBlockMasterClientPool.release(blockMasterClient);
       mBlockStore.unlockBlock(lockId);
+      LOG.info("Debug: release the block master client takes {}", System.currentTimeMillis() - mid);
     }
   }
 
   @Override
   public void commitBlockInUfs(long blockId, long length) throws IOException {
+    LOG.info("Debug: commit block in ufs");
     BlockMasterClient blockMasterClient = mBlockMasterClientPool.acquire();
     try {
       blockMasterClient.commitBlockInUfs(blockId, length);
