@@ -14,12 +14,15 @@ package alluxio.worker.block;
 import alluxio.exception.BlockDoesNotExistException;
 import alluxio.exception.ExceptionMessage;
 import alluxio.master.block.BlockId;
+import alluxio.worker.block.allocator.MaxFreeAllocator;
 import alluxio.worker.block.meta.BlockMeta;
 import alluxio.worker.block.meta.StorageDirView;
 import alluxio.worker.block.meta.StorageTier;
 import alluxio.worker.block.meta.StorageTierView;
 
 import com.google.common.base.Preconditions;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -42,6 +45,7 @@ import javax.annotation.concurrent.NotThreadSafe;
  */
 @NotThreadSafe
 public class BlockMetadataManagerView {
+  private static final Logger LOG = LoggerFactory.getLogger(BlockMetadataManagerView.class);
 
   /** The {@link BlockMetadataManager} this view is derived from. */
   private final BlockMetadataManager mMetadataManager;
@@ -151,7 +155,9 @@ public class BlockMetadataManagerView {
    * @return the {@link StorageTierView} object associated with the alias
    */
   public StorageTierView getTierView(String tierAlias) {
+    long start = System.currentTimeMillis();
     StorageTierView tierView = mAliasToTierViews.get(tierAlias);
+    LOG.info("getTierView(tierAlias) takes {}", System.currentTimeMillis() - start);
     if (tierView == null) {
       throw new IllegalArgumentException(
           ExceptionMessage.TIER_VIEW_ALIAS_NOT_FOUND.getMessage(tierAlias));
@@ -166,7 +172,10 @@ public class BlockMetadataManagerView {
    * @return the list of {@link StorageTierView}s
    */
   public List<StorageTierView> getTierViews() {
-    return Collections.unmodifiableList(mTierViews);
+    long start = System.currentTimeMillis();
+    List<StorageTierView> res =  Collections.unmodifiableList(mTierViews);
+    LOG.info("getTierViews takes {}", System.currentTimeMillis() - start);
+    return res;
   }
 
   /**

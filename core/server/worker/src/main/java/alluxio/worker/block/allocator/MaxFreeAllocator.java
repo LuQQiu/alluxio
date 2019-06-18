@@ -11,12 +11,15 @@
 
 package alluxio.worker.block.allocator;
 
+import alluxio.worker.block.BlockMetadataManager;
 import alluxio.worker.block.BlockMetadataManagerView;
 import alluxio.worker.block.BlockStoreLocation;
 import alluxio.worker.block.meta.StorageDirView;
 import alluxio.worker.block.meta.StorageTierView;
 
 import com.google.common.base.Preconditions;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
@@ -26,6 +29,7 @@ import javax.annotation.concurrent.NotThreadSafe;
  */
 @NotThreadSafe
 public final class MaxFreeAllocator implements Allocator {
+  private static final Logger LOG = LoggerFactory.getLogger(MaxFreeAllocator.class);
   private BlockMetadataManagerView mManagerView;
 
   /**
@@ -55,11 +59,13 @@ public final class MaxFreeAllocator implements Allocator {
    *         otherwise
    * @throws IllegalArgumentException if block location is invalid
    */
+  // TODO(lu) See where takes time
   private StorageDirView allocateBlock(long sessionId, long blockSize,
       BlockStoreLocation location) {
     Preconditions.checkNotNull(location, "location");
     StorageDirView candidateDirView = null;
 
+    long start = System.currentTimeMillis();
     if (location.equals(BlockStoreLocation.anyTier())) {
       for (StorageTierView tierView : mManagerView.getTierViews()) {
         candidateDirView = getCandidateDirInTier(tierView, blockSize,
@@ -68,9 +74,11 @@ public final class MaxFreeAllocator implements Allocator {
           break;
         }
       }
+      LOG.info("1. takes {}", System.currentTimeMillis() - start);
     } else if (location.equals(BlockStoreLocation.anyDirInTier(location.tierAlias()))) {
       StorageTierView tierView = mManagerView.getTierView(location.tierAlias());
       candidateDirView = getCandidateDirInTier(tierView, blockSize, BlockStoreLocation.ANY_MEDIUM);
+      LOG.info("2. takes {}", System.currentTimeMillis() - start);
     } else if (location.equals(BlockStoreLocation.anyDirInTierWithMedium(location.mediumType()))) {
       for (StorageTierView tierView : mManagerView.getTierViews()) {
         candidateDirView = getCandidateDirInTier(tierView, blockSize, location.mediumType());
@@ -78,12 +86,14 @@ public final class MaxFreeAllocator implements Allocator {
           break;
         }
       }
+      LOG.info("3. takes {}", System.currentTimeMillis() - start);
     } else {
       StorageTierView tierView = mManagerView.getTierView(location.tierAlias());
       StorageDirView dirView = tierView.getDirView(location.dir());
       if (dirView.getAvailableBytes() >= blockSize) {
         candidateDirView = dirView;
       }
+      LOG.info("4. takes {}", System.currentTimeMillis() - start);
     }
 
     return candidateDirView;
@@ -99,6 +109,7 @@ public final class MaxFreeAllocator implements Allocator {
    */
   private StorageDirView getCandidateDirInTier(StorageTierView tierView, long blockSize,
       String mediumType) {
+    long start = System.currentTimeMillis();
     StorageDirView candidateDirView = null;
     long maxFreeBytes = blockSize - 1;
     for (StorageDirView dirView : tierView.getDirViews()) {
@@ -109,6 +120,7 @@ public final class MaxFreeAllocator implements Allocator {
         candidateDirView = dirView;
       }
     }
+    LOG.info("getCandidateDirInTier: takes {}", System.currentTimeMillis() - start);
     return candidateDirView;
   }
 }
