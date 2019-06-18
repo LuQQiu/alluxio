@@ -315,7 +315,10 @@ public final class DefaultBlockWorker extends AbstractWorker implements BlockWor
     // TODO(calvin): Reconsider how to do this without heavy locking.
     // Block successfully committed, update master with new block metadata
     Long lockId = mBlockStore.lockBlock(sessionId, blockId);
+    long start = System.currentTimeMillis();
     BlockMasterClient blockMasterClient = mBlockMasterClientPool.acquire();
+    long mid = System.currentTimeMillis();
+    LOG.info("Debug: acquire block master client takes {}", mid - start);
     try {
       BlockMeta meta = mBlockStore.getBlockMeta(sessionId, blockId, lockId);
       BlockStoreLocation loc = meta.getBlockLocation();
@@ -323,8 +326,11 @@ public final class DefaultBlockWorker extends AbstractWorker implements BlockWor
       Long length = meta.getBlockSize();
       BlockStoreMeta storeMeta = mBlockStore.getBlockStoreMeta();
       Long bytesUsedOnTier = storeMeta.getUsedBytesOnTiers().get(loc.tierAlias());
+      long third = System.currentTimeMillis();
+      LOG.info("Debug: getBlockMetadata takes {}", third - mid);
       blockMasterClient.commitBlock(mWorkerId.get(), bytesUsedOnTier, loc.tierAlias(), mediumType,
           blockId, length);
+      LOG.info("Debug: commit block takes {}", System.currentTimeMillis() - third);
     } catch (Exception e) {
       throw new IOException(ExceptionMessage.FAILED_COMMIT_BLOCK_TO_MASTER.getMessage(blockId), e);
     } finally {
