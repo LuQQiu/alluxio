@@ -248,8 +248,13 @@ public class TieredBlockStore implements BlockStore {
       throws BlockDoesNotExistException, InvalidWorkerStateException {
     LOG.debug("getBlockMeta: sessionId={}, blockId={}, lockId={}", sessionId, blockId, lockId);
     mLockManager.validateLock(sessionId, blockId, lockId);
+    long start = System.currentTimeMillis();
     try (LockResource r = new LockResource(mMetadataReadLock)) {
-      return mMetaManager.getBlockMeta(blockId);
+      long mid = System.currentTimeMillis();
+      LOG.info("getBlockMeta: get read lock takes {}", mid - start);
+      BlockMeta res = mMetaManager.getBlockMeta(blockId);
+      LOG.info("getBlockMeta: hold read lock for {}", System.currentTimeMillis() - mid);
+      return res;
     }
   }
 
@@ -417,8 +422,12 @@ public class TieredBlockStore implements BlockStore {
     // Removed DEBUG logging because this is very noisy
     // LOG.debug("getBlockStoreMeta:");
     BlockStoreMeta storeMeta;
+    long start = System.currentTimeMillis();
     try (LockResource r = new LockResource(mMetadataReadLock)) {
+      long mid = System.currentTimeMillis();
+      LOG.info("getBlockStoreMeta: get read lock takes {}", mid - start);
       storeMeta = mMetaManager.getBlockStoreMeta();
+      LOG.info("getBlockStoreMeta: hold read lock for {}", System.currentTimeMillis() - mid);
     }
     return storeMeta;
   }
@@ -582,7 +591,10 @@ public class TieredBlockStore implements BlockStore {
           throws BlockAlreadyExistsException {
     // NOTE: a temp block is supposed to be visible for its own writer, unnecessary to acquire
     // block lock here since no sharing
+    long start = System.currentTimeMillis();
     try (LockResource r = new LockResource(mMetadataWriteLock)) {
+      long mid = System.currentTimeMillis();
+      LOG.info("createBlockMetaInternal: get write lock takes {}", mid - start);
       if (newBlock) {
         checkTempBlockIdAvailable(blockId);
       }
@@ -605,6 +617,7 @@ public class TieredBlockStore implements BlockStore {
             + "but addTempBlockMeta failed", initialBlockSize, location);
         throw Throwables.propagate(e);
       }
+      LOG.info("createBlockMetaInternal: inside write lock takes {}", System.currentTimeMillis() - mid);
       return tempBlock;
     }
   }
@@ -736,9 +749,14 @@ public class TieredBlockStore implements BlockStore {
    */
   private BlockMetadataManagerView getUpdatedView() {
     // TODO(calvin): Update the view object instead of creating new one every time.
+    long start = System.currentTimeMillis();
     synchronized (mPinnedInodes) {
-      return new BlockMetadataManagerView(mMetaManager, mPinnedInodes,
+      long mid = System.currentTimeMillis();
+      BlockMetadataManagerView res = new BlockMetadataManagerView(mMetaManager, mPinnedInodes,
           mLockManager.getLockedBlocks());
+      long end = System.currentTimeMillis();
+      LOG.info("getUpdatedView takes {}, inside synchronized takes {}", end - start, end - mid);
+      return res;
     }
   }
 
@@ -886,9 +904,13 @@ public class TieredBlockStore implements BlockStore {
   @Override
   public void updatePinnedInodes(Set<Long> inodes) {
     LOG.debug("updatePinnedInodes: inodes={}", inodes);
+    long start = System.currentTimeMillis();
     synchronized (mPinnedInodes) {
+      long mid = System.currentTimeMillis();
       mPinnedInodes.clear();
       mPinnedInodes.addAll(Preconditions.checkNotNull(inodes));
+      long end = System.currentTimeMillis();
+      LOG.info("UpdatePinnedInodes takes {}, inside synchronized takes {}", end - start, end - mid);
     }
   }
 
@@ -899,8 +921,12 @@ public class TieredBlockStore implements BlockStore {
    */
   private void addToPinnedInodes(Long inode) {
     LOG.debug("addToPinnedInodes: inode={}", inode);
+    long start = System.currentTimeMillis();
     synchronized (mPinnedInodes) {
+      long mid = System.currentTimeMillis();
       mPinnedInodes.add(Preconditions.checkNotNull(inode));
+      long end = System.currentTimeMillis();
+      LOG.info("addToPinnedInodes takes {}, inside synchronized takes {}", end - start, end - mid);
     }
   }
 
