@@ -513,12 +513,13 @@ public class TieredBlockStore implements BlockStore {
     // The metadata lock is released during heavy IO. The temp block is private to one session, so
     // we do not lock it.
     Files.delete(Paths.get(path));
-
+    long start = System.currentTimeMillis();
     try (LockResource r = new LockResource(mMetadataWriteLock)) {
       mMetaManager.abortTempBlockMeta(tempBlockMeta);
     } catch (BlockDoesNotExistException e) {
       throw Throwables.propagate(e); // We shall never reach here
     }
+    LOG.info("Debug: write lock in abortBlock takes {}", System.currentTimeMillis() - start);
   }
 
   /**
@@ -555,12 +556,14 @@ public class TieredBlockStore implements BlockStore {
       // Heavy IO is guarded by block lock but not metadata lock. This may throw IOException.
       FileUtils.move(srcPath, dstPath);
 
+      long start = System.currentTimeMillis();
       try (LockResource r = new LockResource(mMetadataWriteLock)) {
         mMetaManager.commitTempBlockMeta(tempBlockMeta);
       } catch (BlockAlreadyExistsException | BlockDoesNotExistException
           | WorkerOutOfSpaceException e) {
         throw Throwables.propagate(e); // we shall never reach here
       }
+      LOG.info("Debug: write lock in commit block takes {}", System.currentTimeMillis() - start);
 
       // Check if block is pinned on commit
       if (pinOnCreate) {
@@ -591,6 +594,7 @@ public class TieredBlockStore implements BlockStore {
           throws BlockAlreadyExistsException {
     // NOTE: a temp block is supposed to be visible for its own writer, unnecessary to acquire
     // block lock here since no sharing
+    long start = System.currentTimeMillis();
     try (LockResource r = new LockResource(mMetadataWriteLock)) {
       if (newBlock) {
         checkTempBlockIdAvailable(blockId);
@@ -614,6 +618,7 @@ public class TieredBlockStore implements BlockStore {
             + "but addTempBlockMeta failed", initialBlockSize, location);
         throw Throwables.propagate(e);
       }
+      LOG.info("Debug: write lock create block meta takes {}", System.currentTimeMillis() - start);
       return tempBlock;
     }
   }
@@ -632,9 +637,11 @@ public class TieredBlockStore implements BlockStore {
       throws BlockDoesNotExistException {
     // NOTE: a temp block is supposed to be visible for its own writer, unnecessary to acquire
     // block lock here since no sharing
+    long start = System.currentTimeMillis();
     try (LockResource r = new LockResource(mMetadataWriteLock)) {
       TempBlockMeta tempBlockMeta = mMetaManager.getTempBlockMeta(blockId);
       if (tempBlockMeta.getParentDir().getAvailableBytes() < additionalBytes) {
+        LOG.info("Debug: write block request space first half takes {}", System.currentTimeMillis() - start);
         return new Pair<>(false, tempBlockMeta.getBlockLocation());
       }
       // Increase the size of this temp block
@@ -644,6 +651,7 @@ public class TieredBlockStore implements BlockStore {
       } catch (InvalidWorkerStateException e) {
         throw Throwables.propagate(e); // we shall never reach here
       }
+      LOG.info("Debug: write lock request space second takes {}", System.currentTimeMillis() - start);
       return new Pair<>(true, null);
     }
   }
@@ -662,6 +670,7 @@ public class TieredBlockStore implements BlockStore {
       Evictor.Mode mode) throws WorkerOutOfSpaceException, IOException {
     EvictionPlan plan;
     // NOTE:change the read lock to the write lock due to the endless-loop issue [ALLUXIO-3089]
+    long start = System.currentTimeMillis();
     try (LockResource r = new LockResource(mMetadataWriteLock)) {
       plan = mEvictor.freeSpaceWithView(availableBytes, location, getUpdatedView(), mode);
       // Absent plan means failed to evict enough space.
@@ -670,6 +679,7 @@ public class TieredBlockStore implements BlockStore {
             ExceptionMessage.NO_EVICTION_PLAN_TO_FREE_SPACE, availableBytes, location.tierAlias());
       }
     }
+    LOG.info("Debug: write lock free space takes {}", System.currentTimeMillis() - start);
 
     // 1. remove blocks to make room.
     for (Pair<Long, BlockStoreLocation> blockInfo : plan.toEvict()) {
@@ -813,6 +823,7 @@ public class TieredBlockStore implements BlockStore {
       // Heavy IO is guarded by block lock but not metadata lock. This may throw IOException.
       FileUtils.move(srcFilePath, dstFilePath);
 
+      long start = System.currentTimeMillis();
       try (LockResource r = new LockResource(mMetadataWriteLock)) {
         // If this metadata update fails, we panic for now.
         // TODO(bin): Implement rollback scheme to recover from IO failures.
@@ -823,6 +834,7 @@ public class TieredBlockStore implements BlockStore {
         // createBlockMetaInternal and moveBlockMeta.
         throw Throwables.propagate(e); // we shall never reach here
       }
+      LOG.info("Debug: write lock remove block meta takes {}", System.currentTimeMillis() - start);
 
       return new MoveBlockResult(true, blockSize, srcLocation, dstLocation);
     } finally {
@@ -859,12 +871,13 @@ public class TieredBlockStore implements BlockStore {
       }
       // Heavy IO is guarded by block lock but not metadata lock. This may throw IOException.
       Files.delete(Paths.get(filePath));
-
+      long start = System.currentTimeMillis();
       try (LockResource r = new LockResource(mMetadataWriteLock)) {
         mMetaManager.removeBlockMeta(blockMeta);
       } catch (BlockDoesNotExistException e) {
         throw Throwables.propagate(e); // we shall never reach here
       }
+      LOG.info("Debug: write lock, remove block meta takes {}", System.currentTimeMillis() - start);
     } finally {
       mLockManager.unlockBlock(lockId);
     }
@@ -915,6 +928,7 @@ public class TieredBlockStore implements BlockStore {
 
   @Override
   public boolean checkStorage() {
+    long start = System.currentTimeMillis();
     try (LockResource r = new LockResource(mMetadataWriteLock)) {
       List<StorageDir> dirsToRemove = new ArrayList<>();
       for (StorageTier tier : mMetaManager.getTiers()) {
@@ -929,6 +943,7 @@ public class TieredBlockStore implements BlockStore {
       dirsToRemove.forEach(this::removeDir);
       return !dirsToRemove.isEmpty();
     }
+    LOG.info("Debug: write lock check storage takes {}", System.currentTimeMillis() - start);
   }
 
   /**
@@ -938,6 +953,7 @@ public class TieredBlockStore implements BlockStore {
    */
   public void removeDir(StorageDir dir) {
     // TODO(feng): Add a command for manually removing directory
+    long start = System.currentTimeMillis();
     try (LockResource r = new LockResource(mMetadataWriteLock)) {
       String tierAlias = dir.getParentTier().getTierAlias();
       dir.getParentTier().removeStorageDir(dir);
@@ -948,6 +964,7 @@ public class TieredBlockStore implements BlockStore {
         }
       }
     }
+    LOG.info("Debug: write lock remove Dir takes {}", System.currentTimeMillis() - start);
   }
 
   /**
