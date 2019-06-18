@@ -23,7 +23,10 @@ import io.grpc.ForwardingClientCallListener;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.util.UUID;
 import java.util.function.Supplier;
 
 /**
@@ -70,7 +73,7 @@ public final class GrpcChannel extends Channel {
 
     // Store {@link AuthenticatedChannel::#close) for signaling end of
     // authenticated session during shutdown.
-    mAuthCloseCallback = ((AuthenticatedChannel) channel)::close;
+    mAuthCloseCallback = channel::close;
   }
 
   @Override
