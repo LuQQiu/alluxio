@@ -248,8 +248,13 @@ public class TieredBlockStore implements BlockStore {
       throws BlockDoesNotExistException, InvalidWorkerStateException {
     LOG.debug("getBlockMeta: sessionId={}, blockId={}, lockId={}", sessionId, blockId, lockId);
     mLockManager.validateLock(sessionId, blockId, lockId);
+    long start = System.currentTimeMillis();
     try (LockResource r = new LockResource(mMetadataReadLock)) {
-      return mMetaManager.getBlockMeta(blockId);
+      long mid = System.currentTimeMillis();
+      LOG.info("Debug: getLockResource in getBlockMeta takes {}", mid - start);
+      BlockMeta blockMeta = mMetaManager.getBlockMeta(blockId);
+      LOG.info("Debug: mMetaManager.getBlockMeta takes {}", System.currentTimeMillis() - mid);
+      return blockMeta;
     }
   }
 
@@ -417,8 +422,12 @@ public class TieredBlockStore implements BlockStore {
     // Removed DEBUG logging because this is very noisy
     // LOG.debug("getBlockStoreMeta:");
     BlockStoreMeta storeMeta;
+    long start = System.currentTimeMillis();
     try (LockResource r = new LockResource(mMetadataReadLock)) {
+      long mid = System.currentTimeMillis();
+      LOG.info("Debug: getLockResource takes {}", mid - start);
       storeMeta = mMetaManager.getBlockStoreMeta();
+      LOG.info("Debug: mMetaManager.getBlockStoreMeta() takes {}", System.currentTimeMillis() - mid);
     }
     return storeMeta;
   }

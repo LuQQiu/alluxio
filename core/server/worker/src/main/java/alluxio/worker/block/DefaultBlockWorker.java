@@ -330,7 +330,6 @@ public final class DefaultBlockWorker extends AbstractWorker implements BlockWor
       LOG.info("Debug: getBlockStoreMeta takes {}", third - mid);
       blockMasterClient.commitBlock(mWorkerId.get(), bytesUsedOnTier, loc.tierAlias(), mediumType,
           blockId, length);
-      LOG.info("Debug: commit block takes {}", System.currentTimeMillis() - third);
     } catch (Exception e) {
       throw new IOException(ExceptionMessage.FAILED_COMMIT_BLOCK_TO_MASTER.getMessage(blockId), e);
     } finally {
