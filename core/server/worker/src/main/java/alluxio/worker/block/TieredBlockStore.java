@@ -549,10 +549,13 @@ public class TieredBlockStore implements BlockStore {
       FileUtils.move(srcPath, dstPath);
 
       // TODO(lu) sometimes takes longer 100-150ms
+      long start = System.currentTimeMillis();
       try (LockResource r = new LockResource(mMetadataWriteLock)) {
-        long start = System.currentTimeMillis();
+        long mid = System.currentTimeMillis();
+        LOG.info("Debug: commitblock get lock takes {}", mid - start);
+        // But the inner place do not take time
         mMetaManager.commitTempBlockMeta(tempBlockMeta);
-        LOG.info("Debug: commitBlock mMetaManager.commitTempBlockMeta takes {}", System.currentTimeMillis() - start);
+        LOG.info("Debug: commitBlock inside lock takes {}", System.currentTimeMillis() - mid);
       } catch (BlockAlreadyExistsException | BlockDoesNotExistException
           | WorkerOutOfSpaceException e) {
         throw Throwables.propagate(e); // we shall never reach here
@@ -588,7 +591,10 @@ public class TieredBlockStore implements BlockStore {
     // NOTE: a temp block is supposed to be visible for its own writer, unnecessary to acquire
     // block lock here since no sharing
     // TODO(LU) !!! here takes a long time
+    long start = System.currentTimeMillis();
     try (LockResource r = new LockResource(mMetadataWriteLock)) {
+      long mid = System.currentTimeMillis();
+      LOG.info("Debug: createBlockMeta take lock uses {}", mid - start);
       if (newBlock) {
         checkTempBlockIdAvailable(blockId);
       }
@@ -604,15 +610,15 @@ public class TieredBlockStore implements BlockStore {
       try {
         // Add allocated temp block to metadata manager. This should never fail if allocator
         // correctly assigns a StorageDir.
-        long start = System.currentTimeMillis();
+       // TODO (lu) here do not takes time
         mMetaManager.addTempBlockMeta(tempBlock);
-        LOG.info("Debug: createBlockMeta mMetaManager.addTempBlockMeta takes {}", System.currentTimeMillis() - start);
       } catch (WorkerOutOfSpaceException | BlockAlreadyExistsException e) {
         // If we reach here, allocator is not working properly
         LOG.error("Unexpected failure: {} bytes allocated at {} by allocator, "
             + "but addTempBlockMeta failed", initialBlockSize, location);
         throw Throwables.propagate(e);
       }
+      LOG.info("Debug: createBlockMeta inside lock takes {}", System.currentTimeMillis() - mid);
       return tempBlock;
     }
   }
@@ -662,7 +668,6 @@ public class TieredBlockStore implements BlockStore {
       Evictor.Mode mode) throws WorkerOutOfSpaceException, IOException {
     EvictionPlan plan;
     // NOTE:change the read lock to the write lock due to the endless-loop issue [ALLUXIO-3089]
-    long start = System.currentTimeMillis();
     try (LockResource r = new LockResource(mMetadataWriteLock)) {
       plan = mEvictor.freeSpaceWithView(availableBytes, location, getUpdatedView(), mode);
       // Absent plan means failed to evict enough space.

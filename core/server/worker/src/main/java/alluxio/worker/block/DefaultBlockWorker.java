@@ -317,17 +317,12 @@ public final class DefaultBlockWorker extends AbstractWorker implements BlockWor
     Long lockId = mBlockStore.lockBlock(sessionId, blockId);
     BlockMasterClient blockMasterClient = mBlockMasterClientPool.acquire();
     try {
-      long start = System.currentTimeMillis();
       BlockMeta meta = mBlockStore.getBlockMeta(sessionId, blockId, lockId);
       BlockStoreLocation loc = meta.getBlockLocation();
       String mediumType = loc.mediumType();
       Long length = meta.getBlockSize();
-      long mid = System.currentTimeMillis();
-      LOG.info("Debug: getBlockMeta takes {}", mid - start);
       BlockStoreMeta storeMeta = mBlockStore.getBlockStoreMeta();
       Long bytesUsedOnTier = storeMeta.getUsedBytesOnTiers().get(loc.tierAlias());
-      long third = System.currentTimeMillis();
-      LOG.info("Debug: getBlockStoreMeta takes {}", third - mid);
       blockMasterClient.commitBlock(mWorkerId.get(), bytesUsedOnTier, loc.tierAlias(), mediumType,
           blockId, length);
     } catch (Exception e) {
