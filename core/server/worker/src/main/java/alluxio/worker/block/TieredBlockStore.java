@@ -248,12 +248,8 @@ public class TieredBlockStore implements BlockStore {
       throws BlockDoesNotExistException, InvalidWorkerStateException {
     LOG.debug("getBlockMeta: sessionId={}, blockId={}, lockId={}", sessionId, blockId, lockId);
     mLockManager.validateLock(sessionId, blockId, lockId);
-    long start = System.currentTimeMillis();
     try (LockResource r = new LockResource(mMetadataReadLock)) {
-      long mid = System.currentTimeMillis();
-      LOG.info("getBlockMeta: get read lock takes {}", mid - start);
       BlockMeta res = mMetaManager.getBlockMeta(blockId);
-      LOG.info("getBlockMeta: hold read lock for {}", System.currentTimeMillis() - mid);
       return res;
     }
   }
@@ -422,12 +418,8 @@ public class TieredBlockStore implements BlockStore {
     // Removed DEBUG logging because this is very noisy
     // LOG.debug("getBlockStoreMeta:");
     BlockStoreMeta storeMeta;
-    long start = System.currentTimeMillis();
     try (LockResource r = new LockResource(mMetadataReadLock)) {
-      long mid = System.currentTimeMillis();
-      LOG.info("getBlockStoreMeta: get read lock takes {}", mid - start);
       storeMeta = mMetaManager.getBlockStoreMeta();
-      LOG.info("getBlockStoreMeta: hold read lock for {}", System.currentTimeMillis() - mid);
     }
     return storeMeta;
   }
@@ -750,6 +742,7 @@ public class TieredBlockStore implements BlockStore {
   private BlockMetadataManagerView getUpdatedView() {
     // TODO(calvin): Update the view object instead of creating new one every time.
     long start = System.currentTimeMillis();
+    // TODO(lu) createBlockMetaInternal will call this method
     synchronized (mPinnedInodes) {
       long mid = System.currentTimeMillis();
       BlockMetadataManagerView res = new BlockMetadataManagerView(mMetaManager, mPinnedInodes,

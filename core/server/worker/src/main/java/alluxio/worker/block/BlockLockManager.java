@@ -114,7 +114,9 @@ public final class BlockLockManager {
     lock.lock();
     try {
       long lockId = LOCK_ID_GEN.getAndIncrement();
+      long start = System.currentTimeMillis();
       synchronized (mSharedMapsLock) {
+        long mid = System.currentTimeMillis();
         mLockIdToRecordMap.put(lockId, new LockRecord(sessionId, blockId, lock));
         Set<Long> sessionLockIds = mSessionIdToLockIdsMap.get(sessionId);
         if (sessionLockIds == null) {
@@ -122,6 +124,8 @@ public final class BlockLockManager {
         } else {
           sessionLockIds.add(lockId);
         }
+        long end = System.currentTimeMillis();
+        LOG.info("lockBlock: get lock takes {}, inside sync takes {}", mid - start, end - mid);
       }
       return lockId;
     } catch (RuntimeException e) {
@@ -137,17 +141,22 @@ public final class BlockLockManager {
    * @return whether the specified session holds a lock on the specified block
    */
   private boolean sessionHoldsLock(long sessionId, long blockId) {
+    long start = System.currentTimeMillis();
     synchronized (mSharedMapsLock) {
+      long mid = System.currentTimeMillis();
       Set<Long> sessionLocks = mSessionIdToLockIdsMap.get(sessionId);
       if (sessionLocks == null) {
+        LOG.info("1. sessionHoldsLock get lock takes {}, whole takes {}", mid - start, System.currentTimeMillis() - mid);
         return false;
       }
       for (Long lockId : sessionLocks) {
         LockRecord lockRecord = mLockIdToRecordMap.get(lockId);
         if (lockRecord.getBlockId() == blockId) {
+          LOG.info("2. sessionHoldsLock get lock takes {}, whole takes {}", mid - start, System.currentTimeMillis() - mid);
           return true;
         }
       }
+      LOG.info("3. sessionHoldsLock get lock takes {}, whole takes {}", mid - start, System.currentTimeMillis() - mid);
       return false;
     }
   }
@@ -166,12 +175,16 @@ public final class BlockLockManager {
     while (true) {
       ClientRWLock blockLock;
       // Check whether a lock has already been allocated for the block id.
+      long start = System.currentTimeMillis();
       synchronized (mSharedMapsLock) {
+        long mid = System.currentTimeMillis();
         blockLock = mLocks.get(blockId);
         if (blockLock != null) {
           blockLock.addReference();
+          LOG.info("1. getBlockLock get lock takes {}, inside sync takes {}", mid - start, System.currentTimeMillis() - mid);
           return blockLock;
         }
+        LOG.info("2. getBlockLock get lock takes {}, inside sync takes {}", mid - start, System.currentTimeMillis() - mid);
       }
       // Since a block lock hasn't already been allocated, try to acquire a new one from the pool.
       // Acquire the lock outside the synchronized section because #acquire might need to block.
@@ -179,7 +192,9 @@ public final class BlockLockManager {
       // allocated to another thread, in which case we could just use that lock.
       blockLock = mLockPool.acquire(1, TimeUnit.SECONDS);
       if (blockLock != null) {
+        long secondStart = System.currentTimeMillis();
         synchronized (mSharedMapsLock) {
+          long mid = System.currentTimeMillis();
           // Check if someone else acquired a block lock for blockId while we were acquiring one.
           if (mLocks.containsKey(blockId)) {
             mLockPool.release(blockLock);
@@ -188,6 +203,7 @@ public final class BlockLockManager {
             mLocks.put(blockId, blockLock);
           }
           blockLock.addReference();
+          LOG.info("getBlockLock get lock takes {}, inside sync takes {}", mid - secondStart, System.currentTimeMillis() - mid);
           return blockLock;
         }
       }
@@ -203,9 +219,12 @@ public final class BlockLockManager {
   public boolean unlockBlockNoException(long lockId) {
     Lock lock;
     LockRecord record;
+    long start = System.currentTimeMillis();
     synchronized (mSharedMapsLock) {
+      long mid = System.currentTimeMillis();
       record = mLockIdToRecordMap.get(lockId);
       if (record == null) {
+        LOG.info("1. unlockBlockNoException get lock takes {}, inside sync takes {}", mid - start, System.currentTimeMillis() - mid);
         return false;
       }
       long sessionId = record.getSessionId();
@@ -216,6 +235,7 @@ public final class BlockLockManager {
       if (sessionLockIds.isEmpty()) {
         mSessionIdToLockIdsMap.remove(sessionId);
       }
+      LOG.info("2. unlockBlockNoException get lock takes {}, inside sync takes {}", mid - start, System.currentTimeMillis() - mid);
     }
     unlock(lock, record.getBlockId());
     return true;
@@ -243,15 +263,19 @@ public final class BlockLockManager {
    */
   // TODO(bin): Temporary, remove me later.
   public boolean unlockBlock(long sessionId, long blockId) {
+    long start = System.currentTimeMillis();
     synchronized (mSharedMapsLock) {
+      long mid = System.currentTimeMillis();
       Set<Long> sessionLockIds = mSessionIdToLockIdsMap.get(sessionId);
       if (sessionLockIds == null) {
+        LOG.info("1. unlockBlock get lock takes {}, inside sync takes {}", mid - start, System.currentTimeMillis() - mid);
         return false;
       }
       for (long lockId : sessionLockIds) {
         LockRecord record = mLockIdToRecordMap.get(lockId);
         if (record == null) {
           // TODO(peis): Should this be a check failure?
+          LOG.info("2. unlockBlock get lock takes {}, inside sync takes {}", mid - start, System.currentTimeMillis() - mid);
           return false;
         }
         if (blockId == record.getBlockId()) {
@@ -262,9 +286,11 @@ public final class BlockLockManager {
           }
           Lock lock = record.getLock();
           unlock(lock, blockId);
+          LOG.info("3. unlockBlock get lock takes {}, inside sync takes {}", mid - start, System.currentTimeMillis() - mid);
           return true;
         }
       }
+      LOG.info("4. unlockBlock get lock takes {}, inside sync takes {}", mid - start, System.currentTimeMillis() - mid);
       return false;
     }
   }
@@ -281,7 +307,9 @@ public final class BlockLockManager {
    */
   public void validateLock(long sessionId, long blockId, long lockId)
       throws BlockDoesNotExistException, InvalidWorkerStateException {
+    long start = System.currentTimeMillis();
     synchronized (mSharedMapsLock) {
+      long mid = System.currentTimeMillis();
       LockRecord record = mLockIdToRecordMap.get(lockId);
       if (record == null) {
         throw new BlockDoesNotExistException(ExceptionMessage.LOCK_RECORD_NOT_FOUND_FOR_LOCK_ID,
@@ -295,6 +323,7 @@ public final class BlockLockManager {
         throw new InvalidWorkerStateException(ExceptionMessage.LOCK_ID_FOR_DIFFERENT_BLOCK, lockId,
             record.getBlockId(), blockId);
       }
+      LOG.info("validateLock get lock takes {}, inside sync takes {}", mid - start, System.currentTimeMillis() - mid);
     }
   }
 
@@ -304,9 +333,12 @@ public final class BlockLockManager {
    * @param sessionId the id of the session to cleanup
    */
   public void cleanupSession(long sessionId) {
+    long start = System.currentTimeMillis();
     synchronized (mSharedMapsLock) {
+      long mid = System.currentTimeMillis();
       Set<Long> sessionLockIds = mSessionIdToLockIdsMap.get(sessionId);
       if (sessionLockIds == null) {
+        LOG.info("1. cleanupSession get lock takes {}, inside sync takes {}", mid - start, System.currentTimeMillis() - mid);
         return;
       }
       for (long lockId : sessionLockIds) {
@@ -320,6 +352,7 @@ public final class BlockLockManager {
         mLockIdToRecordMap.remove(lockId);
       }
       mSessionIdToLockIdsMap.remove(sessionId);
+      LOG.info("2. cleanupSession get lock takes {}, inside sync takes {}", mid - start, System.currentTimeMillis() - mid);
     }
   }
 
@@ -329,11 +362,15 @@ public final class BlockLockManager {
    * @return a set of locked blocks
    */
   public Set<Long> getLockedBlocks() {
+    long start = System.currentTimeMillis();
     synchronized (mSharedMapsLock) {
+      long mid = System.currentTimeMillis();
       Set<Long> set = new HashSet<>();
       for (LockRecord lockRecord : mLockIdToRecordMap.values()) {
         set.add(lockRecord.getBlockId());
       }
+      long end = System.currentTimeMillis();
+      LOG.info("getLockedBlocks get lock takes {}, inside sync takes {}", mid - start, end - mid);
       return set;
     }
   }
@@ -357,7 +394,9 @@ public final class BlockLockManager {
    * @param blockId the block id for which to potentially release the block lock
    */
   private void releaseBlockLockIfUnused(long blockId) {
+    long start = System.currentTimeMillis();
     synchronized (mSharedMapsLock) {
+      long mid = System.currentTimeMillis();
       ClientRWLock lock = mLocks.get(blockId);
       if (lock == null) {
         // Someone else probably released the block lock already.
@@ -368,6 +407,7 @@ public final class BlockLockManager {
         mLocks.remove(blockId);
         mLockPool.release(lock);
       }
+      LOG.info("releaseBlockLockIfUnused get lock takes {}, inside sync takes {}", mid - start, System.currentTimeMillis() - mid);
     }
   }
 
@@ -378,7 +418,9 @@ public final class BlockLockManager {
    * state is encountered.
    */
   public void validate() {
+    long start = System.currentTimeMillis();
     synchronized (mSharedMapsLock) {
+      long mid = System.currentTimeMillis();
       // Compute block lock reference counts based off of lock records
       ConcurrentMap<Long, AtomicInteger> blockLockReferenceCounts = new ConcurrentHashMap<>();
       for (LockRecord record : mLockIdToRecordMap.values()) {
@@ -410,6 +452,7 @@ public final class BlockLockManager {
           }
         }
       }
+      LOG.info("validate get lock takes {}, inside sync takes {}", mid - start, System.currentTimeMillis() - mid);
     }
   }
 
