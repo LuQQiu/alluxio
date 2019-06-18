@@ -185,9 +185,11 @@ public final class BlockMetadataManager {
    * @throws BlockDoesNotExistException if no BlockMeta for this block id is found
    */
   public BlockMeta getBlockMeta(long blockId) throws BlockDoesNotExistException {
+    long start = System.currentTimeMillis();
     for (StorageTier tier : mTiers) {
       for (StorageDir dir : tier.getStorageDirs()) {
         if (dir.hasBlockMeta(blockId)) {
+          LOG.info("getBlockMeta takes {}", System.currentTimeMillis() - start);
           return dir.getBlockMeta(blockId);
         }
       }
@@ -214,7 +216,10 @@ public final class BlockMetadataManager {
    * @return the metadata of this block store
    */
   public BlockStoreMeta getBlockStoreMeta() {
-    return BlockStoreMeta.Factory.create(this);
+    long start = System.currentTimeMillis();
+    BlockStoreMeta meta  = BlockStoreMeta.Factory.create(this);
+    LOG.info("getBlockStoreMeta takes {}", System.currentTimeMillis() - start);
+    return meta;
   }
 
   /**

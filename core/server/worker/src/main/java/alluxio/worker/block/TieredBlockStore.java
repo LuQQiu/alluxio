@@ -244,6 +244,7 @@ public class TieredBlockStore implements BlockStore {
   }
 
   @Override
+  // TODO(lu) hold the read lock for 1 - 2ms
   public BlockMeta getBlockMeta(long sessionId, long blockId, long lockId)
       throws BlockDoesNotExistException, InvalidWorkerStateException {
     LOG.debug("getBlockMeta: sessionId={}, blockId={}, lockId={}", sessionId, blockId, lockId);
@@ -413,6 +414,7 @@ public class TieredBlockStore implements BlockStore {
   }
 
   @Override
+  // TODO(lu) sometimes hold read lock for 1 - 3 ms
   public BlockStoreMeta getBlockStoreMeta() {
     // Removed DEBUG logging because this is very noisy
     // LOG.debug("getBlockStoreMeta:");
@@ -577,17 +579,22 @@ public class TieredBlockStore implements BlockStore {
    *         {@link WorkerOutOfSpaceException} because allocation failure could be an expected case)
    * @throws BlockAlreadyExistsException if there is already a block with the same block id
    */
+  // TODO(LU) createBlockMetaInternal whole the write lock for 3-6ms
   private TempBlockMeta createBlockMetaInternal(long sessionId, long blockId,
       BlockStoreLocation location, long initialBlockSize, boolean newBlock)
           throws BlockAlreadyExistsException {
     // NOTE: a temp block is supposed to be visible for its own writer, unnecessary to acquire
     // block lock here since no sharing
     try (LockResource r = new LockResource(mMetadataWriteLock)) {
+      long start = System.currentTimeMillis();
       if (newBlock) {
         checkTempBlockIdAvailable(blockId);
+        LOG.info("checkTempBlockIdAvailable takes {}", System.currentTimeMillis() - start);
       }
       StorageDirView dirView =
           mAllocator.allocateBlockWithView(sessionId, initialBlockSize, location, getUpdatedView());
+      long mid = System.currentTimeMillis();
+      LOG.info("allocateBlockWithView takes {}", mid - start);
       if (dirView == null) {
         // Allocator fails to find a proper place for this new block.
         return null;
@@ -599,6 +606,7 @@ public class TieredBlockStore implements BlockStore {
         // Add allocated temp block to metadata manager. This should never fail if allocator
         // correctly assigns a StorageDir.
         mMetaManager.addTempBlockMeta(tempBlock);
+        LOG.info("mMetaManager.addTempBlockMeta takes {}", System.currentTimeMillis() - mid);
       } catch (WorkerOutOfSpaceException | BlockAlreadyExistsException e) {
         // If we reach here, allocator is not working properly
         LOG.error("Unexpected failure: {} bytes allocated at {} by allocator, "
