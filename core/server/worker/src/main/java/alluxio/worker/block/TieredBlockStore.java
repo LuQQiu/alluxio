@@ -941,9 +941,9 @@ public class TieredBlockStore implements BlockStore {
         }
       }
       dirsToRemove.forEach(this::removeDir);
+      LOG.info("Debug: write lock check storage takes {}", System.currentTimeMillis() - start);
       return !dirsToRemove.isEmpty();
     }
-    LOG.info("Debug: write lock check storage takes {}", System.currentTimeMillis() - start);
   }
 
   /**
