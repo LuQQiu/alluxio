@@ -114,9 +114,9 @@ public final class BlockLockManager {
     lock.lock();
     try {
       long lockId = LOCK_ID_GEN.getAndIncrement();
-      long start = System.currentTimeMillis();
+      long start = System.nanoTime();
       synchronized (mSharedMapsLock) {
-        long mid = System.currentTimeMillis();
+        long mid = System.nanoTime();
         mLockIdToRecordMap.put(lockId, new LockRecord(sessionId, blockId, lock));
         Set<Long> sessionLockIds = mSessionIdToLockIdsMap.get(sessionId);
         if (sessionLockIds == null) {
@@ -124,7 +124,7 @@ public final class BlockLockManager {
         } else {
           sessionLockIds.add(lockId);
         }
-        long end = System.currentTimeMillis();
+        long end = System.nanoTime();
         LOG.info("lockBlock: get lock takes {}, inside sync takes {}", mid - start, end - mid);
       }
       return lockId;
@@ -175,16 +175,16 @@ public final class BlockLockManager {
     while (true) {
       ClientRWLock blockLock;
       // Check whether a lock has already been allocated for the block id.
-      long start = System.currentTimeMillis();
+      long start = System.nanoTime();
       synchronized (mSharedMapsLock) {
-        long mid = System.currentTimeMillis();
+        long mid = System.nanoTime();
         blockLock = mLocks.get(blockId);
         if (blockLock != null) {
           blockLock.addReference();
-          LOG.info("1. getBlockLock get lock takes {}, inside sync takes {}", mid - start, System.currentTimeMillis() - mid);
+          LOG.info("1. getBlockLock get lock takes {}, inside sync takes {}", mid - start, System.nanoTime() - mid);
           return blockLock;
         }
-        LOG.info("2. getBlockLock get lock takes {}, inside sync takes {}", mid - start, System.currentTimeMillis() - mid);
+        LOG.info("2. getBlockLock get lock takes {}, inside sync takes {}", mid - start, System.nanoTime() - mid);
       }
       // Since a block lock hasn't already been allocated, try to acquire a new one from the pool.
       // Acquire the lock outside the synchronized section because #acquire might need to block.
@@ -219,12 +219,12 @@ public final class BlockLockManager {
   public boolean unlockBlockNoException(long lockId) {
     Lock lock;
     LockRecord record;
-    long start = System.currentTimeMillis();
+    long start = System.nanoTime();
     synchronized (mSharedMapsLock) {
-      long mid = System.currentTimeMillis();
+      long mid = System.nanoTime();
       record = mLockIdToRecordMap.get(lockId);
       if (record == null) {
-        LOG.info("1. unlockBlockNoException get lock takes {}, inside sync takes {}", mid - start, System.currentTimeMillis() - mid);
+        LOG.info("1. unlockBlockNoException get lock takes {}, inside sync takes {}", mid - start, System.nanoTime() - mid);
         return false;
       }
       long sessionId = record.getSessionId();
@@ -235,7 +235,7 @@ public final class BlockLockManager {
       if (sessionLockIds.isEmpty()) {
         mSessionIdToLockIdsMap.remove(sessionId);
       }
-      LOG.info("2. unlockBlockNoException get lock takes {}, inside sync takes {}", mid - start, System.currentTimeMillis() - mid);
+      LOG.info("2. unlockBlockNoException get lock takes {}, inside sync takes {}", mid - start, System.nanoTime() - mid);
     }
     unlock(lock, record.getBlockId());
     return true;
@@ -307,9 +307,9 @@ public final class BlockLockManager {
    */
   public void validateLock(long sessionId, long blockId, long lockId)
       throws BlockDoesNotExistException, InvalidWorkerStateException {
-    long start = System.currentTimeMillis();
+    long start = System.nanoTime();
     synchronized (mSharedMapsLock) {
-      long mid = System.currentTimeMillis();
+      long mid = System.nanoTime();
       LockRecord record = mLockIdToRecordMap.get(lockId);
       if (record == null) {
         throw new BlockDoesNotExistException(ExceptionMessage.LOCK_RECORD_NOT_FOUND_FOR_LOCK_ID,
@@ -323,7 +323,7 @@ public final class BlockLockManager {
         throw new InvalidWorkerStateException(ExceptionMessage.LOCK_ID_FOR_DIFFERENT_BLOCK, lockId,
             record.getBlockId(), blockId);
       }
-      LOG.info("validateLock get lock takes {}, inside sync takes {}", mid - start, System.currentTimeMillis() - mid);
+      LOG.info("validateLock get lock takes {}, inside sync takes {}", mid - start, System.nanoTime() - mid);
     }
   }
 
@@ -362,14 +362,14 @@ public final class BlockLockManager {
    * @return a set of locked blocks
    */
   public Set<Long> getLockedBlocks() {
-    long start = System.currentTimeMillis();
+    long start = System.nanoTime();
     synchronized (mSharedMapsLock) {
-      long mid = System.currentTimeMillis();
+      long mid = System.nanoTime();
       Set<Long> set = new HashSet<>();
       for (LockRecord lockRecord : mLockIdToRecordMap.values()) {
         set.add(lockRecord.getBlockId());
       }
-      long end = System.currentTimeMillis();
+      long end = System.nanoTime();
       LOG.info("getLockedBlocks get lock takes {}, inside sync takes {}", mid - start, end - mid);
       return set;
     }
@@ -393,10 +393,11 @@ public final class BlockLockManager {
    *
    * @param blockId the block id for which to potentially release the block lock
    */
+  // TODO(lu) sometimes takes 1
   private void releaseBlockLockIfUnused(long blockId) {
-    long start = System.currentTimeMillis();
+    long start = System.nanoTime();
     synchronized (mSharedMapsLock) {
-      long mid = System.currentTimeMillis();
+      long mid = System.nanoTime();
       ClientRWLock lock = mLocks.get(blockId);
       if (lock == null) {
         // Someone else probably released the block lock already.
@@ -407,7 +408,7 @@ public final class BlockLockManager {
         mLocks.remove(blockId);
         mLockPool.release(lock);
       }
-      LOG.info("releaseBlockLockIfUnused get lock takes {}, inside sync takes {}", mid - start, System.currentTimeMillis() - mid);
+      LOG.info("releaseBlockLockIfUnused get lock takes {}, inside sync takes {}", mid - start, System.nanoTime() - mid);
     }
   }
 
