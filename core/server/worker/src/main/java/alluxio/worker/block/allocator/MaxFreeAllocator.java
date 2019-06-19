@@ -13,12 +13,16 @@ package alluxio.worker.block.allocator;
 
 import alluxio.worker.block.BlockMetadataManagerView;
 import alluxio.worker.block.BlockStoreLocation;
+import alluxio.worker.block.meta.StorageDir;
 import alluxio.worker.block.meta.StorageDirView;
+import alluxio.worker.block.meta.StorageTier;
 import alluxio.worker.block.meta.StorageTierView;
 
 import com.google.common.base.Preconditions;
 
 import javax.annotation.concurrent.NotThreadSafe;
+import java.util.List;
+import java.util.Map;
 
 /**
  * An allocator that allocates a block in the storage dir with most free space. It always allocates
@@ -44,6 +48,12 @@ public final class MaxFreeAllocator implements Allocator {
     return allocateBlock(sessionId, blockSize, location);
   }
 
+  @Override
+  public StorageDir allocateBlockWithInfo(long sessionId, long blockSize,
+      BlockStoreLocation location, List<StorageTier> tierList, Map<String, StorageTier> aliasToTierMap) {
+    return allocateBlock(sessionId, blockSize, location, tierList, aliasToTierMap);
+  }
+
   /**
    * Allocates a block from the given block store location. The location can be a specific location,
    * or {@link BlockStoreLocation#anyTier()} or {@link BlockStoreLocation#anyDirInTier(String)}.
@@ -55,8 +65,42 @@ public final class MaxFreeAllocator implements Allocator {
    *         otherwise
    * @throws IllegalArgumentException if block location is invalid
    */
+  private StorageDir allocateBlock(long sessionId, long blockSize,
+      BlockStoreLocation location, List<StorageTier> tierList, Map<String, StorageTier> aliasToTierMap) {
+    Preconditions.checkNotNull(location, "location");
+    StorageDir candidateDir = null;
+
+    if (location.equals(BlockStoreLocation.anyTier())) {
+      for (StorageTier tier : tierList) {
+        candidateDir = getCandidateDirInTier(tier, blockSize,
+            BlockStoreLocation.ANY_MEDIUM);
+        if (candidateDir != null) {
+          break;
+        }
+      }
+    } else if (location.equals(BlockStoreLocation.anyDirInTier(location.tierAlias()))) {
+      StorageTier tier = aliasToTierMap.get(location.tierAlias());
+      candidateDir = getCandidateDirInTier(tier, blockSize, BlockStoreLocation.ANY_MEDIUM);
+    } else if (location.equals(BlockStoreLocation.anyDirInTierWithMedium(location.mediumType()))) {
+      for (StorageTier tierView : tierList) {
+        candidateDir = getCandidateDirInTier(tierView, blockSize, location.mediumType());
+        if (candidateDir != null) {
+          break;
+        }
+      }
+    } else {
+      StorageTier tier = aliasToTierMap.get(location.tierAlias());
+      StorageDir dir = tier.getDir(location.dir());
+      if (dir.getAvailableBytes() >= blockSize) {
+        candidateDir = dir;
+      }
+    }
+
+    return candidateDir;
+  }
+
   private StorageDirView allocateBlock(long sessionId, long blockSize,
-      BlockStoreLocation location) {
+                                       BlockStoreLocation location) {
     Preconditions.checkNotNull(location, "location");
     StorageDirView candidateDirView = null;
 
@@ -110,5 +154,28 @@ public final class MaxFreeAllocator implements Allocator {
       }
     }
     return candidateDirView;
+  }
+
+
+  /**
+   * Finds a directory view in a tier view that has max free space and is able to store the block.
+   *
+   * @param blockSize the size of block in bytes
+   * @param mediumType the medium type that must match
+   * @return the storage directory view if found, null otherwise
+   */
+  private StorageDir getCandidateDirInTier(StorageTier tier, long blockSize,
+      String mediumType) {
+    StorageDir candidateDir = null;
+    long maxFreeBytes = blockSize - 1;
+    for (StorageDir dir : tier.getStorageDirs()) {
+      if ((mediumType.equals(BlockStoreLocation.ANY_MEDIUM)
+          || dir.getDirMedium().equals(mediumType))
+          && dir.getAvailableBytes() > maxFreeBytes) {
+        maxFreeBytes = dir.getAvailableBytes();
+        candidateDir = dir;
+      }
+    }
+    return candidateDir;
   }
 }
