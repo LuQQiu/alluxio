@@ -736,9 +736,16 @@ public class TieredBlockStore implements BlockStore {
    */
   private BlockMetadataManagerView getUpdatedView() {
     // TODO(calvin): Update the view object instead of creating new one every time.
+    long start = System.currentTimeMillis();
     synchronized (mPinnedInodes) {
-      return new BlockMetadataManagerView(mMetaManager, mPinnedInodes,
-          mLockManager.getLockedBlocks());
+      long mid = System.currentTimeMillis();
+      Set<Long> lockedBlocks = mLockManager.getLockedBlocks();
+      long third = System.currentTimeMillis();
+      BlockMetadataManagerView view = new BlockMetadataManagerView(mMetaManager, mPinnedInodes,
+          lockedBlocks);
+      LOG.info("getUpdatedView get lock takes {}, getLockedBlocks for {}, get new view for {}",
+          mid - start, third - mid, System.currentTimeMillis() - third);
+      return view;
     }
   }
 
@@ -886,8 +893,11 @@ public class TieredBlockStore implements BlockStore {
   @Override
   public void updatePinnedInodes(Set<Long> inodes) {
     LOG.debug("updatePinnedInodes: inodes={}", inodes);
+    long start = System.currentTimeMillis();
     synchronized (mPinnedInodes) {
+      long mid = System.currentTimeMillis();
       mPinnedInodes = inodes;
+      LOG.info("updatePinnedInodes get lock takes {}, hold lock for {}", mid - start, System.currentTimeMillis() - mid);
     }
   }
 
