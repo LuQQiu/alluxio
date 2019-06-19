@@ -105,7 +105,7 @@ public class TieredBlockStore implements BlockStore {
   private final List<BlockStoreEventListener> mBlockStoreEventListeners = new ArrayList<>();
 
   /** A set of pinned inodes fetched from the master. */
-  private final Set<Long> mPinnedInodes = new HashSet<>();
+  private Set<Long> mPinnedInodes = new HashSet<>();
 
   /** Lock to guard metadata operations. */
   private final ReentrantReadWriteLock mMetadataLock = new ReentrantReadWriteLock();
@@ -887,8 +887,7 @@ public class TieredBlockStore implements BlockStore {
   public void updatePinnedInodes(Set<Long> inodes) {
     LOG.debug("updatePinnedInodes: inodes={}", inodes);
     synchronized (mPinnedInodes) {
-      mPinnedInodes.clear();
-      mPinnedInodes.addAll(Preconditions.checkNotNull(inodes));
+      mPinnedInodes = inodes;
     }
   }
 
