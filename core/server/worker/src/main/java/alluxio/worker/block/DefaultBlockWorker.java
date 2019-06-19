@@ -305,8 +305,10 @@ public final class DefaultBlockWorker extends AbstractWorker implements BlockWor
       IOException, WorkerOutOfSpaceException {
     // NOTE: this may be invoked multiple times due to retry on client side.
     // TODO(binfan): find a better way to handle retry logic
+    long start = System.currentTimeMillis();
     try {
       mBlockStore.commitBlock(sessionId, blockId, pinOnCreate);
+      LOG.info("mBlockStore.commitBlock takes {}", System.currentTimeMillis() - start);
     } catch (BlockAlreadyExistsException e) {
       LOG.debug("Block {} has been in block store, this could be a retry due to master-side RPC "
           + "failure, therefore ignore the exception", blockId, e);
@@ -314,6 +316,7 @@ public final class DefaultBlockWorker extends AbstractWorker implements BlockWor
 
     // TODO(calvin): Reconsider how to do this without heavy locking.
     // Block successfully committed, update master with new block metadata
+    long mid = System.currentTimeMillis();
     Long lockId = mBlockStore.lockBlock(sessionId, blockId);
     BlockMasterClient blockMasterClient = mBlockMasterClientPool.acquire();
     try {
@@ -323,8 +326,11 @@ public final class DefaultBlockWorker extends AbstractWorker implements BlockWor
       Long length = meta.getBlockSize();
       BlockStoreMeta storeMeta = mBlockStore.getBlockStoreMeta();
       Long bytesUsedOnTier = storeMeta.getUsedBytesOnTiers().get(loc.tierAlias());
+      long third = System.currentTimeMillis();
+      LOG.info("getBlockMeta takes {}", third - mid);
       blockMasterClient.commitBlock(mWorkerId.get(), bytesUsedOnTier, loc.tierAlias(), mediumType,
           blockId, length);
+      LOG.info("blockMasterClient.commitBlock takes {}", System.currentTimeMillis() - third);
     } catch (Exception e) {
       throw new IOException(ExceptionMessage.FAILED_COMMIT_BLOCK_TO_MASTER.getMessage(blockId), e);
     } finally {

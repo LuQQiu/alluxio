@@ -148,8 +148,11 @@ public class TieredBlockStore implements BlockStore {
     LOG.debug("lockBlock: sessionId={}, blockId={}", sessionId, blockId);
     long lockId = mLockManager.lockBlock(sessionId, blockId, BlockLockType.READ);
     boolean hasBlock;
+    long start = System.currentTimeMillis();
     try (LockResource r = new LockResource(mMetadataReadLock)) {
+      long mid = System.currentTimeMillis();
       hasBlock = mMetaManager.hasBlockMeta(blockId);
+      LOG.info("lockBlock get lock takes {}, hold lock for {}", mid - start, System.currentTimeMillis() - mid);
     }
     if (hasBlock) {
       return lockId;
@@ -164,8 +167,11 @@ public class TieredBlockStore implements BlockStore {
     LOG.debug("lockBlockNoException: sessionId={}, blockId={}", sessionId, blockId);
     long lockId = mLockManager.lockBlock(sessionId, blockId, BlockLockType.READ);
     boolean hasBlock;
+    long start = System.currentTimeMillis();
     try (LockResource r = new LockResource(mMetadataReadLock)) {
+      long mid = System.currentTimeMillis();
       hasBlock = mMetaManager.hasBlockMeta(blockId);
+      LOG.info("lockBlockNoException get lock takes {}, hold lock for {}", mid - start, System.currentTimeMillis() - mid);
     }
     if (hasBlock) {
       return lockId;
@@ -195,10 +201,14 @@ public class TieredBlockStore implements BlockStore {
     // NOTE: a temp block is supposed to only be visible by its own writer, unnecessary to acquire
     // block lock here since no sharing
     // TODO(bin): Handle the case where multiple writers compete for the same block.
+    long start = System.currentTimeMillis();
     try (LockResource r = new LockResource(mMetadataReadLock)) {
+      long mid = System.currentTimeMillis();
       checkTempBlockOwnedBySession(sessionId, blockId);
       TempBlockMeta tempBlockMeta = mMetaManager.getTempBlockMeta(blockId);
-      return new LocalFileBlockWriter(tempBlockMeta.getPath());
+      BlockWriter res = new LocalFileBlockWriter(tempBlockMeta.getPath());
+      LOG.info("getBlockWriter get lock takes {}, hold lock for {}", mid - start, System.currentTimeMillis() - mid);
+      return res;
     }
   }
 
@@ -207,9 +217,13 @@ public class TieredBlockStore implements BlockStore {
       throws BlockDoesNotExistException, InvalidWorkerStateException, IOException {
     LOG.debug("getBlockReader: sessionId={}, blockId={}, lockId={}", sessionId, blockId, lockId);
     mLockManager.validateLock(sessionId, blockId, lockId);
+    long start = System.currentTimeMillis();
     try (LockResource r = new LockResource(mMetadataReadLock)) {
+      long mid = System.currentTimeMillis();
       BlockMeta blockMeta = mMetaManager.getBlockMeta(blockId);
-      return new LocalFileBlockReader(blockMeta.getPath());
+      BlockReader res = new LocalFileBlockReader(blockMeta.getPath());
+      LOG.info("getBlockReader get lock takes {}, hold lock for {}", mid - start, System.currentTimeMillis() - mid);
+      return res;
     }
   }
 
@@ -238,8 +252,12 @@ public class TieredBlockStore implements BlockStore {
   @Override
   public BlockMeta getVolatileBlockMeta(long blockId) throws BlockDoesNotExistException {
     LOG.debug("getVolatileBlockMeta: blockId={}", blockId);
+    long start = System.currentTimeMillis();
     try (LockResource r = new LockResource(mMetadataReadLock)) {
-      return mMetaManager.getBlockMeta(blockId);
+      long mid = System.currentTimeMillis();
+      BlockMeta res = mMetaManager.getBlockMeta(blockId);
+      LOG.info("getVolatileBlockMeta get lock takes {}, hold lock for {}", mid - start, System.currentTimeMillis() - mid);
+      return res;
     }
   }
 
@@ -248,16 +266,24 @@ public class TieredBlockStore implements BlockStore {
       throws BlockDoesNotExistException, InvalidWorkerStateException {
     LOG.debug("getBlockMeta: sessionId={}, blockId={}, lockId={}", sessionId, blockId, lockId);
     mLockManager.validateLock(sessionId, blockId, lockId);
+    long start = System.currentTimeMillis();
     try (LockResource r = new LockResource(mMetadataReadLock)) {
-      return mMetaManager.getBlockMeta(blockId);
+      long mid = System.currentTimeMillis();
+      BlockMeta res = mMetaManager.getBlockMeta(blockId);
+      LOG.info("getBlockMeta get read lock takes {}, hold lock for {}", mid - start, System.currentTimeMillis() - mid);
+      return res;
     }
   }
 
   @Override
   public TempBlockMeta getTempBlockMeta(long sessionId, long blockId) {
     LOG.debug("getTempBlockMeta: sessionId={}, blockId={}", sessionId, blockId);
+    long start = System.currentTimeMillis();
     try (LockResource r = new LockResource(mMetadataReadLock)) {
-      return mMetaManager.getTempBlockMetaOrNull(blockId);
+      long mid = System.currentTimeMillis();
+      TempBlockMeta res = mMetaManager.getTempBlockMetaOrNull(blockId);
+      LOG.info("getTempBlockMeta get lock takes {}, hold lock for {}", mid - start, System.currentTimeMillis() - mid);
+      return res;
     }
   }
 
@@ -360,8 +386,11 @@ public class TieredBlockStore implements BlockStore {
   public void accessBlock(long sessionId, long blockId) throws BlockDoesNotExistException {
     LOG.debug("accessBlock: sessionId={}, blockId={}", sessionId, blockId);
     boolean hasBlock;
+    long start = System.currentTimeMillis();
     try (LockResource r = new LockResource(mMetadataReadLock)) {
+      long mid = System.currentTimeMillis();
       hasBlock = mMetaManager.hasBlockMeta(blockId);
+      LOG.info("accessBlock get lock takes {}, hold lock for {}", mid - start, System.currentTimeMillis() - mid);
     }
     if (!hasBlock) {
       throw new BlockDoesNotExistException(ExceptionMessage.NO_BLOCK_ID_FOUND, blockId);
@@ -389,8 +418,11 @@ public class TieredBlockStore implements BlockStore {
 
     // Collect a list of temp blocks the given session owns and abort all of them with best effort
     List<TempBlockMeta> tempBlocksToRemove;
+    long start = System.currentTimeMillis();
     try (LockResource r = new LockResource(mMetadataReadLock)) {
+      long mid = System.currentTimeMillis();
       tempBlocksToRemove = mMetaManager.getSessionTempBlocks(sessionId);
+      LOG.info("cleanupSessionget lock takes {}, hold lock for {}", mid - start, System.currentTimeMillis() - mid);
     }
     for (TempBlockMeta tempBlockMeta : tempBlocksToRemove) {
       try {
@@ -407,8 +439,12 @@ public class TieredBlockStore implements BlockStore {
   @Override
   public boolean hasBlockMeta(long blockId) {
     LOG.debug("hasBlockMeta: blockId={}", blockId);
+    long start = System.currentTimeMillis();
     try (LockResource r = new LockResource(mMetadataReadLock)) {
-      return mMetaManager.hasBlockMeta(blockId);
+      long mid = System.currentTimeMillis();
+      boolean res = mMetaManager.hasBlockMeta(blockId);
+      LOG.info("hasBlockMeta get lock takes {}, hold lock for {}", mid - start, System.currentTimeMillis() - mid);
+      return res;
     }
   }
 
@@ -417,8 +453,11 @@ public class TieredBlockStore implements BlockStore {
     // Removed DEBUG logging because this is very noisy
     // LOG.debug("getBlockStoreMeta:");
     BlockStoreMeta storeMeta;
+    long start = System.currentTimeMillis();
     try (LockResource r = new LockResource(mMetadataReadLock)) {
+      long mid = System.currentTimeMillis();
       storeMeta = mMetaManager.getBlockStoreMeta();
+      LOG.info("getBlockStoreMeta get read lock takes {}, hold lock for {}", mid - start, System.currentTimeMillis() - mid);
     }
     return storeMeta;
   }
@@ -428,8 +467,11 @@ public class TieredBlockStore implements BlockStore {
     // Removed DEBUG logging because this is very noisy
     // LOG.debug("getBlockStoreMetaFull:");
     BlockStoreMeta storeMeta;
+    long start = System.currentTimeMillis();
     try (LockResource r = new LockResource(mMetadataReadLock)) {
+      long mid = System.currentTimeMillis();
       storeMeta = mMetaManager.getBlockStoreMetaFull();
+      LOG.info("getBlockStoreMetaFull get lock takes {}, hold lock for {}", mid - start, System.currentTimeMillis() - mid);
     }
     return storeMeta;
   }
@@ -495,10 +537,13 @@ public class TieredBlockStore implements BlockStore {
 
     String path;
     TempBlockMeta tempBlockMeta;
+    long start = System.currentTimeMillis();
     try (LockResource r = new LockResource(mMetadataReadLock)) {
+      long mid = System.currentTimeMillis();
       checkTempBlockOwnedBySession(sessionId, blockId);
       tempBlockMeta = mMetaManager.getTempBlockMeta(blockId);
       path = tempBlockMeta.getPath();
+      LOG.info("abortBlockInternal get lock takes {}, hold lock for {}", mid - start, System.currentTimeMillis() - mid);
     }
 
     // The metadata lock is released during heavy IO. The temp block is private to one session, so
@@ -535,19 +580,25 @@ public class TieredBlockStore implements BlockStore {
       String srcPath;
       String dstPath;
       TempBlockMeta tempBlockMeta;
+      long start = System.currentTimeMillis();
       try (LockResource r = new LockResource(mMetadataReadLock)) {
+        long mid = System.currentTimeMillis();
         checkTempBlockOwnedBySession(sessionId, blockId);
         tempBlockMeta = mMetaManager.getTempBlockMeta(blockId);
         srcPath = tempBlockMeta.getPath();
         dstPath = tempBlockMeta.getCommitPath();
         loc = tempBlockMeta.getBlockLocation();
+        LOG.info("commitBlockInternal get read lock takes {}, hold lock for {}", mid - start, System.currentTimeMillis() - mid);
       }
 
       // Heavy IO is guarded by block lock but not metadata lock. This may throw IOException.
       FileUtils.move(srcPath, dstPath);
 
+      long secondStart = System.currentTimeMillis();
       try (LockResource r = new LockResource(mMetadataWriteLock)) {
+        long mid = System.currentTimeMillis();
         mMetaManager.commitTempBlockMeta(tempBlockMeta);
+        LOG.info("commitBlockInternal get write lock takes {}, hold lock for {}", mid - secondStart, System.currentTimeMillis() - mid);
       } catch (BlockAlreadyExistsException | BlockDoesNotExistException
           | WorkerOutOfSpaceException e) {
         throw Throwables.propagate(e); // we shall never reach here
@@ -582,7 +633,9 @@ public class TieredBlockStore implements BlockStore {
           throws BlockAlreadyExistsException {
     // NOTE: a temp block is supposed to be visible for its own writer, unnecessary to acquire
     // block lock here since no sharing
+    long start = System.currentTimeMillis();
     try (LockResource r = new LockResource(mMetadataWriteLock)) {
+      long mid = System.currentTimeMillis();
       if (newBlock) {
         checkTempBlockIdAvailable(blockId);
       }
@@ -590,6 +643,7 @@ public class TieredBlockStore implements BlockStore {
           mAllocator.allocateBlockWithView(sessionId, initialBlockSize, location, getUpdatedView());
       if (dirView == null) {
         // Allocator fails to find a proper place for this new block.
+        LOG.info("1, createBlockMetaInternal get lock takes {}, hold lock for {}", mid - start, System.currentTimeMillis() - mid);
         return null;
       }
       // TODO(carson): Add tempBlock to corresponding storageDir and remove the use of
@@ -605,6 +659,7 @@ public class TieredBlockStore implements BlockStore {
             + "but addTempBlockMeta failed", initialBlockSize, location);
         throw Throwables.propagate(e);
       }
+      LOG.info("2 createBlockMetaInternal get lock takes {}, hold lock for {}", mid - start, System.currentTimeMillis() - mid);
       return tempBlock;
     }
   }
@@ -623,10 +678,14 @@ public class TieredBlockStore implements BlockStore {
       throws BlockDoesNotExistException {
     // NOTE: a temp block is supposed to be visible for its own writer, unnecessary to acquire
     // block lock here since no sharing
+    long start = System.currentTimeMillis();
     try (LockResource r = new LockResource(mMetadataWriteLock)) {
+      long mid = System.currentTimeMillis();
       TempBlockMeta tempBlockMeta = mMetaManager.getTempBlockMeta(blockId);
       if (tempBlockMeta.getParentDir().getAvailableBytes() < additionalBytes) {
-        return new Pair<>(false, tempBlockMeta.getBlockLocation());
+        Pair<Boolean, BlockStoreLocation> res = new Pair<>(false, tempBlockMeta.getBlockLocation());
+        LOG.info("1. get lock takes {}, hold lock for {}", mid - start, System.currentTimeMillis() - mid);
+        return res;
       }
       // Increase the size of this temp block
       try {
@@ -635,6 +694,7 @@ public class TieredBlockStore implements BlockStore {
       } catch (InvalidWorkerStateException e) {
         throw Throwables.propagate(e); // we shall never reach here
       }
+      LOG.info("2. get lock takes {}, hold lock for {}", mid - start, System.currentTimeMillis() - mid);
       return new Pair<>(true, null);
     }
   }
@@ -653,13 +713,16 @@ public class TieredBlockStore implements BlockStore {
       Evictor.Mode mode) throws WorkerOutOfSpaceException, IOException {
     EvictionPlan plan;
     // NOTE:change the read lock to the write lock due to the endless-loop issue [ALLUXIO-3089]
+    long start = System.currentTimeMillis();
     try (LockResource r = new LockResource(mMetadataWriteLock)) {
+      long mid = System.currentTimeMillis();
       plan = mEvictor.freeSpaceWithView(availableBytes, location, getUpdatedView(), mode);
       // Absent plan means failed to evict enough space.
       if (plan == null) {
         throw new WorkerOutOfSpaceException(
             ExceptionMessage.NO_EVICTION_PLAN_TO_FREE_SPACE, availableBytes, location.tierAlias());
       }
+      LOG.info("freeSpaceInternal get lock takes {}, hold lock for {}", mid - start, System.currentTimeMillis() - mid);
     }
 
     // 1. remove blocks to make room.
@@ -736,9 +799,13 @@ public class TieredBlockStore implements BlockStore {
    */
   private BlockMetadataManagerView getUpdatedView() {
     // TODO(calvin): Update the view object instead of creating new one every time.
+    long start = System.currentTimeMillis();
     synchronized (mPinnedInodes) {
-      return new BlockMetadataManagerView(mMetaManager, mPinnedInodes,
+      long mid = System.currentTimeMillis();
+      BlockMetadataManagerView res = new BlockMetadataManagerView(mMetaManager, mPinnedInodes,
           mLockManager.getLockedBlocks());
+      LOG.info("getUpdatedView get sync takes {}, inside sync takes {}", mid - start, System.currentTimeMillis() - mid);
+      return res;
     }
   }
 
@@ -767,8 +834,9 @@ public class TieredBlockStore implements BlockStore {
       BlockMeta srcBlockMeta;
       BlockStoreLocation srcLocation;
       BlockStoreLocation dstLocation;
-
+      long start = System.currentTimeMillis();
       try (LockResource r = new LockResource(mMetadataReadLock)) {
+        long mid = System.currentTimeMillis();
         if (mMetaManager.hasTempBlockMeta(blockId)) {
           throw new InvalidWorkerStateException(ExceptionMessage.MOVE_UNCOMMITTED_BLOCK, blockId);
         }
@@ -776,6 +844,7 @@ public class TieredBlockStore implements BlockStore {
         srcLocation = srcBlockMeta.getBlockLocation();
         srcFilePath = srcBlockMeta.getPath();
         blockSize = srcBlockMeta.getBlockSize();
+        LOG.info("1. moveBlockInternal get lock takes {}, hold lock for {}", mid - start, System.currentTimeMillis() - mid);
       }
 
       if (!srcLocation.belongsTo(oldLocation)) {
@@ -804,10 +873,13 @@ public class TieredBlockStore implements BlockStore {
       // Heavy IO is guarded by block lock but not metadata lock. This may throw IOException.
       FileUtils.move(srcFilePath, dstFilePath);
 
+      long s = System.currentTimeMillis();
       try (LockResource r = new LockResource(mMetadataWriteLock)) {
+        long m = System.currentTimeMillis();
         // If this metadata update fails, we panic for now.
         // TODO(bin): Implement rollback scheme to recover from IO failures.
         mMetaManager.moveBlockMeta(srcBlockMeta, dstTempBlock);
+        LOG.info("2. moveBlockInternal get lock takes {}, hold lock for {}", m - s, System.currentTimeMillis() - m);
       } catch (BlockAlreadyExistsException | BlockDoesNotExistException
           | WorkerOutOfSpaceException e) {
         // WorkerOutOfSpaceException is only possible if session id gets cleaned between
@@ -836,12 +908,15 @@ public class TieredBlockStore implements BlockStore {
     try {
       String filePath;
       BlockMeta blockMeta;
+      long start = System.currentTimeMillis();
       try (LockResource r = new LockResource(mMetadataReadLock)) {
+        long mid = System.currentTimeMillis();
         if (mMetaManager.hasTempBlockMeta(blockId)) {
           throw new InvalidWorkerStateException(ExceptionMessage.REMOVE_UNCOMMITTED_BLOCK, blockId);
         }
         blockMeta = mMetaManager.getBlockMeta(blockId);
         filePath = blockMeta.getPath();
+        LOG.info("removeBlockInternal get lock takes {}, hold lock for {}", mid - start, System.currentTimeMillis() - mid);
       }
 
       if (!blockMeta.getBlockLocation().belongsTo(location)) {
@@ -886,9 +961,12 @@ public class TieredBlockStore implements BlockStore {
   @Override
   public void updatePinnedInodes(Set<Long> inodes) {
     LOG.debug("updatePinnedInodes: inodes={}", inodes);
+    long start = System.currentTimeMillis();
     synchronized (mPinnedInodes) {
+      long mid = System.currentTimeMillis();
       mPinnedInodes.clear();
       mPinnedInodes.addAll(Preconditions.checkNotNull(inodes));
+      LOG.info("updatePinnedInodes get sync takes {}, inside sync takes {}", mid - start, System.currentTimeMillis() - mid);
     }
   }
 
@@ -906,7 +984,9 @@ public class TieredBlockStore implements BlockStore {
 
   @Override
   public boolean checkStorage() {
+    long start = System.currentTimeMillis();
     try (LockResource r = new LockResource(mMetadataWriteLock)) {
+      long mid = System.currentTimeMillis();
       List<StorageDir> dirsToRemove = new ArrayList<>();
       for (StorageTier tier : mMetaManager.getTiers()) {
         for (StorageDir dir : tier.getStorageDirs()) {
@@ -918,7 +998,9 @@ public class TieredBlockStore implements BlockStore {
         }
       }
       dirsToRemove.forEach(this::removeDir);
-      return !dirsToRemove.isEmpty();
+      boolean res = !dirsToRemove.isEmpty();
+      LOG.info("checkStorage get lock takes {}, hold lock for {}", mid - start, System.currentTimeMillis() - mid);
+      return res;
     }
   }
 
@@ -929,7 +1011,9 @@ public class TieredBlockStore implements BlockStore {
    */
   public void removeDir(StorageDir dir) {
     // TODO(feng): Add a command for manually removing directory
+    long start = System.currentTimeMillis();
     try (LockResource r = new LockResource(mMetadataWriteLock)) {
+      long mid = System.currentTimeMillis();
       String tierAlias = dir.getParentTier().getTierAlias();
       dir.getParentTier().removeStorageDir(dir);
       synchronized (mBlockStoreEventListeners) {
@@ -938,6 +1022,7 @@ public class TieredBlockStore implements BlockStore {
           listener.onStorageLost(tierAlias, dir.getDirPath());
         }
       }
+      LOG.info("removeDir: get lock takes {}, hold lock for {}", mid - start, System.currentTimeMillis() - mid);
     }
   }
 
