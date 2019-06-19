@@ -53,7 +53,7 @@ public class BlockMetadataManagerView {
   private final List<StorageTierView> mTierViews = new ArrayList<>();
 
   /** A list of pinned inodes, including inodes which are scheduled for async persist. */
-  private final Set<Long> mPinnedInodes = new HashSet<>();
+  private final Set<Long> mPinnedInodes;
 
   /** Indices of locks that are being used. */
   private final Set<Long> mInUseBlocks = new HashSet<>();
@@ -73,7 +73,7 @@ public class BlockMetadataManagerView {
   public BlockMetadataManagerView(BlockMetadataManager manager, Set<Long> pinnedInodes,
       Set<Long> lockedBlocks) {
     mMetadataManager = Preconditions.checkNotNull(manager, "manager");
-    mPinnedInodes.addAll(Preconditions.checkNotNull(pinnedInodes, "pinnedInodes"));
+    mPinnedInodes = pinnedInodes;
     Preconditions.checkNotNull(lockedBlocks, "lockedBlocks");
     mInUseBlocks.addAll(lockedBlocks);
 
