@@ -12,12 +12,18 @@
 package alluxio.worker.block.meta;
 
 import javax.annotation.concurrent.ThreadSafe;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * This class is a wrapper of {@link StorageTier} to provide more limited access for allocators.
  */
 @ThreadSafe
 public class StorageTierAllocatorView extends StorageTierView {
+
+  /** A list of {@link StorageDirAllocatorView} under this StorageTierAllocatorView. */
+  final List<StorageDirAllocatorView> mDirViews = new ArrayList<>();
 
   /**
    * Creates a {@link StorageTierView} using the actual {@link StorageTier}.
@@ -30,5 +36,15 @@ public class StorageTierAllocatorView extends StorageTierView {
       StorageDirAllocatorView dirView = new StorageDirAllocatorView(dir, this);
       mDirViews.add(dirView);
     }
+  }
+
+  @Override
+  public List<StorageDirAllocatorView> getDirViews() {
+    return Collections.unmodifiableList(mDirViews);
+  }
+
+  @Override
+  public StorageDirAllocatorView getDirView(int dirIndex) {
+    return mDirViews.get(dirIndex);
   }
 }

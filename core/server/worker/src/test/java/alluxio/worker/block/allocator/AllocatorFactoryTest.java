@@ -42,7 +42,7 @@ public final class AllocatorFactoryTest {
   @Before
   public void before() throws Exception {
     String baseDir = mTestFolder.newFolder().getAbsolutePath();
-    mMetadataView = TieredBlockStoreTestUtils.defaultMetadataManagerView(baseDir);
+    mMetadataView = TieredBlockStoreTestUtils.defaultMetadataEvictorView(baseDir);
   }
 
   @After

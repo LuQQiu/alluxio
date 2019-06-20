@@ -23,13 +23,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import javax.annotation.Nullable;
-
 /**
  * This class is an abstract class for allocators and evictors to extend to provide
  * limited access to block metadata.
  */
 public abstract class BlockMetadataView {
+
   /**
    * A list of {@link StorageTierView}, derived from {@link StorageTier}s from the
    * {@link BlockMetadataManager}.
@@ -80,7 +79,6 @@ public abstract class BlockMetadataView {
    * @param tierView the storage tier view
    * @return the next storage tier view, null if this is the last tier view
    */
-  @Nullable
   public StorageTierView getNextTier(StorageTierView tierView) {
     int nextOrdinal = tierView.getTierViewOrdinal() + 1;
     if (nextOrdinal < mTierViews.size()) {
@@ -90,11 +88,11 @@ public abstract class BlockMetadataView {
   }
 
   /**
-   * Gets all tierViews before certain tierView. Throws an {@link IllegalArgumentException} if the
-   * tierAlias is not found.
+   * Provides {@link StorageTierView} given tierAlias. Throws an {@link IllegalArgumentException} if
+   * the tierAlias is not found.
    *
-   * @param tierAlias the alias of a tierView
-   * @return the list of {@link StorageTierView}
+   * @param tierAlias the alias of this tierView
+   * @return the {@link StorageTierView} object associated with the alias
    */
   public List<StorageTierView> getTierViewsBelow(String tierAlias) {
     int ordinal = getTierView(tierAlias).getTierViewOrdinal();

@@ -13,20 +13,18 @@ package alluxio.worker.block.meta;
 
 import com.google.common.base.Preconditions;
 
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 /**
  * This class is an abstract class for allocators and evictors to extend to provide
  * limited access to {@link StorageTier}.
+ *
+ * @param <T> the storage directory view
  */
-public abstract class StorageTierView {
+public abstract class StorageTierView<T extends StorageDirView> {
 
   /** The {@link StorageTier} this view is derived from. */
   final StorageTier mTier;
-  /** A list of {@link StorageDirView} under this StorageTierView. */
-  final List<StorageDirView> mDirViews = new ArrayList<>();
 
   /**
    * Creates a {@link StorageTierView} using the actual {@link StorageTier}.
@@ -40,9 +38,7 @@ public abstract class StorageTierView {
   /**
    * @return a list of directory views in this storage tier view
    */
-  public List<StorageDirView> getDirViews() {
-    return Collections.unmodifiableList(mDirViews);
-  }
+  public abstract List<T> getDirViews();
 
   /**
    * Returns a directory view for the given index.
@@ -50,9 +46,7 @@ public abstract class StorageTierView {
    * @param dirIndex the directory view index
    * @return a directory view
    */
-  public StorageDirView getDirView(int dirIndex) {
-    return mDirViews.get(dirIndex);
-  }
+  public abstract T getDirView(int dirIndex);
 
   /**
    * @return the storage tier view alias

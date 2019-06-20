@@ -217,7 +217,7 @@ public final class TieredBlockStoreTestUtils {
    *        directory needs to exist before calling this method
    * @return the created metadata evictor view
    */
-  public static BlockMetadataEvictorView defaultMetadataManagerView(String baseDir)
+  public static BlockMetadataEvictorView defaultMetadataEvictorView(String baseDir)
       throws Exception {
     BlockMetadataManager metaManager = TieredBlockStoreTestUtils.defaultMetadataManager(baseDir);
     return new BlockMetadataEvictorView(metaManager, Collections.<Long>emptySet(),

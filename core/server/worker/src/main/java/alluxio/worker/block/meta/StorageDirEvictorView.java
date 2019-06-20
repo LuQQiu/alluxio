@@ -24,6 +24,9 @@ import java.util.Set;
  * This class is a wrapper of {@link StorageDir} to provide more limited access for evictors.
  */
 public class StorageDirEvictorView extends StorageDirView {
+  /** The {@link StorageTierEvictorView} this view under. */
+  private final StorageTierEvictorView mTierView;
+
   /** The {@link BlockMetadataEvictorView} this view is associated with. */
   private final BlockMetadataEvictorView mMetadataView;
 
@@ -44,13 +47,19 @@ public class StorageDirEvictorView extends StorageDirView {
    */
   public StorageDirEvictorView(StorageDir dir, StorageTierEvictorView tierView,
       BlockMetadataEvictorView managerView) {
-    super(dir, tierView);
+    super(dir);
+    mTierView = Preconditions.checkNotNull(tierView, "tierView");
     mMetadataView = Preconditions.checkNotNull(managerView, "view");
   }
 
   @Override
   public long getAvailableBytes() {
     return mDir.getAvailableBytes() + mBlocksToMoveOutSize - mBlocksToMoveInSize;
+  }
+
+  @Override
+  public StorageTierEvictorView getParentTierView() {
+    return mTierView;
   }
 
   /**
