@@ -30,7 +30,7 @@ import java.util.Collections;
  *
  * It provides some utilities and initializes an {@link Evictor}, a {@link BlockMetadataManager} and
  * a {@link BlockMetadataEvictorView} for a default tiered storage defined in
- * {@link TieredBlockStoreTestUtils#defaultMetadataManagerView(String)}.
+ * {@link TieredBlockStoreTestUtils#defaultMetadataEvictorView(String)}.
  */
 public class EvictorTestBase {
   protected static final int SESSION_ID = 2;
@@ -64,7 +64,7 @@ public class EvictorTestBase {
   /**
    * Initialize an {@link Evictor}, a {@link BlockMetadataManager} and a
    * {@link BlockMetadataEvictorView} for a default tiered storage defined in
-   * {@link TieredBlockStoreTestUtils#defaultMetadataManagerView(String)}.
+   * {@link TieredBlockStoreTestUtils#defaultMetadataEvictorView(String)}.
    *
    * @param evictorClassName class name of the specific evictor to be tested
    */

@@ -11,19 +11,28 @@
 
 package alluxio.worker.block.meta;
 
+import com.google.common.base.Preconditions;
+
 /**
  * This class is a wrapper of {@link StorageDir} to provide more limited access for allocators.
  */
 public class StorageDirAllocatorView extends StorageDirView {
-
+  /** The {@link StorageTierAllocatorView} this view under. */
+  private final StorageTierAllocatorView mTierView;
   /**
    * Creates a {@link StorageDirAllocatorView} using the actual {@link StorageDir}.
    *
    * @param dir which the dirView is constructed from
    * @param tierView which the dirView is under
    */
-  public StorageDirAllocatorView(StorageDir dir, StorageTierView tierView) {
-    super(dir, tierView);
+  public StorageDirAllocatorView(StorageDir dir, StorageTierAllocatorView tierView) {
+    super(dir);
+    mTierView = Preconditions.checkNotNull(tierView, "tierView");
+  }
+
+  @Override
+  public StorageTierAllocatorView getParentTierView() {
+    return mTierView;
   }
 
   @Override

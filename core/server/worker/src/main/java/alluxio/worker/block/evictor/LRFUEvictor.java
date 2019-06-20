@@ -19,8 +19,7 @@ import alluxio.worker.block.BlockStoreLocation;
 import alluxio.worker.block.allocator.Allocator;
 import alluxio.worker.block.meta.BlockMeta;
 import alluxio.worker.block.meta.StorageDirEvictorView;
-import alluxio.worker.block.meta.StorageDirView;
-import alluxio.worker.block.meta.StorageTierView;
+import alluxio.worker.block.meta.StorageTierEvictorView;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Iterators;
@@ -79,9 +78,9 @@ public final class LRFUEvictor extends AbstractEvictor {
         "Attenuation factor should be no less than 2.0");
 
     // Preloading blocks
-    for (StorageTierView tier : mMetadataView.getTierViews()) {
-      for (StorageDirView dir : tier.getDirViews()) {
-        for (BlockMeta block : ((StorageDirEvictorView) dir).getEvictableBlocks()) {
+    for (StorageTierEvictorView tier : mMetadataView.getTierViews()) {
+      for (StorageDirEvictorView dir : tier.getDirViews()) {
+        for (BlockMeta block : dir.getEvictableBlocks()) {
           mBlockIdToLastUpdateTime.put(block.getBlockId(), 0L);
           mBlockIdToCRFValue.put(block.getBlockId(), 0.0);
         }

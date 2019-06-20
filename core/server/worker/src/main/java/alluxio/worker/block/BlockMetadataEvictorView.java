@@ -12,17 +12,22 @@
 package alluxio.worker.block;
 
 import alluxio.exception.BlockDoesNotExistException;
+import alluxio.exception.ExceptionMessage;
 import alluxio.master.block.BlockId;
 import alluxio.worker.block.meta.BlockMeta;
 import alluxio.worker.block.meta.StorageDirEvictorView;
-import alluxio.worker.block.meta.StorageDirView;
 import alluxio.worker.block.meta.StorageTier;
 import alluxio.worker.block.meta.StorageTierEvictorView;
 import alluxio.worker.block.meta.StorageTierView;
 
 import com.google.common.base.Preconditions;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import javax.annotation.Nullable;
@@ -38,6 +43,14 @@ import javax.annotation.concurrent.NotThreadSafe;
  */
 @NotThreadSafe
 public class BlockMetadataEvictorView extends BlockMetadataView {
+  /**
+   * A list of {@link StorageTierEvictorView}, derived from {@link StorageTier}s from the
+   * {@link BlockMetadataManager}.
+   */
+  final List<StorageTierEvictorView> mTierViews = new ArrayList<>();
+
+  /** A map from tier alias to {@link StorageTierEvictorView}. */
+  Map<String, StorageTierEvictorView> mAliasToTierViews = new HashMap<>();
 
   /** The {@link BlockMetadataManager} this view is derived from. */
   private final BlockMetadataManager mMetadataManager;
@@ -73,13 +86,44 @@ public class BlockMetadataEvictorView extends BlockMetadataView {
     }
   }
 
+  @Override
+  public StorageTierEvictorView getTierView(String tierAlias) {
+    StorageTierEvictorView tierView = mAliasToTierViews.get(tierAlias);
+    if (tierView == null) {
+      throw new IllegalArgumentException(
+          ExceptionMessage.TIER_VIEW_ALIAS_NOT_FOUND.getMessage(tierAlias));
+    } else {
+      return tierView;
+    }
+  }
+
+  @Override
+  public List<StorageTierEvictorView> getTierViews() {
+    return Collections.unmodifiableList(mTierViews);
+  }
+
+  @Override
+  public StorageTierEvictorView getNextTier(StorageTierView tierView) {
+    int nextOrdinal = tierView.getTierViewOrdinal() + 1;
+    if (nextOrdinal < mTierViews.size()) {
+      return mTierViews.get(nextOrdinal);
+    }
+    return null;
+  }
+
+  @Override
+  public List<StorageTierEvictorView> getTierViewsBelow(String tierAlias) {
+    int ordinal = getTierView(tierAlias).getTierViewOrdinal();
+    return mTierViews.subList(ordinal + 1, mTierViews.size());
+  }
+
   /**
    * Clears all marks of blocks to move in/out in all dir views.
    */
   public void clearBlockMarks() {
-    for (StorageTierView tierView : mTierViews) {
-      for (StorageDirView dirView : tierView.getDirViews()) {
-        ((StorageDirEvictorView) dirView).clearBlockMarks();
+    for (StorageTierEvictorView tierView : mTierViews) {
+      for (StorageDirEvictorView dirView : tierView.getDirViews()) {
+        dirView.clearBlockMarks();
       }
     }
   }
@@ -121,9 +165,9 @@ public class BlockMetadataEvictorView extends BlockMetadataView {
    * @return boolean, true if the block is marked to move out
    */
   public boolean isBlockMarked(long blockId) {
-    for (StorageTierView tierView : mTierViews) {
-      for (StorageDirView dirView : tierView.getDirViews()) {
-        if (((StorageDirEvictorView) dirView).isMarkedToMoveOut(blockId)) {
+    for (StorageTierEvictorView tierView : mTierViews) {
+      for (StorageDirEvictorView dirView : tierView.getDirViews()) {
+        if (dirView.isMarkedToMoveOut(blockId)) {
           return true;
         }
       }

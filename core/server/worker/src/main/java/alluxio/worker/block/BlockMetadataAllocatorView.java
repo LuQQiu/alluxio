@@ -11,8 +11,16 @@
 
 package alluxio.worker.block;
 
+import alluxio.exception.ExceptionMessage;
 import alluxio.worker.block.meta.StorageTier;
 import alluxio.worker.block.meta.StorageTierAllocatorView;
+import alluxio.worker.block.meta.StorageTierView;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
@@ -21,7 +29,6 @@ import javax.annotation.concurrent.NotThreadSafe;
  */
 @NotThreadSafe
 public class BlockMetadataAllocatorView extends BlockMetadataView {
-
   /**
    * Creates a new instance of {@link BlockMetadataAllocatorView}.
    *

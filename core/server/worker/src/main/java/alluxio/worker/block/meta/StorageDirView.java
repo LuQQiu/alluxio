@@ -17,23 +17,21 @@ import com.google.common.base.Preconditions;
 
 /**
  * This class is a wrapper of {@link StorageDir} to provide more limited access.
+ *
+ * @param <T> the storage tier view
  */
-public abstract class StorageDirView {
+public abstract class StorageDirView<T extends StorageTierView> {
 
   /** The {@link StorageDir} this view is derived from. */
   final StorageDir mDir;
-  /** The {@link StorageTierView} this view under. */
-  final StorageTierView mTierView;
 
   /**
    * Creates a {@link StorageDirView} using the actual {@link StorageDir}.
    *
    * @param dir which the dirView is constructed from
-   * @param tierView which the dirView is under
    */
-  public StorageDirView(StorageDir dir, StorageTierView tierView) {
+  public StorageDirView(StorageDir dir) {
     mDir = Preconditions.checkNotNull(dir, "dir");
-    mTierView = Preconditions.checkNotNull(tierView, "tierView");
   }
 
   /**
@@ -85,9 +83,7 @@ public abstract class StorageDirView {
   /**
    * @return parent tier view
    */
-  public StorageTierView getParentTierView() {
-    return mTierView;
-  }
+  public abstract T getParentTierView();
 
   /**
    * Get medium type of the dir view, which is derived from the dir.

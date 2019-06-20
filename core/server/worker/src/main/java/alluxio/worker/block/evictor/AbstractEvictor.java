@@ -78,8 +78,8 @@ public abstract class AbstractEvictor extends AbstractBlockStoreEventListener im
 
     // 1. If bytesToBeAvailable can already be satisfied without eviction, return the eligible
     // StoargeDirView
-    StorageDirEvictorView candidateDirView = (StorageDirEvictorView)
-        EvictorUtils.selectDirWithRequestedSpace(bytesToBeAvailable, location, mMetadataView);
+    StorageDirEvictorView candidateDirView
+        = EvictorUtils.selectDirWithRequestedSpace(bytesToBeAvailable, location, mMetadataView);
     if (candidateDirView != null) {
       return candidateDirView;
     }
@@ -97,7 +97,7 @@ public abstract class AbstractEvictor extends AbstractBlockStoreEventListener im
           if (block.getBlockLocation().belongsTo(location)) {
             String tierAlias = block.getParentDir().getParentTier().getTierAlias();
             int dirIndex = block.getParentDir().getDirIndex();
-            dirCandidates.add((StorageDirEvictorView) mMetadataView.getTierView(tierAlias)
+            dirCandidates.add(mMetadataView.getTierView(tierAlias)
                 .getDirView(dirIndex), blockId, block.getBlockSize());
           }
         }

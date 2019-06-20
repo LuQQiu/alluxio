@@ -16,6 +16,9 @@ import alluxio.worker.block.BlockMetadataEvictorView;
 import com.google.common.base.Preconditions;
 
 import javax.annotation.concurrent.ThreadSafe;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * This class is a wrapper of {@link StorageTier} to provide more limited access for evictors.
@@ -25,6 +28,9 @@ public class StorageTierEvictorView extends StorageTierView {
 
   /** The {@link BlockMetadataEvictorView} this {@link StorageTierEvictorView} is under. */
   private final BlockMetadataEvictorView mMetadataView;
+
+  /** A list of {@link StorageDirEvictorView} under this StorageTierEvictorView. */
+  final List<StorageDirEvictorView> mDirViews = new ArrayList<>();
 
   /**
    * Creates a {@link StorageTierEvictorView} using the actual {@link StorageTier} and the above
@@ -41,6 +47,16 @@ public class StorageTierEvictorView extends StorageTierView {
       StorageDirEvictorView dirView = new StorageDirEvictorView(dir, this, view);
       mDirViews.add(dirView);
     }
+  }
+
+  @Override
+  public List<StorageDirEvictorView> getDirViews() {
+    return Collections.unmodifiableList(mDirViews);
+  }
+
+  @Override
+  public StorageDirEvictorView getDirView(int dirIndex) {
+    return mDirViews.get(dirIndex);
   }
 
   /**
