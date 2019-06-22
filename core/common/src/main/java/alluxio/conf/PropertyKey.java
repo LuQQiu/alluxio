@@ -954,6 +954,13 @@ public final class PropertyKey implements Comparable<PropertyKey> {
   // UFS access control related properties
   //
   // Not prefixed with fs, the s3a property names mirror the aws-sdk property names for ease of use
+  public static final PropertyKey GOOGLE_APPLICATION_CREDENTIALS =
+      new Builder(Name.GOOGLE_APPLICATION_CREDENTIALS)
+      .setDescription("The json file path of the Google application credentials.")
+      .setConsistencyCheckLevel(ConsistencyCheckLevel.ENFORCE)
+      .setScope(Scope.SERVER)
+      .setDisplayType(DisplayType.CREDENTIALS)
+      .build();
   public static final PropertyKey GCS_ACCESS_KEY = new Builder(Name.GCS_ACCESS_KEY)
       .setDescription("The access key of GCS bucket.")
       .setConsistencyCheckLevel(ConsistencyCheckLevel.ENFORCE)
@@ -3728,6 +3735,7 @@ public final class PropertyKey implements Comparable<PropertyKey> {
     public static final String COS_REGION = "fs.cos.region";
     public static final String COS_SECRET_KEY = "fs.cos.secret.key";
     public static final String COS_SOCKET_TIMEOUT = "fs.cos.socket.timeout";
+    public static final String GOOGLE_APPLICATION_CREDENTIALS = "google.application.credentials";
     public static final String GCS_ACCESS_KEY = "fs.gcs.accessKeyId";
     public static final String GCS_SECRET_KEY = "fs.gcs.secretAccessKey";
     public static final String OSS_ACCESS_KEY = "fs.oss.accessKeyId";

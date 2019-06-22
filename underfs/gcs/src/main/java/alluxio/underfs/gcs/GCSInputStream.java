@@ -13,6 +13,10 @@ package alluxio.underfs.gcs;
 
 import alluxio.retry.RetryPolicy;
 
+import com.google.cloud.ReadChannel;
+import com.google.cloud.storage.BlobId;
+import com.google.cloud.storage.BlobInfo;
+import com.google.cloud.storage.Storage;
 import org.apache.commons.httpclient.HttpStatus;
 import org.jets3t.service.ServiceException;
 import org.jets3t.service.impl.rest.httpclient.GoogleStorageService;
@@ -23,6 +27,7 @@ import org.slf4j.LoggerFactory;
 import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.ByteBuffer;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
@@ -41,15 +46,16 @@ public final class GCSInputStream extends InputStream {
   /** Key of the file in GCS to read. */
   private final String mKey;
 
-  /** The JetS3t client for GCS operations. */
-  private final GoogleStorageService mClient;
+  /** The Google cloud storage client. */
+  private final Storage mClient;
 
   /** The underlying input stream. */
-  private BufferedInputStream mInputStream;
+  private ReadChannel mReadChannel;
 
   /** Position of the stream. */
   private long mPos;
 
+  private BlobId mBlobId;
   /**
    * Policy determining the retry behavior in case the key does not exist. The key may not exist
    * because of eventual consistency.
@@ -64,7 +70,7 @@ public final class GCSInputStream extends InputStream {
    * @param client the client for GCS
    * @param retryPolicy retry policy in case the key does not exist
    */
-  GCSInputStream(String bucketName, String key, GoogleStorageService client,
+  GCSInputStream(String bucketName, String key, Storage client,
       RetryPolicy retryPolicy) {
     this(bucketName, key, client, 0L, retryPolicy);
   }
@@ -78,31 +84,35 @@ public final class GCSInputStream extends InputStream {
    * @param pos the position to start
    * @param retryPolicy retry policy in case the key does not exist
    */
-  GCSInputStream(String bucketName, String key, GoogleStorageService client,
+  GCSInputStream(String bucketName, String key, Storage client,
       long pos, RetryPolicy retryPolicy) {
     mBucketName = bucketName;
     mKey = key;
     mClient = client;
     mPos = pos;
     mRetryPolicy = retryPolicy;
+    mBlobId = BlobId.of(mBucketName, mKey);
   }
 
   @Override
   public void close() throws IOException {
-    closeStream();
+    mReadChannel.close();
   }
 
   @Override
   public int read() throws IOException {
-    if (mInputStream == null) {
+    if (mReadChannel == null) {
       openStream();
     }
-    int value = mInputStream.read();
-    if (value != -1) {
+    ByteBuffer bytes = ByteBuffer.allocate(1);
+    int num = mReadChannel.read(bytes);
+    if (num != -1) { // valid data read
       mPos++;
     }
-    return value;
+    bytes.position(0);
+    return bytes.get() & 0xff;
   }
+
 
   @Override
   public int read(byte[] b) throws IOException {
@@ -114,13 +124,16 @@ public final class GCSInputStream extends InputStream {
     if (len == 0) {
       return 0;
     }
-    if (mInputStream == null) {
+    if (mReadChannel == null) {
       openStream();
     }
-    int ret = mInputStream.read(b, off, len);
+    ByteBuffer bytes = ByteBuffer.allocate(b.length);
+    int ret = mReadChannel.read(bytes);
     if (ret != -1) {
       mPos += ret;
     }
+    bytes.position(0);
+    bytes.get(b, off, len);
     return ret;
   }
 
@@ -137,12 +150,8 @@ public final class GCSInputStream extends InputStream {
     if (n <= 0) {
       return 0;
     }
-    if (mInputStream.available() >= n) {
-      return mInputStream.skip(n);
-    }
-    closeStream();
+    mReadChannel.seek(mPos + n);
     mPos += n;
-    openStream();
     return n;
   }
 
@@ -150,39 +159,9 @@ public final class GCSInputStream extends InputStream {
    * Opens a new stream at mPos if the wrapped stream mInputStream is null.
    */
   private void openStream() throws IOException {
-    ServiceException lastException = null;
-    while (mRetryPolicy.attempt()) {
-      try {
-        GSObject object;
-        if (mPos > 0) {
-          object = mClient.getObject(mBucketName, mKey, null, null, null, null, mPos, null);
-        } else {
-          object = mClient.getObject(mBucketName, mKey);
-        }
-        mInputStream = new BufferedInputStream(object.getDataInputStream());
-        return;
-      } catch (ServiceException e) {
-        LOG.warn("Attempt {} to open key {} on position {} in bucket {} failed with exception : {}",
-            mRetryPolicy.getAttemptCount(), mKey, mPos, mBucketName, e.toString());
-        if (e.getResponseCode() != HttpStatus.SC_NOT_FOUND) {
-          throw new IOException(e);
-        }
-        // Key does not exist
-        lastException = e;
-      }
+    mReadChannel = mClient.reader(mBlobId);
+    if (mPos > 0) {
+      mReadChannel.seek(mPos);
     }
-    // Failed after retrying key does not exist
-    throw new IOException(lastException);
-  }
-
-  /**
-   * Closes the current stream.
-   */
-  private void closeStream() throws IOException {
-    if (mInputStream == null) {
-      return;
-    }
-    mInputStream.close();
-    mInputStream = null;
   }
 }

@@ -158,6 +158,10 @@ public final class UnderFileSystemContractTest {
    */
   private void cleanupUfs(String directory) throws IOException {
     UfsStatus[] statuses = mUfs.listStatus(directory);
+    if (statuses == null) {
+      // Nothing to cleanup
+      return;
+    }
     for (UfsStatus status : statuses) {
       if (status instanceof UfsFileStatus) {
         mUfs.deleteFile(PathUtils.concatPath(directory, status.getName()));

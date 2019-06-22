@@ -14,6 +14,9 @@ package alluxio.underfs.gcs;
 import alluxio.util.CommonUtils;
 import alluxio.util.io.PathUtils;
 
+import com.google.cloud.storage.BlobId;
+import com.google.cloud.storage.BlobInfo;
+import com.google.cloud.storage.Storage;
 import com.google.common.base.Preconditions;
 import org.jets3t.service.ServiceException;
 import org.jets3t.service.impl.rest.httpclient.GoogleStorageService;
@@ -23,10 +26,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.BufferedOutputStream;
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.file.Files;
 import java.security.DigestOutputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -53,14 +58,11 @@ public final class GCSOutputStream extends OutputStream {
   /** The local file that will be uploaded when the stream is closed. */
   private final File mFile;
 
-  /** The JetS3t client for GCS operations. */
-  private final GoogleStorageService mClient;
+  /** The Google cloud storage client. */
+  private final Storage mClient;
 
   /** The output stream to a local file where the file will be buffered until closed. */
   private OutputStream mLocalOutputStream;
-
-  /** The MD5 hash of the file. */
-  private MessageDigest mHash;
 
   /** Flag to indicate this stream has been closed, to ensure close is only done once. */
   private AtomicBoolean mClosed = new AtomicBoolean(false);
@@ -73,7 +75,7 @@ public final class GCSOutputStream extends OutputStream {
    * @param client the JetS3t client
    * @param tmpDirs a list of temporary directories
    */
-  public GCSOutputStream(String bucketName, String key, GoogleStorageService client,
+  public GCSOutputStream(String bucketName, String key, Storage client,
       List<String> tmpDirs) throws IOException {
     Preconditions.checkArgument(bucketName != null && !bucketName.isEmpty(), "Bucket name must "
         + "not be null or empty.");
@@ -81,15 +83,7 @@ public final class GCSOutputStream extends OutputStream {
     mKey = key;
     mClient = client;
     mFile = new File(PathUtils.concatPath(CommonUtils.getTmpDir(tmpDirs), UUID.randomUUID()));
-    try {
-      mHash = MessageDigest.getInstance("MD5");
-      mLocalOutputStream =
-          new BufferedOutputStream(new DigestOutputStream(new FileOutputStream(mFile), mHash));
-    } catch (NoSuchAlgorithmException e) {
-      LOG.warn("Algorithm not available for MD5 hash.", e);
-      mHash = null;
-      mLocalOutputStream = new BufferedOutputStream(new FileOutputStream(mFile));
-    }
+    mLocalOutputStream = new BufferedOutputStream(new FileOutputStream(mFile));
   }
 
   @Override
@@ -118,24 +112,12 @@ public final class GCSOutputStream extends OutputStream {
       return;
     }
     mLocalOutputStream.close();
-    try {
-      GSObject obj = new GSObject(mKey);
-      obj.setBucketName(mBucketName);
-      obj.setDataInputFile(mFile);
-      obj.setContentLength(mFile.length());
-      obj.setContentType(Mimetypes.MIMETYPE_BINARY_OCTET_STREAM);
-      if (mHash != null) {
-        obj.setMd5Hash(mHash.digest());
-      } else {
-        LOG.warn("MD5 was not computed for: {}", mKey);
-      }
-      mClient.putObject(mBucketName, obj);
-      if (!mFile.delete()) {
-        LOG.error("Failed to delete temporary file @ {}", mFile.getPath());
-      }
-    } catch (ServiceException e) {
-      LOG.error("Failed to upload {}. Temporary file @ {}", mKey, mFile.getPath());
-      throw new IOException(e);
+    BlobId id = BlobId.of(mBucketName, mKey);
+    BlobInfo info  = BlobInfo.newBuilder(id)
+        .build();
+    mClient.create(info, Files.readAllBytes(mFile.toPath()));
+    if (!mFile.delete()) {
+      LOG.error("Failed to delete temporary file @ {}", mFile.getPath());
     }
   }
 }

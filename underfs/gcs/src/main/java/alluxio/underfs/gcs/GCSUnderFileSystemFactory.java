@@ -48,7 +48,7 @@ public final class GCSUnderFileSystemFactory implements UnderFileSystemFactory {
     if (checkGoogleCredentials(conf)) {
       try {
         return GCSUnderFileSystem.createInstance(new AlluxioURI(path), conf);
-      } catch (ServiceException e) {
+      } catch (IOException e) {
         LOG.error("Failed to create GCSUnderFileSystem.", e);
         throw Throwables.propagate(e);
       }
@@ -69,7 +69,6 @@ public final class GCSUnderFileSystemFactory implements UnderFileSystemFactory {
    * @return true if both access and secret key are present, false otherwise
    */
   private boolean checkGoogleCredentials(UnderFileSystemConfiguration conf) {
-    return conf.isSet(PropertyKey.GCS_ACCESS_KEY)
-        && conf.isSet(PropertyKey.GCS_SECRET_KEY);
+    return conf.isSet(PropertyKey.GOOGLE_APPLICATION_CREDENTIALS);
   }
 }
