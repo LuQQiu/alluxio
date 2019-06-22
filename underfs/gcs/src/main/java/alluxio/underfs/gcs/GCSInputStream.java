@@ -15,16 +15,10 @@ import alluxio.retry.RetryPolicy;
 
 import com.google.cloud.ReadChannel;
 import com.google.cloud.storage.BlobId;
-import com.google.cloud.storage.BlobInfo;
 import com.google.cloud.storage.Storage;
-import org.apache.commons.httpclient.HttpStatus;
-import org.jets3t.service.ServiceException;
-import org.jets3t.service.impl.rest.httpclient.GoogleStorageService;
-import org.jets3t.service.model.GSObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
