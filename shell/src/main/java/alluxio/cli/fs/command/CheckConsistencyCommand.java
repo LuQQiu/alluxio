@@ -13,13 +13,15 @@ package alluxio.cli.fs.command;
 
 import alluxio.AlluxioURI;
 import alluxio.cli.CommandUtils;
-import alluxio.client.file.FileSystem;
-import alluxio.client.file.FileSystemUtils;
+import alluxio.client.file.FileSystemContext;
+import alluxio.client.file.FileSystemMasterClient;
 import alluxio.client.file.URIStatus;
-import alluxio.client.file.options.CheckConsistencyOptions;
-import alluxio.client.file.options.DeleteOptions;
 import alluxio.exception.AlluxioException;
 import alluxio.exception.status.InvalidArgumentException;
+import alluxio.grpc.CheckConsistencyPOptions;
+import alluxio.grpc.DeletePOptions;
+import alluxio.resource.CloseableResource;
+import alluxio.util.FileSystemOptions;
 
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.Option;
@@ -43,16 +45,16 @@ public class CheckConsistencyCommand extends AbstractFileSystemCommand {
           .build();
 
   /**
-   * @param fs the filesystem of Alluxio
+   * @param fsContext the filesystem of Alluxio
    */
-  public CheckConsistencyCommand(FileSystem fs) {
-    super(fs);
+  public CheckConsistencyCommand(FileSystemContext fsContext) {
+    super(fsContext);
   }
 
   @Override
   protected void runPlainPath(AlluxioURI plainPath, CommandLine cl)
       throws AlluxioException, IOException {
-    checkConsistency(plainPath, cl.hasOption("r"));
+    runConsistencyCheck(plainPath, cl.hasOption("r"));
   }
 
   @Override
@@ -80,6 +82,21 @@ public class CheckConsistencyCommand extends AbstractFileSystemCommand {
   }
 
   /**
+   * Checks the consistency of Alluxio metadata against the under storage for all files and
+   * directories in a given subtree.
+   *
+   * @param path the root of the subtree to check
+   * @return a list of inconsistent files and directories
+   */
+  List<AlluxioURI> checkConsistency(AlluxioURI path, CheckConsistencyPOptions options)
+      throws IOException {
+    try (CloseableResource<FileSystemMasterClient> client =
+        mFsContext.acquireMasterClientResource()) {
+      return client.get().checkConsistency(path, options);
+    }
+  }
+
+  /**
    * Checks the inconsistent files and directories which exist in Alluxio but don't exist in the
    * under storage, repairs the inconsistent paths by deleting them if repairConsistency is true.
    *
@@ -88,10 +105,11 @@ public class CheckConsistencyCommand extends AbstractFileSystemCommand {
    * @throws AlluxioException
    * @throws IOException
    */
-  private void checkConsistency(AlluxioURI path, boolean repairConsistency) throws
+  private void runConsistencyCheck(AlluxioURI path, boolean repairConsistency) throws
       AlluxioException, IOException {
-    CheckConsistencyOptions options = CheckConsistencyOptions.defaults();
-    List<AlluxioURI> inconsistentUris = FileSystemUtils.checkConsistency(path, options);
+    List<AlluxioURI> inconsistentUris =
+        checkConsistency(path, FileSystemOptions.checkConsistencyDefaults(
+            mFsContext.getPathConf(path)));
     if (inconsistentUris.isEmpty()) {
       System.out.println(path + " is consistent with the under storage system.");
       return;
@@ -106,23 +124,22 @@ public class CheckConsistencyCommand extends AbstractFileSystemCommand {
       Collections.sort(inconsistentUris);
       System.out.println(path + " has: " + inconsistentUris.size() + " inconsistent files.");
       List<AlluxioURI> inconsistentDirs = new ArrayList<AlluxioURI>();
-      for (int i = 0; i < inconsistentUris.size(); i++) {
-        AlluxioURI inconsistentUri = inconsistentUris.get(i);
+      for (AlluxioURI inconsistentUri : inconsistentUris) {
         URIStatus status = mFileSystem.getStatus(inconsistentUri);
         if (status.isFolder()) {
           inconsistentDirs.add(inconsistentUri);
           continue;
         }
         System.out.println("repairing path: " + inconsistentUri);
-        DeleteOptions deleteOptions = DeleteOptions.defaults().setAlluxioOnly(true);
+        DeletePOptions deleteOptions = DeletePOptions.newBuilder().setAlluxioOnly(true).build();
         mFileSystem.delete(inconsistentUri, deleteOptions);
         mFileSystem.exists(inconsistentUri);
         System.out.println(inconsistentUri + " repaired");
         System.out.println();
       }
       for (AlluxioURI uri : inconsistentDirs) {
-        DeleteOptions deleteOptions = DeleteOptions.defaults().setAlluxioOnly(true)
-            .setRecursive(true);
+        DeletePOptions deleteOptions =
+            DeletePOptions.newBuilder().setAlluxioOnly(true).setRecursive(true).build();
         System.out.println("repairing path: " + uri);
         mFileSystem.delete(uri, deleteOptions);
         mFileSystem.exists(uri);

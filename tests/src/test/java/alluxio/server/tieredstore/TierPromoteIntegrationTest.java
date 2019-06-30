@@ -12,18 +12,19 @@
 package alluxio.server.tieredstore;
 
 import alluxio.AlluxioURI;
-import alluxio.Constants;
-import alluxio.PropertyKey;
-import alluxio.client.ReadType;
+import alluxio.conf.PropertyKey;
 import alluxio.client.file.FileInStream;
 import alluxio.client.file.FileOutStream;
 import alluxio.client.file.FileSystem;
-import alluxio.client.file.options.OpenFileOptions;
+import alluxio.grpc.CreateFilePOptions;
+import alluxio.grpc.OpenFilePOptions;
+import alluxio.grpc.ReadPType;
 import alluxio.heartbeat.HeartbeatContext;
 import alluxio.heartbeat.HeartbeatScheduler;
 import alluxio.heartbeat.ManuallyScheduleHeartbeat;
 import alluxio.testutils.BaseIntegrationTest;
 import alluxio.testutils.LocalAlluxioClusterResource;
+import alluxio.util.FormatUtils;
 import alluxio.util.io.BufferUtils;
 import alluxio.util.io.PathUtils;
 
@@ -42,8 +43,10 @@ import java.util.List;
 
 @RunWith(Parameterized.class)
 public class TierPromoteIntegrationTest extends BaseIntegrationTest {
-  private static final int CAPACITY_BYTES = Constants.KB;
+  private static final int BLOCKS_PER_TIER = 10;
   private static final String BLOCK_SIZE_BYTES = "1KB";
+  private static final long CAPACITY_BYTES =
+      BLOCKS_PER_TIER * FormatUtils.parseSpaceSize(BLOCK_SIZE_BYTES);
 
   @Rule
   public LocalAlluxioClusterResource mLocalAlluxioClusterResource;
@@ -80,7 +83,6 @@ public class TierPromoteIntegrationTest extends BaseIntegrationTest {
         .setProperty(PropertyKey.WORKER_MEMORY_SIZE, CAPACITY_BYTES)
         .setProperty(PropertyKey.USER_SHORT_CIRCUIT_ENABLED, shortCircuitEnabled)
         .setProperty(PropertyKey.WORKER_TIERED_STORE_LEVELS, "2")
-        .setProperty(PropertyKey.WORKER_TIERED_STORE_RESERVER_ENABLED, false)
         .setProperty(PropertyKey.Template.WORKER_TIERED_STORE_LEVEL_ALIAS.format(1), "SSD")
         .setProperty(PropertyKey.Template.WORKER_TIERED_STORE_LEVEL_DIRS_PATH.format(0),
             Files.createTempDir().getAbsolutePath())
@@ -90,21 +92,26 @@ public class TierPromoteIntegrationTest extends BaseIntegrationTest {
             String.valueOf(CAPACITY_BYTES)).build();
   }
 
+  @LocalAlluxioClusterResource.Config(confParams = {PropertyKey.Name.USER_FILE_WRITE_TYPE_DEFAULT,
+      "MUST_CACHE"})
   @Test
   public void promoteBlock() throws Exception {
-    final int size = CAPACITY_BYTES / 2;
+    final int size = (int) CAPACITY_BYTES / 2;
     AlluxioURI path1 = new AlluxioURI(PathUtils.uniqPath());
     AlluxioURI path2 = new AlluxioURI(PathUtils.uniqPath());
     AlluxioURI path3 = new AlluxioURI(PathUtils.uniqPath());
 
     // Write three files, first file should be in ssd, the others should be in memory
-    FileOutStream os1 = mFileSystem.createFile(path1);
+    FileOutStream os1 =
+        mFileSystem.createFile(path1, CreateFilePOptions.newBuilder().setRecursive(true).build());
     os1.write(BufferUtils.getIncreasingByteArray(size));
     os1.close();
-    FileOutStream os2 = mFileSystem.createFile(path2);
+    FileOutStream os2 =
+        mFileSystem.createFile(path2, CreateFilePOptions.newBuilder().setRecursive(true).build());
     os2.write(BufferUtils.getIncreasingByteArray(size));
     os2.close();
-    FileOutStream os3 = mFileSystem.createFile(path3);
+    FileOutStream os3 =
+        mFileSystem.createFile(path3, CreateFilePOptions.newBuilder().setRecursive(true).build());
     os3.write(BufferUtils.getIncreasingByteArray(size));
     os3.close();
 
@@ -115,8 +122,8 @@ public class TierPromoteIntegrationTest extends BaseIntegrationTest {
     Assert.assertFalse(mFileSystem.getStatus(path1).getFileBlockInfos().isEmpty());
 
     // After reading with CACHE_PROMOTE, the file should be in memory
-    FileInStream in = mFileSystem.openFile(path1, OpenFileOptions.defaults().setReadType(ReadType
-        .CACHE_PROMOTE));
+    FileInStream in = mFileSystem.openFile(path1,
+        OpenFilePOptions.newBuilder().setReadType(ReadPType.CACHE_PROMOTE).build());
     byte[] buf = new byte[size];
     while (in.read(buf) != -1) {
       // read the entire file

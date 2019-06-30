@@ -11,8 +11,8 @@
 
 package alluxio.worker.block.evictor;
 
-import alluxio.Configuration;
-import alluxio.PropertyKey;
+import alluxio.conf.ServerConfiguration;
+import alluxio.conf.PropertyKey;
 import alluxio.collections.Pair;
 import alluxio.worker.block.BlockMetadataManagerView;
 import alluxio.worker.block.BlockStoreLocation;
@@ -21,12 +21,10 @@ import alluxio.worker.block.meta.BlockMeta;
 import alluxio.worker.block.meta.StorageDirView;
 import alluxio.worker.block.meta.StorageTierView;
 
-import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Iterators;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
@@ -71,9 +69,9 @@ public final class LRFUEvictor extends AbstractEvictor {
    */
   public LRFUEvictor(BlockMetadataManagerView view, Allocator allocator) {
     super(view, allocator);
-    mStepFactor = Configuration.getDouble(PropertyKey.WORKER_EVICTOR_LRFU_STEP_FACTOR);
+    mStepFactor = ServerConfiguration.getDouble(PropertyKey.WORKER_EVICTOR_LRFU_STEP_FACTOR);
     mAttenuationFactor =
-        Configuration.getDouble(PropertyKey.WORKER_EVICTOR_LRFU_ATTENUATION_FACTOR);
+        ServerConfiguration.getDouble(PropertyKey.WORKER_EVICTOR_LRFU_ATTENUATION_FACTOR);
     Preconditions.checkArgument(mStepFactor >= 0.0 && mStepFactor <= 1.0,
         "Step factor should be in the range of [0.0, 1.0]");
     Preconditions.checkArgument(mAttenuationFactor >= 2.0,
@@ -125,13 +123,7 @@ public final class LRFUEvictor extends AbstractEvictor {
 
   @Override
   protected Iterator<Long> getBlockIterator() {
-    return Iterators.transform(getSortedCRF().iterator(),
-        new Function<Map.Entry<Long, Double>, Long>() {
-          @Override
-          public Long apply(Entry<Long, Double> input) {
-            return input.getKey();
-          }
-        });
+    return Iterators.transform(getSortedCRF().iterator(), Entry::getKey);
   }
 
   /**
@@ -141,12 +133,7 @@ public final class LRFUEvictor extends AbstractEvictor {
    */
   private List<Map.Entry<Long, Double>> getSortedCRF() {
     List<Map.Entry<Long, Double>> sortedCRF = new ArrayList<>(mBlockIdToCRFValue.entrySet());
-    Collections.sort(sortedCRF, new Comparator<Map.Entry<Long, Double>>() {
-      @Override
-      public int compare(Entry<Long, Double> o1, Entry<Long, Double> o2) {
-        return Double.compare(o1.getValue(), o2.getValue());
-      }
-    });
+    sortedCRF.sort(Comparator.comparingDouble(Entry::getValue));
     return sortedCRF;
   }
 
@@ -167,6 +154,11 @@ public final class LRFUEvictor extends AbstractEvictor {
 
   @Override
   public void onRemoveBlockByWorker(long userId, long blockId) {
+    updateOnRemoveBlock(blockId);
+  }
+
+  @Override
+  public void onBlockLost(long blockId) {
     updateOnRemoveBlock(blockId);
   }
 

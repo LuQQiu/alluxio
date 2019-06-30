@@ -11,13 +11,23 @@
 
 package alluxio.master;
 
-import alluxio.ServiceUtils;
+import alluxio.Constants;
+import alluxio.conf.InstancedConfiguration;
+import alluxio.conf.PropertyKey;
+import alluxio.conf.ServerConfiguration;
+import alluxio.master.metastore.BlockStore;
+import alluxio.master.metastore.InodeStore;
+import alluxio.master.metastore.MetastoreType;
+import alluxio.master.metastore.caching.CachingInodeStore;
+import alluxio.master.metastore.heap.HeapBlockStore;
+import alluxio.master.metastore.heap.HeapInodeStore;
+import alluxio.master.metastore.rocks.RocksBlockStore;
+import alluxio.master.metastore.rocks.RocksInodeStore;
 import alluxio.util.CommonUtils;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
-import java.util.concurrent.TimeUnit;
 
 /**
  * This class encapsulates the different master services that are configured to run.
@@ -33,21 +43,57 @@ final class MasterUtils {
    */
   public static void createMasters(MasterRegistry registry, MasterContext context) {
     List<Callable<Void>> callables = new ArrayList<>();
-    for (final MasterFactory factory : ServiceUtils.getMasterServiceLoader()) {
-      callables.add(new Callable<Void>() {
-        @Override
-        public Void call() throws Exception {
-          if (factory.isEnabled()) {
-            factory.create(registry, context);
-          }
-          return null;
+    for (final MasterFactory factory : alluxio.master.ServiceUtils.getMasterServiceLoader()) {
+      callables.add(() -> {
+        if (factory.isEnabled()) {
+          factory.create(registry, context);
         }
+        return null;
       });
     }
     try {
-      CommonUtils.invokeAll(callables, 10, TimeUnit.SECONDS);
+      CommonUtils.invokeAll(callables, 10 * Constants.MINUTE_MS);
     } catch (Exception e) {
       throw new RuntimeException("Failed to start masters", e);
+    }
+  }
+
+  /**
+   * @param baseDir the base directory in which to store on-disk metadata
+   * @return a block store factory of the configured type
+   */
+  public static BlockStore.Factory getBlockStoreFactory(String baseDir) {
+    MetastoreType type =
+        ServerConfiguration.getEnum(PropertyKey.MASTER_METASTORE, MetastoreType.class);
+    switch (type) {
+      case HEAP:
+        return HeapBlockStore::new;
+      case ROCKS:
+        return () -> new RocksBlockStore(baseDir);
+      default:
+        throw new IllegalStateException("Unknown metastore type: " + type);
+    }
+  }
+
+  /**
+   * @param baseDir the base directory in which to store on-disk metadata
+   * @return an inode store factory of the configured type
+   */
+  public static InodeStore.Factory getInodeStoreFactory(String baseDir) {
+    MetastoreType type =
+        ServerConfiguration.getEnum(PropertyKey.MASTER_METASTORE, MetastoreType.class);
+    switch (type) {
+      case HEAP:
+        return lockManager -> new HeapInodeStore();
+      case ROCKS:
+        InstancedConfiguration conf = ServerConfiguration.global();
+        if (conf.getInt(PropertyKey.MASTER_METASTORE_INODE_CACHE_MAX_SIZE) == 0) {
+          return lockManager -> new RocksInodeStore(baseDir);
+        } else {
+          return lockManager -> new CachingInodeStore(new RocksInodeStore(baseDir), lockManager);
+        }
+      default:
+        throw new IllegalStateException("Unknown metastore type: " + type);
     }
   }
 }

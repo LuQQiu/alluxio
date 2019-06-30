@@ -13,17 +13,15 @@ package alluxio;
 
 import static alluxio.exception.ExceptionMessage.INCOMPATIBLE_VERSION;
 
+import alluxio.conf.InstancedConfiguration;
 import alluxio.exception.status.UnavailableException;
+import alluxio.grpc.ServiceType;
 import alluxio.retry.CountingRetry;
-import alluxio.thrift.AlluxioService;
-import alluxio.thrift.AlluxioService.Client;
-import alluxio.thrift.GetServiceVersionTOptions;
-import alluxio.thrift.GetServiceVersionTResponse;
+import alluxio.util.ConfigurationUtils;
 
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
-import org.mockito.Mockito;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -38,13 +36,21 @@ public final class AbstractClientTest {
   public ExpectedException mExpectedException = ExpectedException.none();
 
   private static class BaseTestClient extends AbstractClient {
+    private long mRemoteServiceVersion;
+
     protected BaseTestClient() {
-      super(null, null, () -> new CountingRetry(1));
+      super(ClientContext.create(new InstancedConfiguration(ConfigurationUtils.defaults())), null,
+          () -> new CountingRetry(1));
+    }
+
+    public BaseTestClient(long remoteServiceVersion) {
+      this();
+      mRemoteServiceVersion = remoteServiceVersion;
     }
 
     @Override
-    protected Client getClient() {
-      return null;
+    protected ServiceType getRemoteServiceType() {
+      return ServiceType.UNKNOWN_SERVICE;
     }
 
     @Override
@@ -58,8 +64,8 @@ public final class AbstractClientTest {
     }
 
     @Override
-    public void checkVersion(AlluxioService.Client thriftClient, long version) throws IOException {
-      super.checkVersion(thriftClient, version);
+    protected long getRemoteServiceVersion() {
+      return mRemoteServiceVersion;
     }
   }
 
@@ -78,25 +84,17 @@ public final class AbstractClientTest {
 
   @Test
   public void unsupportedVersion() throws Exception {
-    final AlluxioService.Client thriftClient = Mockito.mock(AlluxioService.Client.class);
-    Mockito.when(thriftClient.getServiceVersion(new GetServiceVersionTOptions()))
-        .thenReturn(new GetServiceVersionTResponse().setVersion(1));
     mExpectedException.expect(IOException.class);
     mExpectedException.expectMessage(INCOMPATIBLE_VERSION.getMessage(SERVICE_NAME, 0, 1));
-
-    try (AbstractClient client = new BaseTestClient()) {
-      client.checkVersion(thriftClient, 0);
-    }
+    final AbstractClient client = new BaseTestClient(1);
+    client.checkVersion(0);
+    client.close();
   }
 
   @Test
   public void supportedVersion() throws Exception {
-    final AlluxioService.Client thriftClient = Mockito.mock(AlluxioService.Client.class);
-    Mockito.when(thriftClient.getServiceVersion(new GetServiceVersionTOptions()))
-        .thenReturn(new GetServiceVersionTResponse().setVersion(1));
-
-    try (AbstractClient client = new BaseTestClient()) {
-      client.checkVersion(thriftClient, 1);
-    }
+    final AbstractClient client = new BaseTestClient(1);
+    client.checkVersion(1);
+    client.close();
   }
 }

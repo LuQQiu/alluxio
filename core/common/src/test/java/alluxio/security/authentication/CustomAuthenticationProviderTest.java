@@ -11,7 +11,10 @@
 
 package alluxio.security.authentication;
 
-import org.junit.Assert;
+import static org.junit.Assert.assertTrue;
+
+import alluxio.security.authentication.plain.CustomAuthenticationProvider;
+
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
@@ -61,7 +64,7 @@ public final class CustomAuthenticationProviderTest {
   public void mockCustomProvider() {
     CustomAuthenticationProvider provider =
         new CustomAuthenticationProvider(MockAuthenticationProvider.class.getName());
-    Assert.assertTrue(provider.getCustomProvider() instanceof MockAuthenticationProvider);
+    assertTrue(provider.getCustomProvider() instanceof MockAuthenticationProvider);
   }
 
   /**

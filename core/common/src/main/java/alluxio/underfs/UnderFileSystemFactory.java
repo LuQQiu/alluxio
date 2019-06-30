@@ -11,13 +11,13 @@
 
 package alluxio.underfs;
 
+import alluxio.annotation.PublicApi;
 import alluxio.extensions.ExtensionFactory;
-
-import javax.annotation.Nullable;
 
 /**
  * Interface for under file system factories.
  */
+@PublicApi
 public interface UnderFileSystemFactory
     extends ExtensionFactory<UnderFileSystem, UnderFileSystemConfiguration> {
 
@@ -27,14 +27,15 @@ public interface UnderFileSystemFactory
    * provided is insufficient to create a client.
    *
    * @param path file path
-   * @param conf optional configuration object for the UFS, may be null
+   * @param conf configuration object for the UFS
    * @return the client
    */
-  UnderFileSystem create(String path, @Nullable UnderFileSystemConfiguration conf);
+  UnderFileSystem create(String path, UnderFileSystemConfiguration conf);
 
   /**
    * Gets whether this factory supports the given path and thus whether calling the
-   * {@link #create(String, UnderFileSystemConfiguration)} can succeed for this path.
+   * {@link #create(String, UnderFileSystemConfiguration)} can succeed for
+   * this path.
    *
    * @param path file path
    * @return true if the path is supported, false otherwise
@@ -43,13 +44,23 @@ public interface UnderFileSystemFactory
 
   /**
    * Gets whether this factory supports the given path and thus whether calling the
-   * {@link #create(String, UnderFileSystemConfiguration)} can succeed for this path.
+   * {@link #create(String, UnderFileSystemConfiguration)} can succeed for
+   * this path.
    *
    * @param path file path
-   * @param conf optional configuration object for the UFS, may be null
+   * @param conf configuration object for the UFS
    * @return true if the path is supported, false otherwise
    */
-  default boolean supportsPath(String path, @Nullable UnderFileSystemConfiguration conf) {
+  default boolean supportsPath(String path, UnderFileSystemConfiguration conf) {
     return supportsPath(path);
+  }
+
+  /**
+   * Get the version supported by this factory.
+   *
+   * @return the version string
+   */
+  default String getVersion() {
+    return "";
   }
 }

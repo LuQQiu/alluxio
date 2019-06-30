@@ -11,19 +11,23 @@
 
 package alluxio.wire;
 
-import static alluxio.util.StreamUtils.map;
-
 import alluxio.Constants;
+import alluxio.grpc.TtlAction;
 import alluxio.security.authorization.AccessControlList;
 import alluxio.security.authorization.DefaultAccessControlList;
 
+import com.google.common.base.MoreObjects;
 import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
 
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
+import javax.annotation.Nullable;
 import javax.annotation.concurrent.NotThreadSafe;
 
 /**
@@ -45,6 +49,7 @@ public final class FileInfo implements Serializable {
   private boolean mCompleted;
   private boolean mFolder;
   private boolean mPinned;
+  private Set<String> mMediumTypes = new HashSet<>();
   private boolean mCacheable;
   private boolean mPersisted;
   private ArrayList<Long> mBlockIds = new ArrayList<>();
@@ -59,11 +64,14 @@ public final class FileInfo implements Serializable {
   private boolean mMountPoint;
   private ArrayList<FileBlockInfo> mFileBlockInfos = new ArrayList<>();
   private long mMountId;
+  private int mReplicationMax;
+  private int mReplicationMin;
   private int mInAlluxioPercentage;
   private String mUfsFingerprint = Constants.INVALID_UFS_FINGERPRINT;
 
   private AccessControlList mAcl = AccessControlList.EMPTY_ACL;
   private DefaultAccessControlList mDefaultAcl = DefaultAccessControlList.EMPTY_DEFAULT_ACL;
+  private Map<String, byte[]> mXAttr;
 
   /**
    * Creates a new instance of {@link FileInfo}.
@@ -239,6 +247,20 @@ public final class FileInfo implements Serializable {
   }
 
   /**
+   * @return the maximum number of block replication
+   */
+  public int getReplicationMax() {
+    return mReplicationMax;
+  }
+
+  /**
+   * @return the minimum number of block replication
+   */
+  public int getReplicationMin() {
+    return mReplicationMin;
+  }
+
+  /**
    * @return the id of the mount
    */
   public long getMountId() {
@@ -280,6 +302,21 @@ public final class FileInfo implements Serializable {
   public List<String> convertDefaultAclToStringEntries() {
     // do not use getX as the name of the method, otherwise it will be used by json serialization
     return (mDefaultAcl == null) ? new ArrayList<>() : mDefaultAcl.toStringEntries();
+  }
+
+  /**
+   * @return a set of pinned locations
+   */
+  public Set<String> getMediumTypes() {
+    return mMediumTypes;
+  }
+
+  /**
+   * @return the extended attributes
+   */
+  @Nullable
+  public Map<String, byte[]> getXAttr() {
+    return mXAttr;
   }
 
   /**
@@ -506,6 +543,24 @@ public final class FileInfo implements Serializable {
   }
 
   /**
+   * @param replicationMax the maximum number of block replication
+   * @return the file descriptor
+   */
+  public FileInfo setReplicationMax(int replicationMax) {
+    mReplicationMax = replicationMax;
+    return this;
+  }
+
+  /**
+   * @param replicationMin the minimum number of block replication
+   * @return the file descriptor
+   */
+  public FileInfo setReplicationMin(int replicationMin) {
+    mReplicationMin = replicationMin;
+    return this;
+  }
+
+  /**
    * @param mountId the id of mount
    * @return the file information
    */
@@ -542,68 +597,21 @@ public final class FileInfo implements Serializable {
   }
 
   /**
-   * @return thrift representation of the file information
+   * @param mediumTypes the pinned locations
+   * @return the file information
    */
-  public alluxio.thrift.FileInfo toThrift() {
-    List<alluxio.thrift.FileBlockInfo> fileBlockInfos = new ArrayList<>();
-    for (FileBlockInfo fileBlockInfo : mFileBlockInfos) {
-      fileBlockInfos.add(fileBlockInfo.toThrift());
-    }
-
-    AccessControlList tAcl = mAcl == null ? new AccessControlList() : mAcl;
-    AccessControlList defaultAcl;
-    defaultAcl = mDefaultAcl == null ? new DefaultAccessControlList() : mDefaultAcl;
-
-    alluxio.thrift.FileInfo info =
-        new alluxio.thrift.FileInfo(mFileId, mName, mPath, mUfsPath, mLength, mBlockSizeBytes,
-        mCreationTimeMs, mCompleted, mFolder, mPinned, mCacheable, mPersisted, mBlockIds,
-        mInMemoryPercentage, mLastModificationTimeMs, mTtl, mOwner, mGroup, mMode,
-        mPersistenceState, mMountPoint, fileBlockInfos, TtlAction.toThrift(mTtlAction), mMountId,
-        mInAlluxioPercentage, mUfsFingerprint, tAcl.toThrift(), defaultAcl.toThrift());
-
-    return info;
+  public FileInfo setMediumTypes(Set<String> mediumTypes) {
+    mMediumTypes = mediumTypes;
+    return this;
   }
 
   /**
-   * Creates a new instance of {@link FileInfo} from thrift representation.
-   *
-   * @param info the thrift representation of a file information
-   * @return the instance
+   * @param xAttr the extended attributes to use
+   * @return the updated {@link FileInfo}
    */
-  public static FileInfo fromThrift(alluxio.thrift.FileInfo info) {
-    return new FileInfo()
-        .setFileId(info.getFileId())
-        .setName(info.getName())
-        .setPath(info.getPath())
-        .setUfsPath(info.getUfsPath())
-        .setLength(info.getLength())
-        .setBlockSizeBytes(info.getBlockSizeBytes())
-        .setCreationTimeMs(info.getCreationTimeMs())
-        .setCompleted(info.isCompleted())
-        .setFolder(info.isFolder())
-        .setPinned(info.isPinned())
-        .setCacheable(info.isCacheable())
-        .setPersisted(info.isPersisted())
-        .setBlockIds(info.getBlockIds())
-        .setInMemoryPercentage(info.getInMemoryPercentage())
-        .setLastModificationTimeMs(info.getLastModificationTimeMs())
-        .setTtl(info.getTtl())
-        .setTtlAction(TtlAction.fromThrift(info.getTtlAction()))
-        .setOwner(info.getOwner())
-        .setGroup(info.getGroup())
-        .setMode(info.getMode())
-        .setPersistenceState(info.getPersistenceState())
-        .setMountPoint(info.isMountPoint())
-        .setFileBlockInfos(map(FileBlockInfo::fromThrift, info.getFileBlockInfos()))
-        .setMountId(info.getMountId())
-        .setInAlluxioPercentage(info.getInAlluxioPercentage())
-        .setUfsFingerprint(info.isSetUfsFingerprint() ? info.getUfsFingerprint()
-            : Constants.INVALID_UFS_FINGERPRINT)
-        .setAcl(info.isSetAcl()
-            ? (AccessControlList.fromThrift(info.getAcl())) : new AccessControlList())
-        .setDefaultAcl(info.isSetDefaultAcl()
-            ? ((DefaultAccessControlList) AccessControlList.fromThrift(info.getDefaultAcl()))
-            : new DefaultAccessControlList());
+  public FileInfo setXAttr(Map<String, byte[]> xAttr) {
+    mXAttr = xAttr;
+    return this;
   }
 
   @Override
@@ -624,32 +632,39 @@ public final class FileInfo implements Serializable {
         && mLastModificationTimeMs == that.mLastModificationTimeMs && mTtl == that.mTtl
         && mOwner.equals(that.mOwner) && mGroup.equals(that.mGroup) && mMode == that.mMode
         && mPersistenceState.equals(that.mPersistenceState) && mMountPoint == that.mMountPoint
+        && mReplicationMax == that.mReplicationMax && mReplicationMin == that.mReplicationMin
         && mFileBlockInfos.equals(that.mFileBlockInfos) && mTtlAction == that.mTtlAction
         && mMountId == that.mMountId && mInAlluxioPercentage == that.mInAlluxioPercentage
         && mUfsFingerprint.equals(that.mUfsFingerprint)
-        && mAcl.equals(that.mAcl)
-        && mDefaultAcl.equals(that.mDefaultAcl);
+        && Objects.equal(mAcl, that.mAcl)
+        && Objects.equal(mDefaultAcl, that.mDefaultAcl)
+        && Objects.equal(mMediumTypes, that.mMediumTypes);
   }
 
   @Override
   public int hashCode() {
     return Objects.hashCode(mFileId, mName, mPath, mUfsPath, mLength, mBlockSizeBytes,
         mCreationTimeMs, mCompleted, mFolder, mPinned, mCacheable, mPersisted, mBlockIds,
-        mInMemoryPercentage, mLastModificationTimeMs, mTtl, mOwner, mGroup, mMode,
-        mPersistenceState, mMountPoint, mFileBlockInfos, mTtlAction, mInAlluxioPercentage,
-        mUfsFingerprint, mAcl, mDefaultAcl);
+        mInMemoryPercentage, mLastModificationTimeMs, mTtl, mOwner, mGroup, mMode, mReplicationMax,
+        mReplicationMin, mPersistenceState, mMountPoint, mFileBlockInfos, mTtlAction,
+        mInAlluxioPercentage, mUfsFingerprint, mAcl, mDefaultAcl, mMediumTypes);
   }
 
   @Override
   public String toString() {
-    return Objects.toStringHelper(this).add("fileId", mFileId).add("name", mName).add("path", mPath)
+    return MoreObjects.toStringHelper(this)
+        .add("fileId", mFileId)
+        .add("name", mName)
+        .add("path", mPath)
         .add("ufsPath", mUfsPath).add("length", mLength).add("blockSizeBytes", mBlockSizeBytes)
         .add("creationTimeMs", mCreationTimeMs).add("completed", mCompleted).add("folder", mFolder)
-        .add("pinned", mPinned).add("cacheable", mCacheable).add("persisted", mPersisted)
+        .add("pinned", mPinned).add("pinnedlocation", mMediumTypes)
+        .add("cacheable", mCacheable).add("persisted", mPersisted)
         .add("blockIds", mBlockIds).add("inMemoryPercentage", mInMemoryPercentage)
         .add("lastModificationTimesMs", mLastModificationTimeMs).add("ttl", mTtl)
         .add("ttlAction", mTtlAction).add("owner", mOwner).add("group", mGroup).add("mode", mMode)
         .add("persistenceState", mPersistenceState).add("mountPoint", mMountPoint)
+        .add("replicationMax", mReplicationMax).add("replicationMin", mReplicationMin)
         .add("fileBlockInfos", mFileBlockInfos)
         .add("mountId", mMountId).add("inAlluxioPercentage", mInAlluxioPercentage)
         .add("ufsFingerprint", mUfsFingerprint)

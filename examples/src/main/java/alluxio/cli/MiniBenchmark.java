@@ -17,7 +17,10 @@ import alluxio.RuntimeConstants;
 import alluxio.client.file.FileInStream;
 import alluxio.client.file.FileOutStream;
 import alluxio.client.file.FileSystem;
+import alluxio.conf.AlluxioConfiguration;
+import alluxio.conf.InstancedConfiguration;
 import alluxio.util.CommonUtils;
+import alluxio.util.ConfigurationUtils;
 import alluxio.util.FormatUtils;
 
 import com.google.common.base.Preconditions;
@@ -128,6 +131,7 @@ public final class MiniBenchmark {
     }
 
     CommonUtils.warmUpLoop();
+    AlluxioConfiguration alluxioConf = new InstancedConfiguration(ConfigurationUtils.defaults());
 
     for (int i = 0; i < sIterations; ++i) {
       final AtomicInteger count = new AtomicInteger(0);
@@ -137,28 +141,22 @@ public final class MiniBenchmark {
       for (int j = 0; j < sConcurrency; ++j) {
         switch (sType) {
           case READ:
-            executorService.submit(new Runnable() {
-              @Override
-              public void run() {
-                try {
-                  readFile(barrier, runtime, count.addAndGet(1));
-                } catch (Exception e) {
-                  LOG.error("Failed to read file.", e);
-                  System.exit(-1);
-                }
+            executorService.submit(() -> {
+              try {
+                readFile(barrier, runtime, count.addAndGet(1), alluxioConf);
+              } catch (Exception e) {
+                LOG.error("Failed to read file.", e);
+                System.exit(-1);
               }
             });
             break;
           case WRITE:
-            executorService.submit(new Runnable() {
-              @Override
-              public void run() {
-                try {
-                  writeFile(barrier, runtime, count.addAndGet(1));
-                } catch (Exception e) {
-                  LOG.error("Failed to write file.", e);
-                  System.exit(-1);
-                }
+            executorService.submit(() -> {
+              try {
+                writeFile(barrier, runtime, count.addAndGet(1), alluxioConf);
+              } catch (Exception e) {
+                LOG.error("Failed to write file.", e);
+                System.exit(-1);
               }
             });
             break;
@@ -181,9 +179,10 @@ public final class MiniBenchmark {
    * @param count the count to determine the filename
    * @throws Exception if it fails to read
    */
-  private static void readFile(CyclicBarrier barrier, AtomicLong runTime, int count)
+  private static void readFile(CyclicBarrier barrier, AtomicLong runTime, int count,
+      AlluxioConfiguration alluxioConf)
       throws Exception {
-    FileSystem fileSystem = FileSystem.Factory.get();
+    FileSystem fileSystem = FileSystem.Factory.create(alluxioConf);
     byte[] buffer = new byte[(int) Math.min(sFileSize, 4 * Constants.MB)];
 
     barrier.await();
@@ -201,9 +200,10 @@ public final class MiniBenchmark {
    * @param count the count to determine the filename
    * @throws Exception if it fails to write
    */
-  private static void writeFile(CyclicBarrier barrier, AtomicLong runtime, int count)
+  private static void writeFile(CyclicBarrier barrier, AtomicLong runtime, int count,
+      AlluxioConfiguration alluxioConf)
       throws Exception {
-    FileSystem fileSystem = FileSystem.Factory.get();
+    FileSystem fileSystem = FileSystem.Factory.create(alluxioConf);
     byte[] buffer = new byte[(int) Math.min(sFileSize, 4 * Constants.MB)];
     Arrays.fill(buffer, (byte) 'a');
     AlluxioURI path = filename(count);

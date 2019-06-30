@@ -12,15 +12,15 @@
 package alluxio.client.fs;
 
 import alluxio.AlluxioURI;
-import alluxio.Configuration;
-import alluxio.ConfigurationTestUtils;
 import alluxio.Constants;
-import alluxio.PropertyKey;
 import alluxio.client.file.FileSystem;
 import alluxio.client.file.FileSystemContext;
 import alluxio.client.file.URIStatus;
-import alluxio.client.file.options.SetAttributeOptions;
-import alluxio.security.User;
+import alluxio.conf.PropertyKey;
+import alluxio.conf.ServerConfiguration;
+import alluxio.exception.status.UnauthenticatedException;
+import alluxio.grpc.SetAttributePOptions;
+import alluxio.security.CurrentUser;
 import alluxio.security.authorization.Mode;
 import alluxio.security.group.GroupMappingService;
 import alluxio.testutils.BaseIntegrationTest;
@@ -34,7 +34,6 @@ import org.junit.BeforeClass;
 import org.junit.Rule;
 import org.junit.Test;
 
-import java.io.IOException;
 import java.security.Principal;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -74,17 +73,17 @@ public final class ImpersonationIntegrationTest extends BaseIntegrationTest {
 
   @After
   public void after() throws Exception {
-    ConfigurationTestUtils.resetConfiguration();
+    ServerConfiguration.reset();
   }
 
   @Before
   public void before() throws Exception {
     // Give the root dir 777, to write files as different users. This must be run as the user
     // that starts the master process
-    FileSystem.Factory.get().setAttribute(new AlluxioURI("/"),
-        SetAttributeOptions.defaults().setMode(new Mode((short) 0777)));
+    FileSystem.Factory.create(ServerConfiguration.global()).setAttribute(new AlluxioURI("/"),
+        SetAttributePOptions.newBuilder().setMode(new Mode((short) 0777).toProto()).build());
     // Enable client impersonation by default
-    Configuration
+    ServerConfiguration
         .set(PropertyKey.SECURITY_LOGIN_IMPERSONATION_USERNAME, Constants.IMPERSONATION_HDFS_USER);
   }
 
@@ -97,9 +96,10 @@ public final class ImpersonationIntegrationTest extends BaseIntegrationTest {
   @Test
   @LocalAlluxioClusterResource.Config(confParams = {IMPERSONATION_GROUPS_CONFIG, "*"})
   public void impersonationNotUsed() throws Exception {
-    Configuration
+    ServerConfiguration
         .set(PropertyKey.SECURITY_LOGIN_IMPERSONATION_USERNAME, Constants.IMPERSONATION_NONE);
-    FileSystemContext context = FileSystemContext.create(createHdfsSubject());
+    FileSystemContext context = FileSystemContext.create(createHdfsSubject(),
+        ServerConfiguration.global());
     FileSystem fs = mLocalAlluxioClusterResource.get().getClient(context);
     fs.createFile(new AlluxioURI("/impersonation-test")).close();
     List<URIStatus> listing = fs.listStatus(new AlluxioURI("/"));
@@ -112,9 +112,10 @@ public final class ImpersonationIntegrationTest extends BaseIntegrationTest {
   @LocalAlluxioClusterResource.Config(confParams = {IMPERSONATION_GROUPS_CONFIG, "*"})
   public void impersonationArbitraryUserDisallowed() throws Exception {
     String arbitraryUser = "arbitrary_user";
-    Configuration
+    ServerConfiguration
         .set(PropertyKey.SECURITY_LOGIN_IMPERSONATION_USERNAME, arbitraryUser);
-    FileSystemContext context = FileSystemContext.create(createHdfsSubject());
+    FileSystemContext context = FileSystemContext.create(createHdfsSubject(),
+        ServerConfiguration.global());
     FileSystem fs = mLocalAlluxioClusterResource.get().getClient(context);
     fs.createFile(new AlluxioURI("/impersonation-test")).close();
     List<URIStatus> listing = fs.listStatus(new AlluxioURI("/"));
@@ -135,7 +136,7 @@ public final class ImpersonationIntegrationTest extends BaseIntegrationTest {
     try {
       checkCreateFile(createHdfsSubject(), HDFS_USER);
       Assert.fail("Connection succeeded, but impersonation should be denied.");
-    } catch (IOException e) {
+    } catch (UnauthenticatedException e) {
       // expected
     }
   }
@@ -160,7 +161,7 @@ public final class ImpersonationIntegrationTest extends BaseIntegrationTest {
     try {
       checkCreateFile(createHdfsSubject(), HDFS_USER);
       Assert.fail("Connection succeeded, but impersonation should be denied.");
-    } catch (IOException e) {
+    } catch (UnauthenticatedException e) {
       // expected
     }
   }
@@ -201,7 +202,7 @@ public final class ImpersonationIntegrationTest extends BaseIntegrationTest {
     try {
       checkCreateFile(createHdfsSubject(), HDFS_USER);
       Assert.fail("Connection succeeded, but impersonation should be denied.");
-    } catch (IOException e) {
+    } catch (UnauthenticatedException e) {
       // expected
     }
   }
@@ -226,13 +227,13 @@ public final class ImpersonationIntegrationTest extends BaseIntegrationTest {
     try {
       checkCreateFile(createHdfsSubject(), HDFS_USER);
       Assert.fail("Connection succeeded, but impersonation should be denied.");
-    } catch (IOException e) {
+    } catch (UnauthenticatedException e) {
       // expected
     }
   }
 
   private void checkCreateFile(Subject subject, String expectedUser) throws Exception {
-    FileSystemContext context = FileSystemContext.create(subject);
+    FileSystemContext context = FileSystemContext.create(subject, ServerConfiguration.global());
     FileSystem fs = mLocalAlluxioClusterResource.get().getClient(context);
     fs.createFile(new AlluxioURI("/impersonation-test")).close();
     List<URIStatus> listing = fs.listStatus(new AlluxioURI("/"));
@@ -243,7 +244,7 @@ public final class ImpersonationIntegrationTest extends BaseIntegrationTest {
 
   private Subject createHdfsSubject() {
     // Create a subject for an hdfs user
-    User user = new User(HDFS_USER);
+    CurrentUser user = new CurrentUser(HDFS_USER);
     Set<Principal> principals = new HashSet<>();
     principals.add(user);
     return new Subject(false, principals, new HashSet<>(), new HashSet<>());

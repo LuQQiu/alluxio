@@ -19,8 +19,9 @@ import alluxio.Constants;
 import alluxio.client.file.FileInStream;
 import alluxio.client.file.FileSystem;
 import alluxio.client.file.FileSystemTestUtils;
-import alluxio.client.file.options.CreateFileOptions;
-import alluxio.multi.process.MultiProcessCluster.DeployMode;
+import alluxio.conf.PropertyKey;
+import alluxio.grpc.CreateFilePOptions;
+import alluxio.master.journal.JournalType;
 
 import org.junit.Rule;
 import org.junit.Test;
@@ -34,31 +35,32 @@ public final class MultiProcessClusterTest {
 
   @Test
   public void simpleCluster() throws Exception {
-    mCluster = MultiProcessCluster.newBuilder()
+    mCluster = MultiProcessCluster.newBuilder(PortCoordination.MULTI_PROCESS_SIMPLE_CLUSTER)
         .setClusterName("simpleCluster")
         .setNumMasters(1)
         .setNumWorkers(1)
         .build();
-    try {
-      mCluster.start();
-      FileSystem fs = mCluster.getFileSystemClient();
-      createAndOpenFile(fs);
-      mCluster.notifySuccess();
-    } finally {
-      mCluster.destroy();
-    }
+    clusterVerification();
   }
 
   @Test
   public void zookeeper() throws Exception {
-    mCluster = MultiProcessCluster.newBuilder()
+    mCluster = MultiProcessCluster.newBuilder(PortCoordination.MULTI_PROCESS_ZOOKEEPER)
         .setClusterName("zookeeper")
-        .setDeployMode(DeployMode.ZOOKEEPER_HA)
         .setNumMasters(3)
         .setNumWorkers(2)
+        .addProperty(PropertyKey.MASTER_JOURNAL_TYPE, JournalType.UFS.toString())
         .build();
+    clusterVerification();
+  }
+
+  /**
+   * Verifies cluster running as expected.
+   */
+  private void clusterVerification() throws Exception {
     try {
       mCluster.start();
+      mCluster.waitForAllNodesRegistered(60 * Constants.SECOND_MS);
       FileSystem fs = mCluster.getFileSystemClient();
       createAndOpenFile(fs);
       mCluster.notifySuccess();
@@ -74,7 +76,7 @@ public final class MultiProcessClusterTest {
       String testFile = "/fileName";
       try {
         FileSystemTestUtils.createByteFile(fs, testFile, len,
-            CreateFileOptions.defaults().setBlockSizeBytes(100));
+            CreateFilePOptions.newBuilder().setBlockSizeBytes(100).build());
         break;
       } catch (Exception e) {
         // This can indicate that the worker hasn't connected yet, so we must delete and retry.

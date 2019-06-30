@@ -11,8 +11,8 @@
 
 package alluxio.mesos;
 
-import alluxio.Configuration;
-import alluxio.PropertyKey;
+import alluxio.conf.ServerConfiguration;
+import alluxio.conf.PropertyKey;
 import alluxio.util.network.NetworkAddressUtils;
 import alluxio.util.network.NetworkAddressUtils.ServiceType;
 
@@ -37,8 +37,11 @@ import javax.annotation.concurrent.NotThreadSafe;
  *
  * The current resource allocation policy uses a configurable Alluxio master allocation, while the
  * workers use the maximum available allocation.
+ *
+ * @deprecated since version 2.0
  */
 @NotThreadSafe
+@Deprecated
 public class AlluxioFramework {
   private static final Logger LOG = LoggerFactory.getLogger(AlluxioFramework.class);
 
@@ -61,18 +64,18 @@ public class AlluxioFramework {
     Protos.FrameworkInfo.Builder frameworkInfo = Protos.FrameworkInfo.newBuilder()
         .setName("alluxio").setCheckpoint(true);
 
-    if (Configuration.isSet(PropertyKey.INTEGRATION_MESOS_ROLE)) {
-      frameworkInfo.setRole(Configuration.get(PropertyKey.INTEGRATION_MESOS_ROLE));
+    if (ServerConfiguration.isSet(PropertyKey.INTEGRATION_MESOS_ROLE)) {
+      frameworkInfo.setRole(ServerConfiguration.get(PropertyKey.INTEGRATION_MESOS_ROLE));
     }
-    if (Configuration.isSet(PropertyKey.INTEGRATION_MESOS_USER)) {
-      frameworkInfo.setUser(Configuration.get(PropertyKey.INTEGRATION_MESOS_USER));
+    if (ServerConfiguration.isSet(PropertyKey.INTEGRATION_MESOS_USER)) {
+      frameworkInfo.setUser(ServerConfiguration.get(PropertyKey.INTEGRATION_MESOS_USER));
     } else {
       // Setting the user to an empty string will prompt Mesos to set it to the current user.
       frameworkInfo.setUser("");
     }
 
-    if (Configuration.isSet(PropertyKey.INTEGRATION_MESOS_PRINCIPAL)) {
-      frameworkInfo.setPrincipal(Configuration.get(PropertyKey.INTEGRATION_MESOS_PRINCIPAL));
+    if (ServerConfiguration.isSet(PropertyKey.INTEGRATION_MESOS_PRINCIPAL)) {
+      frameworkInfo.setPrincipal(ServerConfiguration.get(PropertyKey.INTEGRATION_MESOS_PRINCIPAL));
     }
 
     // Publish WebUI url to mesos master.
@@ -99,21 +102,21 @@ public class AlluxioFramework {
    */
   private static String createMasterWebUrl() {
     InetSocketAddress masterWeb = NetworkAddressUtils.getConnectAddress(
-        ServiceType.MASTER_WEB);
+        ServiceType.MASTER_WEB, ServerConfiguration.global());
     return "http://" + masterWeb.getHostString() + ":" + masterWeb.getPort();
   }
 
   private static Protos.Credential createCredential() {
-    if (!(Configuration.isSet(PropertyKey.INTEGRATION_MESOS_PRINCIPAL)
-        && Configuration.isSet(PropertyKey.INTEGRATION_MESOS_SECRET))) {
+    if (!(ServerConfiguration.isSet(PropertyKey.INTEGRATION_MESOS_PRINCIPAL)
+        && ServerConfiguration.isSet(PropertyKey.INTEGRATION_MESOS_SECRET))) {
       return null;
     }
 
     try {
       Protos.Credential.Builder credentialBuilder = Protos.Credential.newBuilder()
-          .setPrincipal(Configuration.get(PropertyKey.INTEGRATION_MESOS_PRINCIPAL)).setSecret(
+          .setPrincipal(ServerConfiguration.get(PropertyKey.INTEGRATION_MESOS_PRINCIPAL)).setSecret(
               ByteString.copyFrom(
-                  Configuration.get(PropertyKey.INTEGRATION_MESOS_SECRET).getBytes("UTF-8")));
+                  ServerConfiguration.get(PropertyKey.INTEGRATION_MESOS_SECRET).getBytes("UTF-8")));
 
       return credentialBuilder.build();
     } catch (UnsupportedEncodingException ex) {

@@ -11,8 +11,8 @@
 
 package alluxio.worker.block.meta;
 
-import alluxio.Configuration;
-import alluxio.PropertyKey;
+import alluxio.conf.ServerConfiguration;
+import alluxio.conf.PropertyKey;
 import alluxio.util.io.PathUtils;
 import alluxio.worker.block.BlockStoreLocation;
 
@@ -41,8 +41,8 @@ public abstract class AbstractBlockMeta {
    * @return temp file path
    */
   public static String tempPath(StorageDir dir, long sessionId, long blockId) {
-    final String tmpDir = Configuration.get(PropertyKey.WORKER_DATA_TMP_FOLDER);
-    final int subDirMax = Configuration.getInt(PropertyKey.WORKER_DATA_TMP_SUBDIR_MAX);
+    final String tmpDir = ServerConfiguration.get(PropertyKey.WORKER_DATA_TMP_FOLDER);
+    final int subDirMax = ServerConfiguration.getInt(PropertyKey.WORKER_DATA_TMP_SUBDIR_MAX);
 
     return PathUtils.concatPath(dir.getDirPath(), tmpDir, sessionId % subDirMax,
         String.format("%x-%x", sessionId, blockId));
@@ -88,7 +88,7 @@ public abstract class AbstractBlockMeta {
    */
   public BlockStoreLocation getBlockLocation() {
     StorageTier tier = mDir.getParentTier();
-    return new BlockStoreLocation(tier.getTierAlias(), mDir.getDirIndex());
+    return new BlockStoreLocation(tier.getTierAlias(), mDir.getDirIndex(), mDir.getDirMedium());
   }
 
   /**

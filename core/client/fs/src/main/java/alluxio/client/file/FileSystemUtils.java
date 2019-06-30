@@ -12,11 +12,11 @@
 package alluxio.client.file;
 
 import alluxio.AlluxioURI;
-import alluxio.Configuration;
 import alluxio.Constants;
-import alluxio.PropertyKey;
-import alluxio.client.file.options.CheckConsistencyOptions;
+import alluxio.conf.PropertyKey;
 import alluxio.exception.AlluxioException;
+import alluxio.exception.FileDoesNotExistException;
+import alluxio.grpc.ScheduleAsyncPersistencePOptions;
 import alluxio.util.CommonUtils;
 import alluxio.util.WaitForOptions;
 
@@ -25,7 +25,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
@@ -41,7 +40,6 @@ public final class FileSystemUtils {
   // prevent instantiation
   private FileSystemUtils() {}
 
-  // TODO(calvin): make this PublicApi as it meant to be user facing.
   /**
    * Shortcut for {@code waitCompleted(fs, uri, -1, TimeUnit.MILLISECONDS)}, i.e., wait for an
    * indefinite amount of time. Note that if a file is never completed, the thread will block
@@ -91,10 +89,11 @@ public final class FileSystemUtils {
    */
   public static boolean waitCompleted(final FileSystem fs, final AlluxioURI uri,
       final long timeout, final TimeUnit tunit)
-          throws IOException, AlluxioException, InterruptedException {
+      throws IOException, AlluxioException, InterruptedException {
 
     final long deadline = System.currentTimeMillis() + tunit.toMillis(timeout);
-    final long pollPeriod = Configuration.getMs(PropertyKey.USER_FILE_WAITCOMPLETED_POLL_MS);
+    final long fileWaitCompletedPollMs =
+        fs.getConf().getMs(PropertyKey.USER_FILE_WAITCOMPLETED_POLL_MS);
     boolean completed = false;
     long timeleft = deadline - System.currentTimeMillis();
 
@@ -112,8 +111,8 @@ public final class FileSystemUtils {
       } else if (!completed) {
         long toSleep;
 
-        if (timeout < 0 || timeleft > pollPeriod) {
-          toSleep = pollPeriod;
+        if (timeout < 0 || timeleft > fileWaitCompletedPollMs) {
+          toSleep = fileWaitCompletedPollMs;
         } else {
           toSleep = timeleft;
         }
@@ -122,52 +121,48 @@ public final class FileSystemUtils {
         timeleft = deadline - System.currentTimeMillis();
       }
     }
-
     return completed;
   }
 
   /**
-   * Persists the given file to the under file system.
+   * Convenience method for {@code #persistAndWait(fs, uri, persistenceWaitTime, -1)}.
+   * i.e. wait for an indefinite period of time to persist. This will block
+   * for an indefinite period of time if the path is never persisted. Use with care.
    *
    * @param fs {@link FileSystem} to carry out Alluxio operations
    * @param uri the uri of the file to persist
+   * @param persistenceWaitTime the persistence wait time
    */
-  public static void persistFile(final FileSystem fs, final AlluxioURI uri)
-      throws IOException, TimeoutException, InterruptedException {
-    FileSystemContext context = FileSystemContext.get();
-    FileSystemMasterClient client = context.acquireMasterClient();
-    try {
-      client.scheduleAsyncPersist(uri);
-    } finally {
-      context.releaseMasterClient(client);
-    }
+  public static void persistAndWait(final FileSystem fs, final AlluxioURI uri,
+      long persistenceWaitTime) throws FileDoesNotExistException, IOException, AlluxioException,
+      TimeoutException, InterruptedException {
+    persistAndWait(fs, uri, persistenceWaitTime, -1);
+  }
+
+  /**
+   * Persists the given path to the under file system and returns once the persist is complete.
+   * Note that if this method times out, the persist may still occur after the timeout period.
+   *
+   * @param fs {@link FileSystem} to carry out Alluxio operations
+   * @param uri the uri of the file to persist
+   * @param persistenceWaitTime the initial persistence wait time
+   * @param timeoutMs max amount of time to wait for persist in milliseconds. -1 to wait
+   *                  indefinitely
+   * @throws TimeoutException if the persist takes longer than the timeout
+   */
+  public static void persistAndWait(final FileSystem fs, final AlluxioURI uri,
+      long persistenceWaitTime, int timeoutMs) throws FileDoesNotExistException, IOException,
+      AlluxioException, TimeoutException, InterruptedException {
+    fs.persist(uri, ScheduleAsyncPersistencePOptions
+        .newBuilder().setPersistenceWaitTime(persistenceWaitTime).build());
     CommonUtils.waitFor(String.format("%s to be persisted", uri) , () -> {
       try {
         return fs.getStatus(uri).isPersisted();
       } catch (Exception e) {
-        Throwables.propagateIfPossible(e);
+        Throwables.throwIfUnchecked(e);
         throw new RuntimeException(e);
       }
-    }, WaitForOptions.defaults().setTimeoutMs(20 * Constants.MINUTE_MS)
+    }, WaitForOptions.defaults().setTimeoutMs(timeoutMs)
         .setInterval(Constants.SECOND_MS));
-  }
-
-  /**
-   * Checks the consistency of Alluxio metadata against the under storage for all files and
-   * directories in a given subtree.
-   *
-   * @param path the root of the subtree to check
-   * @param options method options
-   * @return a list of inconsistent files and directories
-   */
-  public static List<AlluxioURI> checkConsistency(AlluxioURI path, CheckConsistencyOptions options)
-      throws IOException {
-    FileSystemContext context = FileSystemContext.get();
-    FileSystemMasterClient client = context.acquireMasterClient();
-    try {
-      return client.checkConsistency(path, options);
-    } finally {
-      context.releaseMasterClient(client);
-    }
   }
 }

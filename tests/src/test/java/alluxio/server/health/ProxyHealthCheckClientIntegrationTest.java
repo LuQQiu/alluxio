@@ -12,8 +12,8 @@
 package alluxio.server.health;
 
 import alluxio.HealthCheckClient;
+import alluxio.conf.ServerConfiguration;
 import alluxio.testutils.LocalAlluxioClusterResource;
-import alluxio.PropertyKey;
 import alluxio.master.LocalAlluxioCluster;
 import alluxio.proxy.ProxyHealthCheckClient;
 import alluxio.retry.CountingRetry;
@@ -29,8 +29,7 @@ public class ProxyHealthCheckClientIntegrationTest extends BaseIntegrationTest {
 
   @Rule
   public LocalAlluxioClusterResource mLocalAlluxioClusterResource =
-          new LocalAlluxioClusterResource.Builder()
-                  .setProperty(PropertyKey.USER_RPC_RETRY_MAX_NUM_RETRY, 30).build();
+          new LocalAlluxioClusterResource.Builder().build();
 
   private LocalAlluxioCluster mLocalAlluxioCluster = null;
   private HealthCheckClient mHealthCheckClient;
@@ -39,7 +38,8 @@ public class ProxyHealthCheckClientIntegrationTest extends BaseIntegrationTest {
   public final void before() throws Exception {
     mLocalAlluxioCluster = mLocalAlluxioClusterResource.get();
     mHealthCheckClient = new ProxyHealthCheckClient(
-        NetworkAddressUtils.getBindAddress(NetworkAddressUtils.ServiceType.PROXY_WEB),
+        NetworkAddressUtils.getBindAddress(NetworkAddressUtils.ServiceType.PROXY_WEB,
+            ServerConfiguration.global()),
         () -> new CountingRetry(1));
   }
 

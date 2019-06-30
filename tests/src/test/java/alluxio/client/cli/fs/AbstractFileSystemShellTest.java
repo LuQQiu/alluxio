@@ -17,19 +17,25 @@ import static org.junit.Assert.assertTrue;
 
 import alluxio.AlluxioURI;
 import alluxio.cli.fs.FileSystemShell;
-import alluxio.client.cli.fs.AbstractShellIntegrationTest;
-import alluxio.client.ReadType;
-import alluxio.client.WriteType;
+import alluxio.cli.job.JobShell;
 import alluxio.client.file.FileInStream;
 import alluxio.client.file.FileSystem;
 import alluxio.client.file.FileSystemTestUtils;
-import alluxio.client.file.options.OpenFileOptions;
+import alluxio.conf.ServerConfiguration;
 import alluxio.exception.AlluxioException;
+import alluxio.grpc.OpenFilePOptions;
+import alluxio.grpc.ReadPType;
+import alluxio.grpc.WritePType;
 import alluxio.master.LocalAlluxioCluster;
-import alluxio.security.LoginUserTestUtils;
+import alluxio.master.LocalAlluxioJobCluster;
+import alluxio.master.job.JobMaster;
+import alluxio.security.group.GroupMappingService;
+import alluxio.util.CommonUtils;
+import alluxio.util.WaitForOptions;
 import alluxio.util.io.BufferUtils;
 import alluxio.util.io.PathUtils;
 
+import com.google.common.collect.Lists;
 import org.junit.After;
 import org.junit.Before;
 
@@ -38,6 +44,9 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
 
 import javax.annotation.Nullable;
 
@@ -48,17 +57,81 @@ public abstract class AbstractFileSystemShellTest extends AbstractShellIntegrati
   public LocalAlluxioCluster mLocalAlluxioCluster = null;
   public FileSystem mFileSystem = null;
   public FileSystemShell mFsShell = null;
+  protected JobMaster mJobMaster;
+  protected LocalAlluxioJobCluster mLocalAlluxioJobCluster = null;
+  protected JobShell mJobShell = null;
+
+  /*
+   * The user and group mappings for testing are:
+   *    alice -> alice,staff
+   *    bob   -> bob,staff
+   */
+  protected static final TestUser TEST_USER_1 =
+      new TestUser("alice", "alice,staff");
+  protected static final TestUser TEST_USER_2 =
+      new TestUser("bob", "bob,staff");
+
+  /**
+   * A simple structure to represent a user and its groups.
+   */
+  protected static final class TestUser {
+    private String mUser;
+    private String mGroup;
+
+    TestUser(String user, String group) {
+      mUser = user;
+      mGroup = group;
+    }
+
+    public String getUser() {
+      return mUser;
+    }
+
+    public String getGroup() {
+      return mGroup;
+    }
+  }
+
+  /**
+   * Test class implements {@link GroupMappingService} providing user-to-groups mapping.
+   */
+  public static class FakeUserGroupsMapping implements GroupMappingService {
+    private HashMap<String, String> mUserGroups = new HashMap<>();
+
+    /**
+     * Constructor of {@link FakeUserGroupsMapping} to put the user and groups in user-to-groups
+     * HashMap.
+     */
+    public FakeUserGroupsMapping() {
+      mUserGroups.put(TEST_USER_1.getUser(), TEST_USER_1.getGroup());
+      mUserGroups.put(TEST_USER_2.getUser(), TEST_USER_2.getGroup());
+    }
+
+    @Override
+    public List<String> getGroups(String user) throws IOException {
+      if (mUserGroups.containsKey(user)) {
+        return Lists.newArrayList(mUserGroups.get(user).split(","));
+      }
+      return new ArrayList<>();
+    }
+  }
 
   @Before
   public final void before() throws Exception {
     mLocalAlluxioCluster = mLocalAlluxioClusterResource.get();
+    mLocalAlluxioJobCluster = new LocalAlluxioJobCluster();
+    mLocalAlluxioJobCluster.start();
     mFileSystem = mLocalAlluxioCluster.getClient();
-    mFsShell = new FileSystemShell();
+    mJobMaster = mLocalAlluxioJobCluster.getMaster().getJobMaster();
+    mJobShell = new alluxio.cli.job.JobShell(ServerConfiguration.global());
+    mFsShell = new FileSystemShell(ServerConfiguration.global());
   }
 
   @After
   public final void after() throws Exception {
     mFsShell.close();
+    mLocalAlluxioJobCluster.stop();
+    mJobShell.close();
   }
 
   /**
@@ -67,7 +140,8 @@ public abstract class AbstractFileSystemShellTest extends AbstractShellIntegrati
    * @param bytes file size
    */
   protected void copyToLocalWithBytes(int bytes) throws Exception {
-    FileSystemTestUtils.createByteFile(mFileSystem, "/testFile", WriteType.MUST_CACHE, bytes);
+    FileSystemTestUtils.createByteFile(mFileSystem, "/testFile", WritePType.MUST_CACHE,
+        bytes);
     mFsShell.run("copyToLocal", "/testFile",
         mLocalAlluxioCluster.getAlluxioHome() + "/testFile");
     assertEquals(getCommandOutput(new String[] {"copyToLocal", "/testFile",
@@ -184,22 +258,6 @@ public abstract class AbstractFileSystemShellTest extends AbstractShellIntegrati
   }
 
   /**
-   * Resets the singleton {@link alluxio.security.LoginUser} to null.
-   */
-  protected void clearLoginUser() {
-    LoginUserTestUtils.resetLoginUser();
-  }
-
-  /**
-   * Clears the {@link alluxio.security.LoginUser} and logs in with new user.
-   *
-   * @param user the new user
-   */
-  protected void clearAndLogin(String user) throws IOException {
-    LoginUserTestUtils.resetLoginUser(user);
-  }
-
-  /**
    * Reads content from the file that the uri points to.
    *
    * @param uri the path of the file to read
@@ -207,8 +265,8 @@ public abstract class AbstractFileSystemShellTest extends AbstractShellIntegrati
    * @return the content that has been read
    */
   protected byte[] readContent(AlluxioURI uri, int length) throws IOException, AlluxioException {
-    try (FileInStream tfis = mFileSystem
-        .openFile(uri, OpenFileOptions.defaults().setReadType(ReadType.NO_CACHE))) {
+    try (FileInStream tfis = mFileSystem.openFile(uri,
+        OpenFilePOptions.newBuilder().setReadType(ReadPType.NO_CACHE).build())) {
       byte[] read = new byte[length];
       tfis.read(read);
       return read;
@@ -246,7 +304,15 @@ public abstract class AbstractFileSystemShellTest extends AbstractShellIntegrati
    */
   protected void checkFilePersisted(AlluxioURI uri, int size) throws Exception {
     assertTrue(mFileSystem.getStatus(uri).isPersisted());
-    mFileSystem.free(uri);
+    CommonUtils.waitFor("file to be completely freed", () -> {
+      try {
+        // Call free inside the loop in case a worker reports blocks after the call to free.
+        mFileSystem.free(uri);
+        return mFileSystem.getStatus(uri).getInAlluxioPercentage() == 0;
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+    }, WaitForOptions.defaults().setTimeoutMs(10000));
     try (FileInStream tfis = mFileSystem.openFile(uri)) {
       byte[] actual = new byte[size];
       tfis.read(actual);

@@ -11,15 +11,20 @@
 
 package alluxio.client.fs;
 
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+
 import alluxio.AlluxioURI;
-import alluxio.Configuration;
-import alluxio.PropertyKey;
-import alluxio.client.WriteType;
+import alluxio.client.file.FileSystemTestUtils;
+import alluxio.conf.ServerConfiguration;
+import alluxio.conf.PropertyKey;
 import alluxio.client.file.FileOutStream;
 import alluxio.client.file.FileSystem;
 import alluxio.client.file.FileSystemUtils;
-import alluxio.client.file.options.CreateFileOptions;
 import alluxio.exception.AlluxioException;
+import alluxio.grpc.CreateFilePOptions;
+import alluxio.grpc.WritePType;
+import alluxio.master.LocalAlluxioJobCluster;
 import alluxio.testutils.BaseIntegrationTest;
 import alluxio.testutils.LocalAlluxioClusterResource;
 import alluxio.util.CommonUtils;
@@ -34,6 +39,7 @@ import org.junit.rules.ExpectedException;
 
 import java.io.IOException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Tests for {@link alluxio.client.file.FileSystemUtils}.
@@ -45,7 +51,9 @@ public class FileSystemUtilsIntegrationTest extends BaseIntegrationTest {
       new LocalAlluxioClusterResource.Builder()
           .setProperty(PropertyKey.USER_FILE_BUFFER_BYTES, USER_QUOTA_UNIT_BYTES)
           .build();
-  private static CreateFileOptions sWriteBoth;
+
+  public static LocalAlluxioJobCluster sJobCluster;
+  private static CreateFilePOptions sWriteBoth;
   private static FileSystem sFileSystem = null;
 
   @Rule
@@ -53,8 +61,11 @@ public class FileSystemUtilsIntegrationTest extends BaseIntegrationTest {
 
   @BeforeClass
   public static void beforeClass() throws Exception {
+    sJobCluster = new LocalAlluxioJobCluster();
+    sJobCluster.start();
     sFileSystem = sLocalAlluxioClusterResource.get().getClient();
-    sWriteBoth = CreateFileOptions.defaults().setWriteType(WriteType.CACHE_THROUGH);
+    sWriteBoth = CreateFilePOptions.newBuilder().setWriteType(WritePType.CACHE_THROUGH)
+        .setRecursive(true).build();
   }
 
   @Test
@@ -69,14 +80,14 @@ public class FileSystemUtilsIntegrationTest extends BaseIntegrationTest {
         try {
           FileOutStream os = sFileSystem.createFile(uri, sWriteBoth);
           boolean completed = sFileSystem.getStatus(uri).isCompleted();
-          Assert.assertFalse(completed);
+          assertFalse(completed);
           for (int i = 0; i < numWrites; i++) {
             os.write(42);
             CommonUtils.sleepMs(200);
           }
           os.close();
           completed = sFileSystem.getStatus(uri).isCompleted();
-          Assert.assertTrue(completed);
+          assertTrue(completed);
         } catch (Exception e) {
           Assert.fail(e.getMessage());
         }
@@ -88,9 +99,9 @@ public class FileSystemUtilsIntegrationTest extends BaseIntegrationTest {
       public void run() {
         try {
           boolean completed = FileSystemUtils.waitCompleted(sFileSystem, uri);
-          Assert.assertTrue(completed);
+          assertTrue(completed);
           completed = sFileSystem.getStatus(uri).isCompleted();
-          Assert.assertTrue(completed);
+          assertTrue(completed);
         } catch (Exception e) {
           e.printStackTrace();
           Assert.fail(e.getMessage());
@@ -120,7 +131,7 @@ public class FileSystemUtilsIntegrationTest extends BaseIntegrationTest {
         try {
           FileOutStream os = sFileSystem.createFile(uri, sWriteBoth);
           boolean completed = sFileSystem.getStatus(uri).isCompleted();
-          Assert.assertFalse(completed);
+          assertFalse(completed);
           // four writes that will take > 600ms due to the sleeps
           for (int i = 0; i < numWrites; i++) {
             os.write(42);
@@ -128,7 +139,7 @@ public class FileSystemUtilsIntegrationTest extends BaseIntegrationTest {
           }
           os.close();
           completed = sFileSystem.getStatus(uri).isCompleted();
-          Assert.assertTrue(completed);
+          assertTrue(completed);
         } catch (Exception e) {
           Assert.fail(e.getMessage());
         }
@@ -141,17 +152,17 @@ public class FileSystemUtilsIntegrationTest extends BaseIntegrationTest {
         try {
           // set the slow default polling period to a more sensible value, in order
           // to speed up the tests artificial waiting times
-          String original = Configuration.get(PropertyKey.USER_FILE_WAITCOMPLETED_POLL_MS);
-          Configuration.set(PropertyKey.USER_FILE_WAITCOMPLETED_POLL_MS, "100");
+          String original = ServerConfiguration.get(PropertyKey.USER_FILE_WAITCOMPLETED_POLL_MS);
+          ServerConfiguration.set(PropertyKey.USER_FILE_WAITCOMPLETED_POLL_MS, "100");
           try {
             // The write will take at most 600ms I am waiting for at most 400ms - epsilon.
             boolean completed = FileSystemUtils.waitCompleted(sFileSystem, uri, 300,
                 TimeUnit.MILLISECONDS);
-            Assert.assertFalse(completed);
+            assertFalse(completed);
             completed = sFileSystem.getStatus(uri).isCompleted();
-            Assert.assertFalse(completed);
+            assertFalse(completed);
           } finally {
-            Configuration.set(PropertyKey.USER_FILE_WAITCOMPLETED_POLL_MS, original);
+            ServerConfiguration.set(PropertyKey.USER_FILE_WAITCOMPLETED_POLL_MS, original);
           }
         } catch (Exception e) {
           e.printStackTrace();
@@ -168,5 +179,25 @@ public class FileSystemUtilsIntegrationTest extends BaseIntegrationTest {
 
     waitingThread.join();
     writingThread.join();
+  }
+
+  @Test
+  public void waitPersistTimeoutTest() throws Exception {
+    String path = PathUtils.uniqPath();
+    AlluxioURI alluxioPath = new AlluxioURI(path);
+    FileSystemTestUtils.createByteFile(sFileSystem, path, WritePType.MUST_CACHE, 4096);
+    assertFalse("File cannot yet be persisted", sFileSystem.getStatus(alluxioPath).isPersisted());
+    mThrown.expect(TimeoutException.class);
+    FileSystemUtils.persistAndWait(sFileSystem, alluxioPath, 0, 1); // 1ms timeout
+  }
+
+  @Test
+  public void waitPersistIndefiniteTimeoutTest() throws Exception {
+    String path = PathUtils.uniqPath();
+    AlluxioURI alluxioPath = new AlluxioURI(path);
+    FileSystemTestUtils.createByteFile(sFileSystem, path, WritePType.MUST_CACHE, 4096);
+    assertFalse("File cannot yet be persisted", sFileSystem.getStatus(alluxioPath).isPersisted());
+    FileSystemUtils.persistAndWait(sFileSystem, alluxioPath, 5000, -1);
+    assertTrue("File must be persisted", sFileSystem.getStatus(alluxioPath).isPersisted());
   }
 }

@@ -11,7 +11,7 @@
 
 package alluxio.client.rest;
 
-import alluxio.PropertyKey;
+import alluxio.conf.PropertyKey;
 import alluxio.security.authentication.AuthType;
 import alluxio.testutils.BaseIntegrationTest;
 import alluxio.testutils.LocalAlluxioClusterResource;
@@ -34,7 +34,6 @@ public abstract class RestApiTest extends BaseIntegrationTest {
   public LocalAlluxioClusterResource mResource = new LocalAlluxioClusterResource.Builder()
       .setProperty(PropertyKey.SECURITY_AUTHORIZATION_PERMISSION_ENABLED, "false")
       .setProperty(PropertyKey.SECURITY_AUTHENTICATION_TYPE, AuthType.NOSASL.getAuthName())
-      .setProperty(PropertyKey.MASTER_STARTUP_CONSISTENCY_CHECK_ENABLED, "true")
       .build();
 
   protected String getEndpoint(String suffix) {

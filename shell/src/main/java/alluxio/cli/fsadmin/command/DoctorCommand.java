@@ -14,6 +14,8 @@ package alluxio.cli.fsadmin.command;
 import alluxio.cli.CommandUtils;
 import alluxio.cli.fsadmin.FileSystemAdminShellUtils;
 import alluxio.cli.fsadmin.doctor.ConfigurationCommand;
+import alluxio.cli.fsadmin.doctor.StorageCommand;
+import alluxio.conf.AlluxioConfiguration;
 import alluxio.exception.status.InvalidArgumentException;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -39,13 +41,18 @@ public final class DoctorCommand extends AbstractFsAdminCommand {
   enum Command {
     ALL, // Show all errors/warnings
     CONFIGURATION, // Show server-side configuration errors/warnings
+    STORAGE, // Show worker lost storage warnings
   }
+
+  private final AlluxioConfiguration mConf;
 
   /**
    * @param context fsadmin command context
+   * @param alluxioConf Alluxio configuration
    */
-  public DoctorCommand(Context context) {
+  public DoctorCommand(Context context, AlluxioConfiguration alluxioConf) {
     super(context);
+    mConf = alluxioConf;
   }
 
   @Override
@@ -63,7 +70,7 @@ public final class DoctorCommand extends AbstractFsAdminCommand {
       return 0;
     }
 
-    FileSystemAdminShellUtils.checkMasterClientService();
+    FileSystemAdminShellUtils.checkMasterClientService(mConf);
 
     // Get the doctor category
     Command command = Command.ALL;
@@ -72,6 +79,9 @@ public final class DoctorCommand extends AbstractFsAdminCommand {
         case "configuration":
           command = Command.CONFIGURATION;
           break;
+        case "storage" :
+          command = Command.STORAGE;
+          break;
         default:
           System.out.println(getUsage());
           System.out.println(getDescription());
@@ -79,16 +89,15 @@ public final class DoctorCommand extends AbstractFsAdminCommand {
       }
     }
 
-    switch (command) {
-      case ALL:// intended to fall through
-        // TODO(lu) add other Alluxio errors and warnings and separate from CONFIGURATION
-      case CONFIGURATION:
-        ConfigurationCommand configurationCommand =
-            new ConfigurationCommand(mMetaClient, System.out);
-        configurationCommand.run();
-        break;
-      default:
-        break;
+    if (command.equals(Command.CONFIGURATION) || command.equals(Command.ALL)) {
+      ConfigurationCommand configurationCommand =
+          new ConfigurationCommand(mMetaClient, System.out);
+      configurationCommand.run();
+    }
+
+    if (command.equals(Command.STORAGE) || command.equals(Command.ALL)) {
+      StorageCommand storageCommand = new StorageCommand(mBlockClient, System.out);
+      storageCommand.run();
     }
     return 0;
   }
@@ -120,7 +129,8 @@ public final class DoctorCommand extends AbstractFsAdminCommand {
         + "Where [category] is an optional argument. If no arguments are passed in, "
         + "all categories of errors/warnings will be printed out.\n"
         + "[category] can be one of the following:\n"
-        + "    configuration    server-side configuration errors/warnings\n";
+        + "    configuration    server-side configuration errors/warnings\n"
+        + "    storage          worker lost storage warnings\n";
   }
 
   @Override

@@ -15,9 +15,8 @@ import alluxio.AlluxioURI;
 import alluxio.Constants;
 import alluxio.cli.CommandUtils;
 import alluxio.client.file.FileInStream;
-import alluxio.client.file.FileSystem;
+import alluxio.client.file.FileSystemContext;
 import alluxio.client.file.URIStatus;
-import alluxio.client.file.options.OpenFileOptions;
 import alluxio.exception.AlluxioException;
 import alluxio.exception.ExceptionMessage;
 import alluxio.exception.status.InvalidArgumentException;
@@ -44,10 +43,10 @@ public final class TailCommand extends AbstractFileSystemCommand {
       .build();
 
   /**
-   * @param fs the filesystem of Alluxio
+   * @param fsContext the filesystem of Alluxio
    */
-  public TailCommand(FileSystem fs) {
-    super(fs);
+  public TailCommand(FileSystemContext fsContext) {
+    super(fsContext);
   }
 
   @Override
@@ -68,8 +67,7 @@ public final class TailCommand extends AbstractFileSystemCommand {
     if (status.isFolder()) {
       throw new IOException(ExceptionMessage.PATH_MUST_BE_FILE.getMessage(path));
     }
-    OpenFileOptions options = OpenFileOptions.defaults();
-    try (FileInStream is = mFileSystem.openFile(path, options)) {
+    try (FileInStream is = mFileSystem.openFile(path)) {
       byte[] buf = new byte[numOfBytes];
       long bytesToRead;
       if (status.getLength() > numOfBytes) {

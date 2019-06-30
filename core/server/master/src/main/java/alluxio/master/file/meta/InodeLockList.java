@@ -11,204 +11,205 @@
 
 package alluxio.master.file.meta;
 
-import alluxio.exception.InvalidPathException;
-
-import com.google.common.collect.Lists;
+import alluxio.concurrent.LockMode;
 
 import java.util.ArrayList;
 import java.util.List;
 
-import javax.annotation.concurrent.ThreadSafe;
+import javax.annotation.concurrent.NotThreadSafe;
 
 /**
- * Manages the locks for a list of {@link Inode}.
+ * Represents a locked path within the inode tree. Both inodes and edges are locked along the path.
+ * The path may start from either an edge or an inode.
+ *
+ * A lock list always contains some number of read locks (possibly zero) followed by some number of
+ * write locks (possibly zero).
+ *
+ * This class uses list notation to describe lock lists. Nodes are single letters, edges are
+ * parentName->childName, and write-locks are indicated with '*'. For example, a lock list for
+ * /a/b/c/d where the c->d edge is the first write-locked element:
+ *
+ * [->/, /, /->a, a, a->b, b, b->c, c, c->d*, d*]
+ *
+ * The "->/" at the start is a pseudo-edge used to allow the WRITE_EDGE lock mode to be applied to
+ * the root. This edge can only be locked by calling lockRootEdge.
+ *
+ * Not all lock lists need to start from the root. Another example list could be
+ *
+ * [b, b->c, c->d*, d*]
+ *
+ * This allows us to create composite lock lists out of a "normal" lock list starting from the root,
+ * plus a non-root lock list.
  */
-@ThreadSafe
-public class InodeLockList implements AutoCloseable {
-  private static final int INITIAL_CAPACITY = 4;
-  protected List<Inode<?>> mInodes;
-  protected List<InodeTree.LockMode> mLockModes;
-
+@NotThreadSafe
+public interface InodeLockList extends AutoCloseable {
   /**
-   * Creates a new instance of {@link InodeLockList}.
+   * Locks the root edge in the specified mode.
+   *
+   * The lock list must be empty to call this method.
+   *
+   * @param mode the mode to lock in
    */
-  public InodeLockList() {
-    mInodes = new ArrayList<>(INITIAL_CAPACITY);
-    mLockModes = new ArrayList<>(INITIAL_CAPACITY);
-  }
+  void lockRootEdge(LockMode mode);
 
   /**
-   * Locks the given inode in read mode, and adds it to this lock list. This call should only be
-   * used when locking the root or an inode by id and not path or parent.
+   * Locks the given inode and adds it to the lock list. This method does *not* check that the inode
+   * is still a child of the previous inode, or that the inode still exists. This method should only
+   * be called when the edge leading to the inode is locked.
+   *
+   * Example
+   * Starting from [a, a->b]
+   *
+   * lockInode(b, LockMode.READ) results in [a, a->b, b]
+   * lockInode(b, LockMode.WRITE) results in [a, a->b, b*]
    *
    * @param inode the inode to lock
+   * @param mode the mode to lock in
    */
-  public synchronized void lockRead(Inode<?> inode) {
-    inode.lockRead();
-    mInodes.add(inode);
-    mLockModes.add(InodeTree.LockMode.READ);
-  }
+  void lockInode(Inode inode, LockMode mode);
 
   /**
-   * Locks the given inode in read mode, and adds it to this lock list. This method ensures the
-   * parent is the expected parent inode.
+   * Locks an edge leading out of the last inode in the list.
    *
-   * NOTE: This method assumes that the inode path to the parent has been read locked.
+   * Example
+   * Starting from [a, a->b, b]
    *
-   * @param inode the inode to lock
-   * @param parent the expected parent inode
-   * @throws InvalidPathException if the inode is no long consistent with the caller's expectations
+   * lockEdge(b, c, LockMode.READ) results in [a, a->b, b, b->c]
+   * lockEdge(b, c, LockMode.WRITE) results in [a, a->b, b, b->c*]
+   *
+   * @param inode the parent inode of the edge
+   * @param childName the child name of the edge
+   * @param mode the mode to lock in
    */
-  public synchronized void lockReadAndCheckParent(Inode<?> inode, Inode parent)
-      throws InvalidPathException {
-    inode.lockReadAndCheckParent(parent);
-    mInodes.add(inode);
-    mLockModes.add(InodeTree.LockMode.READ);
-  }
+  void lockEdge(Inode inode, String childName, LockMode mode);
 
   /**
-   * Locks the given inode in read mode, and adds it to this lock list. This method ensures the
-   * parent is the expected parent inode, and the name of the inode is the expected name.
+   * Unlocks the last locked inode.
    *
-   * NOTE: This method assumes that the inode path to the parent has been read locked.
+   * Example
+   * Starting from [a, a->b, b]
    *
-   * @param inode the inode to lock
-   * @param parent the expected parent inode
-   * @param name the expected name of the inode to be locked
-   * @throws InvalidPathException if the inode is not consistent with the caller's expectations
+   * unlockLastInode() results in [a, a->b]
    */
-  public synchronized void lockReadAndCheckNameAndParent(Inode<?> inode, Inode parent, String name)
-      throws InvalidPathException {
-    inode.lockReadAndCheckNameAndParent(parent, name);
-    mInodes.add(inode);
-    mLockModes.add(InodeTree.LockMode.READ);
-  }
+  void unlockLastInode();
 
   /**
-   * Unlocks the last inode that was locked.
+   * Unlocks the last locked edge.
+   *
+   * Example
+   * Starting from [a, a->b]
+   *
+   * unlockLastEdge results in [a]
    */
-  public synchronized void unlockLast() {
-    if (mInodes.isEmpty()) {
-      return;
-    }
-    Inode<?> inode = mInodes.remove(mInodes.size() - 1);
-    InodeTree.LockMode lockMode = mLockModes.remove(mLockModes.size() - 1);
-    if (lockMode == InodeTree.LockMode.READ) {
-      inode.unlockRead();
-    } else {
-      inode.unlockWrite();
-    }
-  }
+  void unlockLastEdge();
 
   /**
-   * Downgrades the last inode that was locked, if the inode was previously WRITE locked. If the
-   * inode was previously READ locked, no additional locking will occur.
+   * Downgrades the last inode from a write lock to a read lock. The read lock is acquired before
+   * releasing the write lock.
+   *
+   * Example
+   * Starting from [a, a->b, b*]
+   *
+   * downgradeLastInode() results in [a, a->b, b]
+   *
+   * If the last inode is not the only write-locked inode, no downgrade occurs.
    */
-  public synchronized void downgradeLast() {
-    if (mInodes.isEmpty()) {
-      return;
-    }
-    if (mLockModes.get(mLockModes.size() - 1) != InodeTree.LockMode.READ) {
-      // The last inode was previously WRITE locked, so downgrade the lock.
-      Inode<?> inode = mInodes.get(mInodes.size() - 1);
-      inode.lockRead();
-      inode.unlockWrite();
-      // Update the last lock mode to READ
-      mLockModes.remove(mLockModes.size() - 1);
-      mLockModes.add(InodeTree.LockMode.READ);
-    }
-  }
+  void downgradeLastInode();
 
   /**
-   * Locks the given inode in write mode, and adds it to this lock list. This call should only be
-   * used when locking the root or an inode by id and not path or parent.
+   * Downgrades the last edge lock in the lock list from WRITE lock to READ lock.
    *
-   * @param inode the inode to lock
+   * Example
+   * Starting from [a, a->b*]
+   *
+   * downgradeLastEdge() results in [a, a->b]
    */
-  public synchronized void lockWrite(Inode<?> inode) {
-    inode.lockWrite();
-    mInodes.add(inode);
-    mLockModes.add(InodeTree.LockMode.WRITE);
-  }
+  void downgradeLastEdge();
 
   /**
-   * Locks the given inode in write mode, and adds it to this lock list. This method ensures the
-   * parent is the expected parent inode.
+   * Leapfrogs the final edge write lock forward, reducing the lock list's write-locked scope.
    *
-   * NOTE: This method assumes that the inode path to the parent has been read locked.
+   * Example
+   * Starting from [a, a->b*]
    *
-   * @param inode the inode to lock
-   * @param parent the expected parent inode
-   * @throws InvalidPathException if the inode is not consistent with the caller's expectations
+   * pushWriteLockedEdge(b, c) results in [a, a->b, b, b->c*]
+   *
+   * The read lock on a->b is acquired before releasing the write lock. This ensures that no other
+   * thread can take the write lock before the read lock is acquired.
+   *
+   * If this is a composite lock list and the final write lock is part of the base lock list, the
+   * new locks will be acquired but no downgrade will occur.
+   *
+   * @param inode the inode to add to the lock list
+   * @param childName the child name for the edge to add to the lock list
    */
-  public synchronized void lockWriteAndCheckParent(Inode<?> inode, Inode parent)
-      throws InvalidPathException {
-    inode.lockWriteAndCheckParent(parent);
-    mInodes.add(inode);
-    mLockModes.add(InodeTree.LockMode.WRITE);
-  }
+  void pushWriteLockedEdge(Inode inode, String childName);
 
   /**
-   * Locks the given inode in write mode, and adds it to this lock list. This method ensures the
-   * parent is the expected parent inode, and the name of the inode is the expected name.
+   * Downgrades from edge write-locking to inode write-locking. This reduces the scope of the write
+   * lock by pushing it forward one entry.
    *
-   * NOTE: This method assumes that the inode path to the parent has been read locked.
+   * Example
+   * Starting from [a, a->b*]
    *
-   * @param inode the inode to lock
-   * @param parent the expected parent inode
-   * @param name the expected name of the inode to be locked
-   * @throws InvalidPathException if the inode is not consistent with the caller's expectations
+   * downgradeEdgeToInode(b, LockMode.READ) results in [a, a->b, b]
+   * downgradeEdgeToInode(b, LockMode.WRITE) results in [a, a->b, b*]
+   *
+   * The read lock on a->b is acquired before releasing the write lock. This ensures that no other
+   * thread can take the write lock before the read lock is acquired.
+   *
+   * @param inode the next inode in the lock list
+   * @param mode the mode to downgrade to
    */
-  public synchronized void lockWriteAndCheckNameAndParent(Inode<?> inode, Inode parent, String name)
-      throws InvalidPathException {
-    inode.lockWriteAndCheckNameAndParent(parent, name);
-    mInodes.add(inode);
-    mLockModes.add(InodeTree.LockMode.WRITE);
-  }
+  void downgradeEdgeToInode(Inode inode, LockMode mode);
 
   /**
-   * @return a copy of the the list of inodes locked in this lock list, in order of when
-   * the inodes were locked
+   * @return {@link LockMode#WRITE} if the last entry in the list is write-locked, otherwise
+   *         {@link LockMode#READ}
    */
-  // TODO(david): change this API to not return a copy
-  public synchronized List<Inode<?>> getInodes() {
-    return Lists.newArrayList(mInodes);
+  LockMode getLockMode();
+
+  /**
+   * @return a copy of all locked inodes
+   */
+  List<Inode> getLockedInodes();
+
+  /**
+   * @return a copy of all locked inodes
+   */
+  default List<InodeView> getLockedInodeViews() {
+    return new ArrayList<>(getLockedInodes());
   }
 
   /**
    * @param index the index of the list
    * @return the inode at the specified index
    */
-  public synchronized Inode<?> get(int index) {
-    return mInodes.get(index);
-  }
+  Inode get(int index);
 
   /**
-   * @return the size of the list
+   * @return the size of the list in terms of locked inodes
    */
-  public synchronized int size() {
-    return mInodes.size();
-  }
+  int numInodes();
+
+  /**
+   * @return whether this lock list ends in an inode (as opposed to an edge)
+   */
+  boolean endsInInode();
 
   /**
    * @return true if the locklist is empty
    */
-  public synchronized boolean isEmpty() {
-    return mInodes.isEmpty();
-  }
+  boolean isEmpty();
 
+  /**
+   * @return the inode lock manager for this lock list
+   */
+  InodeLockManager getInodeLockManager();
+
+  /**
+   * Closes the lock list, releasing all locks.
+   */
   @Override
-  public synchronized void close() {
-    for (int i = mInodes.size() - 1; i >= 0; i--) {
-      Inode<?> inode = mInodes.get(i);
-      InodeTree.LockMode lockMode = mLockModes.get(i);
-      if (lockMode == InodeTree.LockMode.READ) {
-        inode.unlockRead();
-      } else {
-        inode.unlockWrite();
-      }
-    }
-    mInodes.clear();
-    mLockModes.clear();
-  }
+  void close();
 }

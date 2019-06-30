@@ -52,7 +52,7 @@ public class BlockMetadataManagerView {
    */
   private final List<StorageTierView> mTierViews = new ArrayList<>();
 
-  /** A list of pinned inodes. */
+  /** A list of pinned inodes, including inodes which are scheduled for async persist. */
   private final Set<Long> mPinnedInodes = new HashSet<>();
 
   /** Indices of locks that are being used. */
@@ -97,14 +97,13 @@ public class BlockMetadataManagerView {
   }
 
   /**
-   * Tests if the block is pinned.
+   * Tests if the block is pinned either explicitly or because it is scheduled for async persist.
    *
    * @param blockId to be tested
    * @return boolean, true if block is pinned
    */
   public boolean isBlockPinned(long blockId) {
-    return mPinnedInodes.contains(
-        BlockId.createBlockId(BlockId.getContainerId(blockId), BlockId.getMaxSequenceNumber()));
+    return mPinnedInodes.contains(BlockId.getFileId(blockId));
   }
 
   /**

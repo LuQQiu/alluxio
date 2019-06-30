@@ -11,27 +11,28 @@
 
 package alluxio.client.file;
 
-import alluxio.Configuration;
-import alluxio.PropertyKey;
+import alluxio.AlluxioURI;
 import alluxio.Seekable;
 import alluxio.annotation.PublicApi;
 import alluxio.client.BoundedStream;
 import alluxio.client.PositionedReadable;
+import alluxio.client.ReadType;
 import alluxio.client.block.AlluxioBlockStore;
 import alluxio.client.block.stream.BlockInStream;
+import alluxio.client.block.stream.BlockWorkerClient;
 import alluxio.client.file.options.InStreamOptions;
+import alluxio.conf.AlluxioConfiguration;
+import alluxio.conf.PropertyKey;
 import alluxio.exception.PreconditionMessage;
 import alluxio.exception.status.DeadlineExceededException;
 import alluxio.exception.status.UnavailableException;
-import alluxio.network.netty.NettyRPC;
-import alluxio.network.netty.NettyRPCContext;
-import alluxio.proto.dataserver.Protocol;
+import alluxio.grpc.AsyncCacheRequest;
 import alluxio.retry.CountingRetry;
-import alluxio.util.proto.ProtoMessage;
+import alluxio.util.CommonUtils;
 import alluxio.wire.WorkerNetAddress;
 
 import com.google.common.base.Preconditions;
-import io.netty.channel.Channel;
+import com.google.common.io.Closer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -68,13 +69,13 @@ import javax.annotation.concurrent.NotThreadSafe;
 public class FileInStream extends InputStream implements BoundedStream, PositionedReadable,
     Seekable {
   private static final Logger LOG = LoggerFactory.getLogger(FileInStream.class);
-  private static final int MAX_WORKERS_TO_RETRY =
-      Configuration.getInt(PropertyKey.USER_BLOCK_WORKER_CLIENT_READ_RETRY);
 
+  private final int mBlockWorkerClientReadRetry;
   private final URIStatus mStatus;
   private final InStreamOptions mOptions;
   private final AlluxioBlockStore mBlockStore;
   private final FileSystemContext mContext;
+  private final boolean mPassiveCachingEnabled;
 
   /* Convenience values derived from mStatus, use these instead of querying mStatus. */
   /** Length of the file in bytes. */
@@ -88,20 +89,44 @@ public class FileInStream extends InputStream implements BoundedStream, Position
   /** Underlying block stream, null if a position change has invalidated the previous stream. */
   private BlockInStream mBlockInStream;
 
+  /** Cached block stream for the positioned read API. */
+  private BlockInStream mCachedPositionedReadStream;
+
+  /** The last block id for which async cache was triggered. */
+  private long mLastBlockIdCached;
+
   /** A map of worker addresses to the most recent epoch time when client fails to read from it. */
   private Map<WorkerNetAddress, Long> mFailedWorkers = new HashMap<>();
 
-  protected FileInStream(URIStatus status, InStreamOptions options, FileSystemContext context) {
-    mStatus = status;
-    mOptions = options;
-    mBlockStore = AlluxioBlockStore.create(context);
+  private Closer mCloser;
+
+  protected FileInStream(URIStatus status, InStreamOptions options, FileSystemContext context)
+      throws IOException {
+    mCloser = Closer.create();
+    // Acquire a resource to block FileSystemContext reinitialization, this needs to be done before
+    // using mContext.
+    // The resource will be released in close().
     mContext = context;
-
-    mLength = mStatus.getLength();
-    mBlockSize = mStatus.getBlockSizeBytes();
-
-    mPosition = 0;
-    mBlockInStream = null;
+    mCloser.register(mContext.blockReinit());
+    try {
+      AlluxioConfiguration conf = mContext.getPathConf(new AlluxioURI(status.getPath()));
+      mPassiveCachingEnabled = conf.getBoolean(PropertyKey.USER_FILE_PASSIVE_CACHE_ENABLED);
+      mBlockWorkerClientReadRetry = conf.getInt(PropertyKey.USER_BLOCK_WORKER_CLIENT_READ_RETRY);
+      mStatus = status;
+      mOptions = options;
+      mBlockStore = AlluxioBlockStore.create(mContext);
+      mLength = mStatus.getLength();
+      mBlockSize = mStatus.getBlockSizeBytes();
+      mPosition = 0;
+      mBlockInStream = null;
+      mCachedPositionedReadStream = null;
+      mLastBlockIdCached = 0;
+    } catch (Throwable t) {
+      // If there is any exception, including RuntimeException such as thrown by conf.getBoolean,
+      // release the acquired resource, otherwise, FileSystemContext reinitialization will be
+      // blocked forever.
+      throw CommonUtils.closeAndRethrow(mCloser, t);
+    }
   }
 
   /* Input Stream methods */
@@ -110,11 +135,11 @@ public class FileInStream extends InputStream implements BoundedStream, Position
     if (mPosition == mLength) { // at end of file
       return -1;
     }
-    CountingRetry retry = new CountingRetry(MAX_WORKERS_TO_RETRY);
+    CountingRetry retry = new CountingRetry(mBlockWorkerClientReadRetry);
     IOException lastException = null;
     while (retry.attempt()) {
-      updateStream();
       try {
+        updateStream();
         int result = mBlockInStream.read();
         if (result != -1) {
           mPosition++;
@@ -122,8 +147,10 @@ public class FileInStream extends InputStream implements BoundedStream, Position
         return result;
       } catch (UnavailableException | DeadlineExceededException | ConnectException e) {
         lastException = e;
-        handleRetryableException(mBlockInStream, e);
-        mBlockInStream = null;
+        if (mBlockInStream != null) {
+          handleRetryableException(mBlockInStream, e);
+          mBlockInStream = null;
+        }
       }
     }
     throw lastException;
@@ -148,11 +175,11 @@ public class FileInStream extends InputStream implements BoundedStream, Position
 
     int bytesLeft = len;
     int currentOffset = off;
-    CountingRetry retry = new CountingRetry(MAX_WORKERS_TO_RETRY);
+    CountingRetry retry = new CountingRetry(mBlockWorkerClientReadRetry);
     IOException lastException = null;
     while (bytesLeft > 0 && mPosition != mLength && retry.attempt()) {
-      updateStream();
       try {
+        updateStream();
         int bytesRead = mBlockInStream.read(b, currentOffset, bytesLeft);
         if (bytesRead > 0) {
           bytesLeft -= bytesRead;
@@ -163,8 +190,10 @@ public class FileInStream extends InputStream implements BoundedStream, Position
         lastException = null;
       } catch (UnavailableException | ConnectException | DeadlineExceededException e) {
         lastException = e;
-        handleRetryableException(mBlockInStream, e);
-        mBlockInStream = null;
+        if (mBlockInStream != null) {
+          handleRetryableException(mBlockInStream, e);
+          mBlockInStream = null;
+        }
       }
     }
     if (lastException != null) {
@@ -187,6 +216,8 @@ public class FileInStream extends InputStream implements BoundedStream, Position
   @Override
   public void close() throws IOException {
     closeBlockInStream(mBlockInStream);
+    closeBlockInStream(mCachedPositionedReadStream);
+    mCloser.close();
   }
 
   /* Bounded Stream methods */
@@ -207,30 +238,38 @@ public class FileInStream extends InputStream implements BoundedStream, Position
     }
 
     int lenCopy = len;
-    CountingRetry retry = new CountingRetry(MAX_WORKERS_TO_RETRY);
+    CountingRetry retry = new CountingRetry(mBlockWorkerClientReadRetry);
     IOException lastException = null;
     while (len > 0 && retry.attempt()) {
       if (pos >= mLength) {
         break;
       }
       long blockId = mStatus.getBlockIds().get(Math.toIntExact(pos / mBlockSize));
-      BlockInStream stream = mBlockStore.getInStream(blockId, mOptions, mFailedWorkers);
       try {
+        // Positioned read may be called multiple times for the same block. Caching the in-stream
+        // allows us to avoid the block store rpc to open a new stream for each call.
+        if (mCachedPositionedReadStream == null) {
+          mCachedPositionedReadStream = mBlockStore.getInStream(blockId, mOptions, mFailedWorkers);
+        } else if (mCachedPositionedReadStream.getId() != blockId) {
+          closeBlockInStream(mCachedPositionedReadStream);
+          mCachedPositionedReadStream = mBlockStore.getInStream(blockId, mOptions, mFailedWorkers);
+        }
         long offset = pos % mBlockSize;
-        int bytesRead =
-            stream.positionedRead(offset, b, off, (int) Math.min(mBlockSize - offset, len));
+        int bytesRead = mCachedPositionedReadStream.positionedRead(offset, b, off,
+            (int) Math.min(mBlockSize - offset, len));
         Preconditions.checkState(bytesRead > 0, "No data is read before EOF");
         pos += bytesRead;
         off += bytesRead;
         len -= bytesRead;
         retry.reset();
         lastException = null;
+        triggerAsyncCaching(mCachedPositionedReadStream);
       } catch (UnavailableException | DeadlineExceededException | ConnectException e) {
         lastException = e;
-        handleRetryableException(stream, e);
-        stream = null;
-      } finally {
-        closeBlockInStream(stream);
+        if (mCachedPositionedReadStream != null) {
+          handleRetryableException(mCachedPositionedReadStream, e);
+          mCachedPositionedReadStream = null;
+        }
       }
     }
     if (lastException != null) {
@@ -293,9 +332,6 @@ public class FileInStream extends InputStream implements BoundedStream, Position
 
   private void closeBlockInStream(BlockInStream stream) throws IOException {
     if (stream != null) {
-      // Get relevant information from the stream.
-      WorkerNetAddress dataSource = stream.getAddress();
-      long blockId = stream.getId();
       BlockInStream.BlockInStreamSource blockSource = stream.getSource();
       stream.close();
       // TODO(calvin): we should be able to do a close check instead of using null
@@ -305,38 +341,45 @@ public class FileInStream extends InputStream implements BoundedStream, Position
       if (blockSource == BlockInStream.BlockInStreamSource.LOCAL) {
         return;
       }
+      triggerAsyncCaching(stream);
+    }
+  }
 
-      // Send an async cache request to a worker based on read type and passive cache options.
-      boolean cache = mOptions.getOptions().getReadType().isCache();
-      boolean passiveCache = Configuration.getBoolean(PropertyKey.USER_FILE_PASSIVE_CACHE_ENABLED);
-      long channelTimeout = Configuration.getMs(PropertyKey.USER_NETWORK_NETTY_TIMEOUT_MS);
-      if (cache) {
-        WorkerNetAddress worker;
-        if (passiveCache && mContext.hasLocalWorker()) { // send request to local worker
-          worker = mContext.getLocalWorker();
-        } else { // send request to data source
-          worker = dataSource;
-        }
+  // Send an async cache request to a worker based on read type and passive cache options.
+  private void triggerAsyncCaching(BlockInStream stream) throws IOException {
+    boolean cache = ReadType.fromProto(mOptions.getOptions().getReadType()).isCache();
+    boolean overReplicated = mStatus.getReplicationMax() > 0
+        && mStatus.getFileBlockInfos().get((int) (getPos() / mBlockSize))
+        .getBlockInfo().getLocations().size() >= mStatus.getReplicationMax();
+    cache = cache && !overReplicated;
+    // Get relevant information from the stream.
+    WorkerNetAddress dataSource = stream.getAddress();
+    long blockId = stream.getId();
+    if (cache && (mLastBlockIdCached != blockId)) {
+      WorkerNetAddress worker;
+      if (mPassiveCachingEnabled && mContext.hasLocalWorker()) { // send request to local worker
+        worker = mContext.getLocalWorker();
+      } else { // send request to data source
+        worker = dataSource;
+      }
+      try {
+        // Construct the async cache request
+        long blockLength = mOptions.getBlockInfo(blockId).getLength();
+        AsyncCacheRequest request =
+            AsyncCacheRequest.newBuilder().setBlockId(blockId).setLength(blockLength)
+                .setOpenUfsBlockOptions(mOptions.getOpenUfsBlockOptions(blockId))
+                .setSourceHost(dataSource.getHost()).setSourcePort(dataSource.getDataPort())
+                .build();
+        BlockWorkerClient blockWorker = mContext.acquireBlockWorkerClient(worker);
         try {
-          // Construct the async cache request
-          long blockLength = mOptions.getBlockInfo(blockId).getLength();
-          Protocol.AsyncCacheRequest request =
-              Protocol.AsyncCacheRequest.newBuilder().setBlockId(blockId).setLength(blockLength)
-                  .setOpenUfsBlockOptions(mOptions.getOpenUfsBlockOptions(blockId))
-                  .setSourceHost(dataSource.getHost()).setSourcePort(dataSource.getDataPort())
-                  .build();
-          Channel channel = mContext.acquireNettyChannel(worker);
-          try {
-            NettyRPCContext rpcContext =
-                NettyRPCContext.defaults().setChannel(channel).setTimeout(channelTimeout);
-            NettyRPC.fireAndForget(rpcContext, new ProtoMessage(request));
-          } finally {
-            mContext.releaseNettyChannel(worker, channel);
-          }
-        } catch (Exception e) {
-          LOG.warn("Failed to complete async cache request for block {} at worker {}: {}", blockId,
-              worker, e.getMessage());
+          blockWorker.asyncCache(request);
+          mLastBlockIdCached = blockId;
+        } finally {
+          mContext.releaseBlockWorkerClient(worker, blockWorker);
         }
+      } catch (Exception e) {
+        LOG.warn("Failed to complete async cache request for block {} at worker {}: {}", blockId,
+            worker, e.getMessage());
       }
     }
   }

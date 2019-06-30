@@ -11,12 +11,9 @@
 
 package alluxio.util;
 
-import alluxio.Configuration;
 import alluxio.Constants;
-import alluxio.PropertyKey;
 
 import java.io.File;
-import java.io.FileFilter;
 
 import javax.annotation.concurrent.ThreadSafe;
 
@@ -31,15 +28,12 @@ public final class ExtensionUtils {
   /**
    * List extension jars from the configured extensions directory.
    *
+   * @param extensionDir the directory containing extensions
    * @return an array of files (one file per jar)
    */
-  public static File[] listExtensions() {
-    String extensionDir = Configuration.get(PropertyKey.EXTENSIONS_DIR);
-    File[] extensions = new File(extensionDir).listFiles(new FileFilter() {
-      public boolean accept(File file) {
-        return file.getPath().toLowerCase().endsWith(Constants.EXTENSION_JAR);
-      }
-    });
+  public static File[] listExtensions(String extensionDir) {
+    File[] extensions = new File(extensionDir)
+        .listFiles(file -> file.getPath().toLowerCase().endsWith(Constants.EXTENSION_JAR));
     if (extensions == null) {
       // Directory does not exist
       return EMPTY_EXTENSIONS_LIST;

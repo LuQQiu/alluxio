@@ -11,7 +11,9 @@
 
 package alluxio.security.authorization;
 
-import org.junit.Assert;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
+
 import org.junit.Test;
 
 /**
@@ -99,20 +101,25 @@ public class AclEntryTest {
 
     checkCliStringInvalid("mask:mask:---");
     checkCliStringInvalid("other:other:---");
+
+    checkCliStringInvalid("default:user:test");
   }
 
   private void checkCliString(String stringEntry) {
     AclEntry entry = AclEntry.fromCliString(stringEntry);
     String toString = entry.toCliString();
-    Assert.assertEquals(stringEntry, toString);
+    assertEquals(stringEntry, toString);
   }
 
   private void checkCliStringInvalid(String stringEntry) {
     try {
       checkCliString(stringEntry);
-      Assert.fail("this is expected to fail");
-    } catch (Exception e) {
+      fail("this is expected to fail");
+    } catch (IllegalArgumentException e) {
       // expected
+    } catch (Exception e) {
+      // unexpected
+      fail("Unexpected exception");
     }
   }
 }

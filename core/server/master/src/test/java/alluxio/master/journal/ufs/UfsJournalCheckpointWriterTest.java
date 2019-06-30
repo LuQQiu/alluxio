@@ -11,7 +11,7 @@
 
 package alluxio.master.journal.ufs;
 
-import alluxio.ConfigurationTestUtils;
+import alluxio.conf.ServerConfiguration;
 import alluxio.master.NoopMaster;
 import alluxio.proto.journal.Journal;
 import alluxio.underfs.UnderFileSystem;
@@ -26,6 +26,7 @@ import org.junit.rules.TemporaryFolder;
 import org.mockito.Mockito;
 
 import java.net.URI;
+import java.util.Collections;
 
 /**
  * Unit tests for {@link UfsJournalCheckpointWriter}.
@@ -41,13 +42,14 @@ public final class UfsJournalCheckpointWriterTest {
   public void before() throws Exception {
     URI location = URIUtils
         .appendPathOrDie(new URI(mFolder.newFolder().getAbsolutePath()), "FileSystemMaster");
-    mUfs = Mockito.spy(UnderFileSystem.Factory.create(location));
-    mJournal = new UfsJournal(location, new NoopMaster(), mUfs, 0);
+    mUfs = Mockito
+        .spy(UnderFileSystem.Factory.create(location.toString(), ServerConfiguration.global()));
+    mJournal = new UfsJournal(location, new NoopMaster(), mUfs, 0, Collections::emptySet);
   }
 
   @After
   public void after() throws Exception {
-    ConfigurationTestUtils.resetConfiguration();
+    ServerConfiguration.reset();
   }
 
   /**
@@ -58,7 +60,7 @@ public final class UfsJournalCheckpointWriterTest {
     long endSN = 0x20;
     UfsJournalCheckpointWriter writer = mJournal.getCheckpointWriter(endSN);
     for (int i = 0; i < 5; i++) {
-      writer.write(newEntry(i));
+      newEntry(i).writeDelimitedTo(writer);
     }
     writer.close();
 
@@ -83,7 +85,7 @@ public final class UfsJournalCheckpointWriterTest {
     long endSN = 0x20;
     UfsJournalCheckpointWriter writer = mJournal.getCheckpointWriter(endSN);
     for (int i = 0; i < endSN + 10; i++) {
-      writer.write(newEntry(i));
+      newEntry(i).writeDelimitedTo(writer);
     }
     writer.close();
 
@@ -105,7 +107,7 @@ public final class UfsJournalCheckpointWriterTest {
     long endSN = 0x20;
     UfsJournalCheckpointWriter writer = mJournal.getCheckpointWriter(endSN);
     for (int i = 0; i < 5; i++) {
-      writer.write(newEntry(i));
+      newEntry(i).writeDelimitedTo(writer);
     }
     writer.cancel();
 
@@ -126,7 +128,7 @@ public final class UfsJournalCheckpointWriterTest {
             .toString();
     mJournal.getUfs().create(expectedCheckpoint).close();
     for (int i = 0; i < 5; i++) {
-      writer.write(newEntry(i));
+      newEntry(i).writeDelimitedTo(writer);
     }
     writer.close();
 
@@ -152,7 +154,7 @@ public final class UfsJournalCheckpointWriterTest {
         URIUtils.appendPathOrDie(mJournal.getCheckpointDir(), String.format("0x%x-0x%x", 0, endSN))
             .toString();
     for (int i = 0; i < 5; i++) {
-      writer.write(newEntry(i));
+      newEntry(i).writeDelimitedTo(writer);
     }
     writer.close();
 
@@ -176,7 +178,7 @@ public final class UfsJournalCheckpointWriterTest {
         .toString();
     mJournal.getUfs().create(newerCheckpoint).close();
     for (int i = 0; i < 5; i++) {
-      writer.write(newEntry(i));
+      newEntry(i).writeDelimitedTo(writer);
     }
     writer.close();
 

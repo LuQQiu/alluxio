@@ -15,21 +15,23 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
 import alluxio.AlluxioURI;
-import alluxio.Configuration;
-import alluxio.PropertyKey;
-import alluxio.client.MetaMasterClient;
-import alluxio.client.RetryHandlingMetaMasterClient;
-import alluxio.client.WriteType;
+import alluxio.ClientContext;
+import alluxio.conf.ServerConfiguration;
+import alluxio.conf.PropertyKey;
+import alluxio.client.meta.MetaMasterClient;
+import alluxio.client.meta.RetryHandlingMetaMasterClient;
 import alluxio.client.file.FileSystemMasterClient;
 import alluxio.client.file.RetryHandlingFileSystemMasterClient;
-import alluxio.client.file.options.CreateDirectoryOptions;
-import alluxio.client.file.options.UpdateUfsModeOptions;
 import alluxio.exception.AccessControlException;
+import alluxio.grpc.BackupPOptions;
+import alluxio.grpc.CreateDirectoryPOptions;
+import alluxio.grpc.UfsPMode;
+import alluxio.grpc.UpdateUfsModePOptions;
+import alluxio.grpc.WritePType;
 import alluxio.master.LocalAlluxioCluster;
-import alluxio.master.MasterClientConfig;
+import alluxio.master.MasterClientContext;
 import alluxio.testutils.BaseIntegrationTest;
 import alluxio.testutils.LocalAlluxioClusterResource;
-import alluxio.underfs.UnderFileSystem.UfsMode;
 
 import org.junit.Before;
 import org.junit.Rule;
@@ -73,20 +75,21 @@ public class JournalCheckpointIntegrationTest extends BaseIntegrationTest {
     assertEquals(3, mCluster.getClient().getMountTable().size());
     mCluster.getClient().unmount(alluxioMount1);
     assertEquals(2, mCluster.getClient().getMountTable().size());
-    Configuration.unset(PropertyKey.MASTER_JOURNAL_INIT_FROM_BACKUP);
+    ServerConfiguration.unset(PropertyKey.MASTER_JOURNAL_INIT_FROM_BACKUP);
   }
 
   @Test
   public void recoverUfsState() throws Exception {
     FileSystemMasterClient client =
-        new RetryHandlingFileSystemMasterClient(MasterClientConfig.defaults());
+        new RetryHandlingFileSystemMasterClient(MasterClientContext
+            .newBuilder(ClientContext.create(ServerConfiguration.global())).build());
     client.updateUfsMode(new AlluxioURI(""),
-        UpdateUfsModeOptions.defaults().setUfsMode(UfsMode.READ_ONLY));
+        UpdateUfsModePOptions.newBuilder().setUfsMode(UfsPMode.READ_ONLY).build());
 
     backupAndRestore();
     try {
       mCluster.getClient().createDirectory(new AlluxioURI("/test"),
-          CreateDirectoryOptions.defaults().setWriteType(WriteType.THROUGH));
+          CreateDirectoryPOptions.newBuilder().setWriteType(WritePType.THROUGH).build());
       fail("Expected an exception to be thrown");
     } catch (AccessControlException e) {
       // Expected
@@ -95,9 +98,13 @@ public class JournalCheckpointIntegrationTest extends BaseIntegrationTest {
 
   private void backupAndRestore() throws Exception {
     File backup = mFolder.newFolder("backup");
-    MetaMasterClient metaClient = new RetryHandlingMetaMasterClient(MasterClientConfig.defaults());
-    AlluxioURI backupURI = metaClient.backup(backup.getAbsolutePath(), true).getBackupUri();
-    Configuration.set(PropertyKey.MASTER_JOURNAL_INIT_FROM_BACKUP, backupURI);
+    MetaMasterClient metaClient =
+        new RetryHandlingMetaMasterClient(MasterClientContext
+            .newBuilder(ClientContext.create(ServerConfiguration.global())).build());
+    AlluxioURI backupURI = metaClient.backup(BackupPOptions.newBuilder()
+        .setTargetDirectory(backup.getAbsolutePath())
+        .setLocalFileSystem(true).build()).getBackupUri();
+    ServerConfiguration.set(PropertyKey.MASTER_JOURNAL_INIT_FROM_BACKUP, backupURI);
     mCluster.formatAndRestartMasters();
   }
 }

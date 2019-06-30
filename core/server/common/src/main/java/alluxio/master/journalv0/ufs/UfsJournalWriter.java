@@ -11,8 +11,8 @@
 
 package alluxio.master.journalv0.ufs;
 
-import alluxio.Configuration;
-import alluxio.PropertyKey;
+import alluxio.conf.ServerConfiguration;
+import alluxio.conf.PropertyKey;
 import alluxio.RuntimeConstants;
 import alluxio.exception.ExceptionMessage;
 import alluxio.master.journalv0.JournalFormatter;
@@ -20,6 +20,7 @@ import alluxio.master.journalv0.JournalOutputStream;
 import alluxio.master.journalv0.JournalWriter;
 import alluxio.proto.journal.Journal.JournalEntry;
 import alluxio.underfs.UnderFileSystem;
+import alluxio.underfs.UnderFileSystemConfiguration;
 import alluxio.underfs.options.CreateOptions;
 import alluxio.util.UnderFileSystemUtils;
 
@@ -80,7 +81,8 @@ public final class UfsJournalWriter implements JournalWriter {
     } catch (URISyntaxException e) {
       throw new RuntimeException(e);
     }
-    mUfs = UnderFileSystem.Factory.create(mJournal.getLocation());
+    mUfs = UnderFileSystem.Factory.create(mJournal.getLocation().toString(),
+        UnderFileSystemConfiguration.defaults(ServerConfiguration.global()));
     mCheckpointManager = new UfsCheckpointManager(mUfs, mJournal.getCheckpoint(), this);
   }
 
@@ -318,9 +320,10 @@ public final class UfsJournalWriter implements JournalWriter {
       mCurrentLog = log;
       mJournalFormatter = journalFormatter;
       mJournalWriter = journalWriter;
-      mMaxLogSize = Configuration.getBytes(PropertyKey.MASTER_JOURNAL_LOG_SIZE_BYTES_MAX);
+      mMaxLogSize = ServerConfiguration.getBytes(PropertyKey.MASTER_JOURNAL_LOG_SIZE_BYTES_MAX);
       mRawOutputStream = mUfs.create(mCurrentLog.toString(),
-          CreateOptions.defaults().setEnsureAtomic(false).setCreateParent(true));
+          CreateOptions.defaults(ServerConfiguration.global())
+              .setEnsureAtomic(false).setCreateParent(true));
       LOG.info("Opened current log file: {}", mCurrentLog);
       mDataOutputStream = new DataOutputStream(mRawOutputStream);
     }
@@ -398,7 +401,8 @@ public final class UfsJournalWriter implements JournalWriter {
       mDataOutputStream.close();
       mJournalWriter.completeCurrentLog();
       mRawOutputStream = mUfs.create(mCurrentLog.toString(),
-          CreateOptions.defaults().setEnsureAtomic(false).setCreateParent(true));
+          CreateOptions.defaults(ServerConfiguration.global()).setEnsureAtomic(false)
+              .setCreateParent(true));
       LOG.info("Opened current log file: {}", mCurrentLog);
       mDataOutputStream = new DataOutputStream(mRawOutputStream);
     }

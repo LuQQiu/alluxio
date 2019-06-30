@@ -11,14 +11,17 @@
 
 package alluxio.cli;
 
-import alluxio.Configuration;
-import alluxio.ConfigurationValueOptions;
-import alluxio.PropertyKey;
-import alluxio.client.RetryHandlingMetaMasterClient;
-import alluxio.master.MasterClientConfig;
+import alluxio.ClientContext;
+import alluxio.conf.AlluxioConfiguration;
+import alluxio.conf.ConfigurationValueOptions;
+import alluxio.conf.InstancedConfiguration;
+import alluxio.conf.PropertyKey;
+import alluxio.client.meta.RetryHandlingMetaMasterConfigClient;
+import alluxio.grpc.ConfigProperty;
+import alluxio.grpc.GetConfigurationPOptions;
+import alluxio.master.MasterClientContext;
 import alluxio.util.ConfigurationUtils;
 import alluxio.util.FormatUtils;
-import alluxio.wire.ConfigProperty;
 
 import com.google.common.annotations.VisibleForTesting;
 import org.apache.commons.cli.CommandLine;
@@ -134,24 +137,27 @@ public final class GetConf {
   /**
    * Implements get configuration.
    *
+   * @param ctx Alluxio client configuration
    * @param args list of arguments
    * @return 0 on success, 1 on failures
    */
-  public static int getConf(String... args) {
+  public static int getConf(ClientContext ctx, String... args) {
     return getConfImpl(
-        () -> new RetryHandlingMetaMasterClient(MasterClientConfig.defaults()), args);
+        () -> new RetryHandlingMetaMasterConfigClient(MasterClientContext.newBuilder(ctx).build()),
+        ctx.getClusterConf(), args);
   }
 
   /**
    * Implements get configuration.
    *
-   * @param clientSupplier a functor to return a client of meta master
+   * @param clientSupplier a functor to return a config client of meta master
+   * @param alluxioConf Alluxio configuration
    * @param args list of arguments
    * @return 0 on success, 1 on failures
    */
   @VisibleForTesting
-  public static int getConfImpl(
-      Supplier<RetryHandlingMetaMasterClient> clientSupplier, String... args) {
+  public static int getConfImpl(Supplier<RetryHandlingMetaMasterConfigClient> clientSupplier,
+      AlluxioConfiguration alluxioConf, String... args) {
     CommandLineParser parser = new DefaultParser();
     CommandLine cmd;
     try {
@@ -165,21 +171,26 @@ public final class GetConf {
     Map<String, ConfigProperty> confMap = new HashMap<>();
     if (cmd.hasOption(MASTER_OPTION_NAME)) {
       // load cluster-wide configuration
-      try (RetryHandlingMetaMasterClient client = clientSupplier.get()) {
-        client.getConfiguration().forEach(prop -> confMap.put(prop.getName(), prop));
+      try (RetryHandlingMetaMasterConfigClient client = clientSupplier.get()) {
+        client.getConfiguration(GetConfigurationPOptions.newBuilder()
+            .setIgnorePathConf(true).build()).getClusterConf().forEach(
+              prop -> confMap.put(prop.getName(), prop.toProto()));
       } catch (IOException e) {
         System.out.println("Unable to get master-side configuration: " + e.getMessage());
         return -1;
       }
     } else {
       // load local configuration
-      for (PropertyKey key : Configuration.keySet()) {
+      for (PropertyKey key : alluxioConf.keySet()) {
         if (key.isBuiltIn()) {
-          confMap.put(key.getName(), new ConfigProperty()
-              .setName(key.getName())
-              .setValue(Configuration.getOrDefault(key, null,
-                  ConfigurationValueOptions.defaults().useDisplayValue(true)))
-              .setSource(Configuration.getSource(key).toString()));
+          ConfigProperty.Builder config = ConfigProperty.newBuilder().setName(key.getName())
+              .setSource(alluxioConf.getSource(key).toString());
+          String val = alluxioConf.getOrDefault(key, null,
+              ConfigurationValueOptions.defaults().useDisplayValue(true));
+          if (val != null) {
+            config.setValue(val);
+          }
+          confMap.put(key.getName(), config.build());
         }
       }
     }
@@ -258,7 +269,8 @@ public final class GetConf {
    * @param args the arguments to specify the unit (optional) and configuration key (optional)
    */
   public static void main(String[] args) {
-    System.exit(getConf(args));
+    System.exit(getConf(
+        ClientContext.create(new InstancedConfiguration(ConfigurationUtils.defaults())), args));
   }
 
   private GetConf() {} // this class is not intended for instantiation

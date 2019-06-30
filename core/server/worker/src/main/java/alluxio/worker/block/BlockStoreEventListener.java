@@ -83,4 +83,18 @@ public interface BlockStoreEventListener {
    */
   void onRemoveBlockByWorker(long sessionId, long blockId);
 
+  /**
+   * Actions when a block is lost.
+   *
+   * @param blockId the id of the lost block
+   */
+  void onBlockLost(long blockId);
+
+  /**
+   * Actions when a storage dir is lost.
+   *
+   * @param tierAlias the tier alias of this storage
+   * @param dirPath the directory path of this storage
+   */
+  void onStorageLost(String tierAlias, String dirPath);
 }

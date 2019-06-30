@@ -13,12 +13,12 @@ package alluxio.cli.fs.command;
 
 import alluxio.AlluxioURI;
 import alluxio.cli.CommandUtils;
-import alluxio.client.file.FileSystem;
-import alluxio.client.file.options.SetAclOptions;
+import alluxio.client.file.FileSystemContext;
 import alluxio.exception.AlluxioException;
 import alluxio.exception.status.InvalidArgumentException;
+import alluxio.grpc.SetAclAction;
+import alluxio.grpc.SetAclPOptions;
 import alluxio.security.authorization.AclEntry;
-import alluxio.wire.SetAclAction;
 
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.Option;
@@ -78,10 +78,10 @@ public final class SetFaclCommand extends AbstractFileSystemCommand {
       .build();
 
   /**
-   * @param fs the filesystem of Alluxio
+   * @param fsContext the filesystem of Alluxio
    */
-  public SetFaclCommand(FileSystem fs) {
-    super(fs);
+  public SetFaclCommand(FileSystemContext fsContext) {
+    super(fsContext);
   }
 
   @Override
@@ -99,10 +99,8 @@ public final class SetFaclCommand extends AbstractFileSystemCommand {
   @Override
   protected void runPlainPath(AlluxioURI path, CommandLine cl)
       throws AlluxioException, IOException {
-    SetAclOptions options = SetAclOptions.defaults().setRecursive(false);
-    if (cl.hasOption(RECURSIVE_OPTION.getOpt())) {
-      options.setRecursive(true);
-    }
+    SetAclPOptions options =
+        SetAclPOptions.newBuilder().setRecursive(cl.hasOption(RECURSIVE_OPTION.getOpt())).build();
 
     List<AclEntry> entries = Collections.emptyList();
     SetAclAction action = SetAclAction.REPLACE;

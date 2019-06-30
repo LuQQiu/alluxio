@@ -13,34 +13,39 @@ package alluxio.underfs.gcs;
 
 import alluxio.AlluxioURI;
 import alluxio.Constants;
-import alluxio.PropertyKey;
+import alluxio.conf.PropertyKey;
+import alluxio.retry.RetryPolicy;
 import alluxio.underfs.ObjectUnderFileSystem;
+import alluxio.underfs.UfsDirectoryStatus;
 import alluxio.underfs.UnderFileSystem;
 import alluxio.underfs.UnderFileSystemConfiguration;
 import alluxio.underfs.options.OpenOptions;
-import alluxio.util.CommonUtils;
 import alluxio.util.UnderFileSystemUtils;
 import alluxio.util.io.PathUtils;
 
+import com.google.api.gax.paging.Page;
+import com.google.auth.oauth2.GoogleCredentials;
+import com.google.cloud.storage.Blob;
+import com.google.cloud.storage.BlobId;
+import com.google.cloud.storage.BlobInfo;
+import com.google.cloud.storage.Bucket;
+import com.google.cloud.storage.Storage;
+import com.google.cloud.storage.StorageOptions;
 import com.google.common.base.Preconditions;
+import com.google.common.collect.Lists;
 import org.jets3t.service.ServiceException;
 import org.jets3t.service.StorageObjectsChunk;
-import org.jets3t.service.acl.gs.GSAccessControlList;
-import org.jets3t.service.impl.rest.httpclient.GoogleStorageService;
-import org.jets3t.service.model.GSObject;
-import org.jets3t.service.model.StorageObject;
-import org.jets3t.service.model.StorageOwner;
-import org.jets3t.service.security.GSCredentials;
-import org.jets3t.service.utils.Mimetypes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.ByteArrayInputStream;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import java.util.regex.Pattern;
 
 import javax.annotation.concurrent.ThreadSafe;
 
@@ -51,30 +56,17 @@ import javax.annotation.concurrent.ThreadSafe;
 public class GCSUnderFileSystem extends ObjectUnderFileSystem {
   private static final Logger LOG = LoggerFactory.getLogger(GCSUnderFileSystem.class);
 
+  /** Google cloud storage client. */
+  private final Storage mStorageClient;
+
   /** Suffix for an empty file to flag it as a directory. */
-  private static final String FOLDER_SUFFIX = "_$folder$";
+  private static final String FOLDER_SUFFIX = "/";
 
-  private static final byte[] DIR_HASH;
-
-  /** Jets3t GCS client. */
-  private final GoogleStorageService mClient;
+  /** Google cloud storage bucket client. */
+  private final Bucket mBucketClient;
 
   /** Bucket name of user's configured Alluxio bucket. */
   private final String mBucketName;
-
-  /** The name of the account owner. */
-  private final String mAccountOwner;
-
-  /** The permission mode that the account owner has to the bucket. */
-  private final short mBucketMode;
-
-  static {
-    try {
-      DIR_HASH = MessageDigest.getInstance("MD5").digest(new byte[0]);
-    } catch (NoSuchAlgorithmException e) {
-      throw new IllegalStateException(e);
-    }
-  }
 
   /**
    * Constructs a new instance of {@link GCSUnderFileSystem}.
@@ -84,44 +76,19 @@ public class GCSUnderFileSystem extends ObjectUnderFileSystem {
    * @return the created {@link GCSUnderFileSystem} instance
    * @throws ServiceException when a connection to GCS could not be created
    */
-  public static GCSUnderFileSystem createInstance(
-      AlluxioURI uri, UnderFileSystemConfiguration conf) throws ServiceException {
+  public static GCSUnderFileSystem createInstance(AlluxioURI uri, UnderFileSystemConfiguration conf)
+      throws IOException {
     String bucketName = UnderFileSystemUtils.getBucketName(uri);
-    Preconditions.checkArgument(conf.containsKey(PropertyKey.GCS_ACCESS_KEY),
-            "Property " + PropertyKey.GCS_ACCESS_KEY + " is required to connect to GCS");
-    Preconditions.checkArgument(conf.containsKey(PropertyKey.GCS_SECRET_KEY),
-            "Property " + PropertyKey.GCS_SECRET_KEY + " is required to connect to GCS");
-    GSCredentials googleCredentials = new GSCredentials(
-        conf.getValue(PropertyKey.GCS_ACCESS_KEY),
-        conf.getValue(PropertyKey.GCS_SECRET_KEY));
+    Preconditions.checkArgument(conf.isSet(PropertyKey.GOOGLE_APPLICATION_CREDENTIALS),
+            "Property " + PropertyKey.GOOGLE_APPLICATION_CREDENTIALS + " is required to connect to GCS");
 
-    // TODO(chaomin): maybe add proxy support for GCS.
-    GoogleStorageService googleStorageService = new GoogleStorageService(googleCredentials);
+    GoogleCredentials credentials = GoogleCredentials
+        .fromStream(new FileInputStream(conf.get(PropertyKey.GOOGLE_APPLICATION_CREDENTIALS)))
+        .createScoped(Lists.newArrayList("https://www.googleapis.com/auth/cloud-platform"));
 
-    // getAccountOwner() can return null even when the account is authenticated.
-    // TODO(chaomin): investigate the root cause why Google cloud service is returning
-    // null StorageOwner.
-    StorageOwner storageOwner = googleStorageService.getAccountOwner();
-    String accountOwnerId = "unknown";
-    String accountOwner = "unknown";
-    if (storageOwner != null) {
-      accountOwnerId = storageOwner.getId();
-      // Gets the owner from user-defined static mapping from GCS account id to Alluxio user name.
-      String owner = CommonUtils.getValueFromStaticMapping(
-          conf.getValue(PropertyKey.UNDERFS_GCS_OWNER_ID_TO_USERNAME_MAPPING), accountOwnerId);
-      // If there is no user-defined mapping, use the display name.
-      if (owner == null) {
-        owner = storageOwner.getDisplayName();
-      }
-      accountOwner = owner == null ? accountOwnerId : owner;
-    } else {
-      LOG.debug("GoogleStorageService returns a null StorageOwner with this Google Cloud account.");
-    }
-
-    GSAccessControlList acl = googleStorageService.getBucketAcl(bucketName);
-    short bucketMode = GCSUtils.translateBucketAcl(acl, accountOwnerId);
-
-    return new GCSUnderFileSystem(uri, googleStorageService, bucketName, bucketMode, accountOwner,
+    Storage storage = StorageOptions.newBuilder().setCredentials(credentials).build().getService();
+    Bucket bucket = storage.get(bucketName);
+    return new GCSUnderFileSystem(uri, storage, bucket, bucketName,
         conf);
   }
 
@@ -129,19 +96,16 @@ public class GCSUnderFileSystem extends ObjectUnderFileSystem {
    * Constructor for {@link GCSUnderFileSystem}.
    *
    * @param uri the {@link AlluxioURI} for this UFS
-   * @param googleStorageService the Jets3t GCS client
+   * @param storage the Google cloud storage client
    * @param bucketName bucket name of user's configured Alluxio bucket
-   * @param bucketMode the permission mode that the account owner has to the bucket
-   * @param accountOwner the name of the account owner
    * @param conf configuration for this UFS
    */
-  protected GCSUnderFileSystem(AlluxioURI uri, GoogleStorageService googleStorageService,
-      String bucketName, short bucketMode, String accountOwner, UnderFileSystemConfiguration conf) {
+  protected GCSUnderFileSystem(AlluxioURI uri, Storage storage,Bucket bucket,
+      String bucketName, UnderFileSystemConfiguration conf) {
     super(uri, conf);
-    mClient = googleStorageService;
+    mStorageClient = storage;
+    mBucketClient = bucket;
     mBucketName = bucketName;
-    mBucketMode = bucketMode;
-    mAccountOwner = accountOwner;
   }
 
   @Override
@@ -158,55 +122,54 @@ public class GCSUnderFileSystem extends ObjectUnderFileSystem {
   public void setMode(String path, short mode) throws IOException {}
 
   @Override
-  protected boolean copyObject(String src, String dst) {
-    LOG.debug("Copying {} to {}", src, dst);
-    GSObject obj = new GSObject(dst);
-    // Retry copy for a few times, in case some Jets3t or GCS internal errors happened during copy.
-    int retries = 3;
-    for (int i = 0; i < retries; i++) {
-      try {
-        mClient.copyObject(mBucketName, src, mBucketName, obj, false);
-        return true;
-      } catch (ServiceException e) {
-        LOG.error("Failed to copy file {} to {}", src, dst, e);
-        if (i != retries - 1) {
-          LOG.error("Retrying copying file {} to {}", src, dst);
-        }
-      }
-    }
-    LOG.error("Failed to copy file {} to {}, after {} retries", src, dst, retries);
-    return false;
+  public UfsDirectoryStatus getExistingDirectoryStatus(String path) throws IOException {
+    return getDirectoryStatus(path);
+  }
+
+  // GCS provides strong global consistency for read-after-write and read-after-metadata-update
+  @Override
+  public InputStream openExistingFile(String path) throws IOException {
+    return open(path);
+  }
+
+  // GCS provides strong global consistency for read-after-write and read-after-metadata-update
+  @Override
+  public InputStream openExistingFile(String path, OpenOptions options) throws IOException {
+    return open(path, options);
   }
 
   @Override
-  protected boolean createEmptyObject(String key) {
-    try {
-      GSObject obj = new GSObject(key);
-      obj.setDataInputStream(new ByteArrayInputStream(new byte[0]));
-      obj.setContentLength(0);
-      obj.setMd5Hash(DIR_HASH);
-      obj.setContentType(Mimetypes.MIMETYPE_BINARY_OCTET_STREAM);
-      mClient.putObject(mBucketName, obj);
-      return true;
-    } catch (ServiceException e) {
-      LOG.error("Failed to create directory: {}", key, e);
-      return false;
-    }
+  protected boolean copyObject(String src, String dst) {
+    LOG.debug("Copying {} to {}", src, dst);
+    // TODO(lu) how GOOGLE CLOUD API throws exceptions???
+    // Retry copy for a few times, in case some Jets3t or GCS internal errors happened during copy.
+    Storage.CopyRequest request = Storage.CopyRequest.newBuilder()
+        .setSource(BlobId.of(mBucketName, src))
+        .setTarget(BlobId.of(mBucketName, dst))
+        .build();
+    mStorageClient.copy(request).getResult();
+    return true;
+  }
+
+  @Override
+  public boolean createEmptyObject(String key) {
+    BlobId blobId = BlobId.of(mBucketName, key);
+    // TODO(lu) see what other content need to be included
+    BlobInfo blobInfo = BlobInfo.newBuilder(blobId).build();
+    mStorageClient.create(blobInfo);
+    return true;
   }
 
   @Override
   protected OutputStream createObject(String key) throws IOException {
-    return new GCSOutputStream(mBucketName, key, mClient);
+    return new GCSOutputStream(mBucketName, key, mStorageClient,
+        mUfsConf.getList(PropertyKey.TMP_DIRS, ","));
   }
 
   @Override
-  protected boolean deleteObject(String key) throws IOException {
-    try {
-      mClient.deleteObject(mBucketName, key);
-    } catch (ServiceException e) {
-      LOG.error("Failed to delete {}", key, e);
-      return false;
-    }
+  protected boolean deleteObject(String key) {
+    BlobId blobId = BlobId.of(mBucketName, key);
+    mStorageClient.delete(blobId);
     return true;
   }
 
@@ -221,89 +184,79 @@ public class GCSUnderFileSystem extends ObjectUnderFileSystem {
     key = PathUtils.normalizePath(key, PATH_SEPARATOR);
     // In case key is root (empty string) do not normalize prefix
     key = key.equals(PATH_SEPARATOR) ? "" : key;
-    String delimiter = recursive ? "" : PATH_SEPARATOR;
-    StorageObjectsChunk chunk = getObjectListingChunk(key, delimiter, null);
-    if (chunk != null) {
-      return new GCSObjectListingChunk(chunk);
+    Page<Blob> blobPages= getObjectListingChunk(key);
+    if (blobPages != null && blobPages.getValues().iterator().hasNext()) {
+      return new GCSObjectListingChunk(blobPages, Pattern.compile("^" + key + "([^/]+)/?$"), recursive);
     }
     return null;
   }
 
-  // Get next chunk of listing result
-  private StorageObjectsChunk getObjectListingChunk(String key, String delimiter,
-      String priorLastKey) {
-    StorageObjectsChunk res;
-    try {
-      res = mClient.listObjectsChunked(mBucketName, key, delimiter,
-          getListingChunkLength(), priorLastKey);
-    } catch (ServiceException e) {
-      LOG.error("Failed to list path {}", key, e);
-      res = null;
-    }
-    return res;
+  // Get next chunk of listing result.
+  private Page<Blob> getObjectListingChunk(String key) {
+    return mBucketClient.list(Storage.BlobListOption.prefix(key));
   }
 
   /**
    * Wrapper over GCS {@link StorageObjectsChunk}.
    */
   private final class GCSObjectListingChunk implements ObjectListingChunk {
-    final StorageObjectsChunk mChunk;
+    final Page<Blob> mBlobs;
+    final Pattern mPattern;
+    final boolean mRecursive;
 
-    GCSObjectListingChunk(StorageObjectsChunk chunk)
-        throws IOException {
-      mChunk = chunk;
-      if (mChunk == null) {
-        throw new IOException("GCS listing result is null");
-      }
+    GCSObjectListingChunk(Page<Blob> blobs, Pattern pattern, boolean recursive) {
+      mBlobs = blobs;
+      mPattern = pattern;
+      mRecursive = recursive;
     }
 
     @Override
     public ObjectStatus[] getObjectStatuses() {
-      StorageObject[] objects = mChunk.getObjects();
-      ObjectStatus[] ret = new ObjectStatus[objects.length];
-      for (int i = 0; i < ret.length; ++i) {
-        ret[i] = new ObjectStatus(objects[i].getKey(), objects[i].getMd5HashAsBase64(),
-            objects[i].getContentLength(), objects[i].getLastModifiedDate().getTime());
+      Iterator<Blob> blobs = mBlobs.getValues().iterator();
+      List<Blob> blobList = new ArrayList<>();
+      while (blobs.hasNext()) {
+        Blob blob = blobs.next();
+        if (mRecursive || mPattern.matcher(blob.getName()).matches()) {
+          blobList.add(blob);
+        }
       }
-      return ret;
+      ObjectStatus[] res = new ObjectStatus[blobList.size()];
+      for (int i = 0; i < blobList.size(); i++) {
+        Blob blob = blobList.get(i);
+        // TODO(Lu) investigate MD5
+        res[i] = new ObjectStatus(blob.getName(), blob.getMd5(), blob.getSize(), blob.getUpdateTime());
+      }
+      return res;
     }
 
     @Override
     public String[] getCommonPrefixes() {
-      return mChunk.getCommonPrefixes();
+      return new String[0];
     }
 
     @Override
-    public ObjectListingChunk getNextChunk() throws IOException {
-      if (!mChunk.isListingComplete()) {
-        StorageObjectsChunk nextChunk = getObjectListingChunk(mChunk.getPrefix(),
-            mChunk.getDelimiter(), mChunk.getPriorLastKey());
-        if (nextChunk != null) {
-          return new GCSObjectListingChunk(nextChunk);
-        }
+    public ObjectListingChunk getNextChunk() {
+      if (mBlobs.hasNextPage()) {
+        return new GCSObjectListingChunk(mBlobs.getNextPage(), mPattern, mRecursive);
       }
       return null;
     }
   }
 
   @Override
-  protected ObjectStatus getObjectStatus(String key) {
-    try {
-      GSObject meta = mClient.getObjectDetails(mBucketName, key);
-      if (meta == null) {
-        return null;
-      }
-      return new ObjectStatus(key, meta.getMd5HashAsBase64(), meta.getContentLength(),
-          meta.getLastModifiedDate().getTime());
-    } catch (ServiceException e) {
+  protected ObjectStatus getObjectStatus(String key) throws IOException {
+    BlobId info = BlobId.of(mBucketName, key);
+    Blob blob = mStorageClient.get(info);
+    if (blob == null) {
       return null;
     }
+    return new ObjectStatus(key, blob.getMd5ToHexString(), blob.getSize(),
+        blob.getUpdateTime());
   }
 
-  // No group in GCS ACL, returns the account owner for group.
   @Override
   protected ObjectPermissions getPermissions() {
-    return new ObjectPermissions(mAccountOwner, mAccountOwner, mBucketMode);
+    return new ObjectPermissions("", "", Constants.DEFAULT_FILE_SYSTEM_MODE);
   }
 
   @Override
@@ -312,11 +265,7 @@ public class GCSUnderFileSystem extends ObjectUnderFileSystem {
   }
 
   @Override
-  protected InputStream openObject(String key, OpenOptions options) throws IOException {
-    try {
-      return new GCSInputStream(mBucketName, key, mClient, options.getOffset());
-    } catch (ServiceException e) {
-      throw new IOException(e.getMessage());
-    }
+  protected InputStream openObject(String key, OpenOptions options, RetryPolicy retryPolicy) {
+    return new GCSInputStream(mBucketName, key, mStorageClient, options.getOffset(), retryPolicy);
   }
 }

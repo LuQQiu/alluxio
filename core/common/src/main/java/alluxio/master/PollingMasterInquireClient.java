@@ -13,16 +13,23 @@ package alluxio.master;
 
 import static java.util.stream.Collectors.joining;
 
-import alluxio.Constants;
-import alluxio.exception.status.UnauthenticatedException;
+import alluxio.conf.AlluxioConfiguration;
+import alluxio.conf.PropertyKey;
+import alluxio.exception.status.AlluxioStatusException;
 import alluxio.exception.status.UnavailableException;
-import alluxio.network.thrift.ThriftUtils;
+import alluxio.grpc.GetServiceVersionPRequest;
+import alluxio.grpc.GrpcChannel;
+import alluxio.grpc.GrpcChannelBuilder;
+import alluxio.grpc.GrpcServerAddress;
+import alluxio.grpc.ServiceType;
+import alluxio.grpc.ServiceVersionClientServiceGrpc;
+import alluxio.retry.ExponentialBackoffRetry;
 import alluxio.retry.RetryPolicy;
-import alluxio.security.authentication.TransportProvider;
+import alluxio.security.user.UserState;
+import alluxio.uri.Authority;
+import alluxio.uri.MultiMasterAuthority;
 
-import org.apache.thrift.protocol.TProtocol;
-import org.apache.thrift.transport.TTransport;
-import org.apache.thrift.transport.TTransportException;
+import io.grpc.StatusRuntimeException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,15 +50,31 @@ public class PollingMasterInquireClient implements MasterInquireClient {
 
   private final MultiMasterConnectDetails mConnectDetails;
   private final Supplier<RetryPolicy> mRetryPolicySupplier;
+  private final AlluxioConfiguration mConfiguration;
+  private final UserState mUserState;
+
+  /**
+   * @param masterAddresses the potential master addresses
+   * @param alluxioConf Alluxio configuration
+   */
+  public PollingMasterInquireClient(List<InetSocketAddress> masterAddresses,
+      AlluxioConfiguration alluxioConf) {
+    this(masterAddresses, () -> new ExponentialBackoffRetry(20, 2000, 30),
+        alluxioConf);
+  }
 
   /**
    * @param masterAddresses the potential master addresses
    * @param retryPolicySupplier the retry policy supplier
+   * @param alluxioConf Alluxio configuration
    */
   public PollingMasterInquireClient(List<InetSocketAddress> masterAddresses,
-      Supplier<RetryPolicy> retryPolicySupplier) {
+      Supplier<RetryPolicy> retryPolicySupplier,
+      AlluxioConfiguration alluxioConf) {
     mConnectDetails = new MultiMasterConnectDetails(masterAddresses);
     mRetryPolicySupplier = retryPolicySupplier;
+    mConfiguration = alluxioConf;
+    mUserState = UserState.Factory.create(mConfiguration);
   }
 
   @Override
@@ -77,23 +100,33 @@ public class PollingMasterInquireClient implements MasterInquireClient {
         pingMetaService(address);
         LOG.debug("Successfully connected to {}", address);
         return address;
-      } catch (TTransportException e) {
+      } catch (UnavailableException e) {
         LOG.debug("Failed to connect to {}", address);
         continue;
-      } catch (UnauthenticatedException e) {
+      } catch (AlluxioStatusException e) {
         throw new RuntimeException(e);
       }
     }
     return null;
   }
 
-  private void pingMetaService(InetSocketAddress address)
-      throws UnauthenticatedException, TTransportException {
-    TTransport transport = TransportProvider.Factory.create().getClientTransport(address);
-    TProtocol protocol =
-        ThriftUtils.createThriftProtocol(transport, Constants.META_MASTER_CLIENT_SERVICE_NAME);
-    protocol.getTransport().open();
-    protocol.getTransport().close();
+  private void pingMetaService(InetSocketAddress address) throws AlluxioStatusException {
+    GrpcChannel channel =
+        GrpcChannelBuilder.newBuilder(new GrpcServerAddress(address), mConfiguration)
+            .setSubject(mUserState.getSubject()).build();
+    ServiceVersionClientServiceGrpc.ServiceVersionClientServiceBlockingStub versionClient =
+        ServiceVersionClientServiceGrpc.newBlockingStub(channel);
+    ServiceType serviceType
+        = address.getPort() == mConfiguration.getInt(PropertyKey.JOB_MASTER_RPC_PORT)
+        ? ServiceType.JOB_MASTER_CLIENT_SERVICE : ServiceType.META_MASTER_CLIENT_SERVICE;
+    try {
+      versionClient.getServiceVersion(GetServiceVersionPRequest.newBuilder()
+          .setServiceType(serviceType).build());
+    } catch (StatusRuntimeException e) {
+      throw AlluxioStatusException.fromThrowable(e);
+    } finally {
+      channel.shutdown();
+    }
   }
 
   @Override
@@ -127,6 +160,12 @@ public class PollingMasterInquireClient implements MasterInquireClient {
     }
 
     @Override
+    public Authority toAuthority() {
+      return new MultiMasterAuthority(mAddresses.stream()
+          .map(addr -> addr.getHostString() + ":" + addr.getPort()).collect(joining(",")));
+    }
+
+    @Override
     public boolean equals(Object o) {
       if (this == o) {
         return true;
@@ -145,8 +184,7 @@ public class PollingMasterInquireClient implements MasterInquireClient {
 
     @Override
     public String toString() {
-      return mAddresses.stream().map(addr -> addr.getHostString() + ":" + addr.getPort())
-          .collect(joining(","));
+      return toAuthority().toString();
     }
   }
 }

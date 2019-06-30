@@ -15,16 +15,20 @@ import alluxio.AlluxioURI;
 import alluxio.cli.Command;
 import alluxio.cli.fs.FileSystemShellUtils;
 import alluxio.client.file.FileSystem;
+import alluxio.client.file.FileSystemContext;
+import alluxio.conf.InstancedConfiguration;
 import alluxio.exception.AlluxioException;
+import alluxio.util.ConfigurationUtils;
 
 import com.google.common.base.Joiner;
 import org.apache.commons.cli.CommandLine;
 
-import javax.annotation.concurrent.ThreadSafe;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import javax.annotation.Nullable;
+import javax.annotation.concurrent.ThreadSafe;
 
 /**
  * The base class for all the FileSystem {@link alluxio.cli.Command} classes.
@@ -34,30 +38,43 @@ import java.util.List;
 public abstract class AbstractFileSystemCommand implements Command {
 
   protected FileSystem mFileSystem;
+  protected FileSystemContext mFsContext;
 
-  protected AbstractFileSystemCommand(FileSystem fs) {
-    mFileSystem = fs;
+  // The FilesystemContext contains configuration information and is also used to instantiate a
+  // filesystem client, if null - load default properties
+  protected AbstractFileSystemCommand(@Nullable FileSystemContext fsContext) {
+    if (fsContext == null) {
+      fsContext =
+          FileSystemContext.create(new InstancedConfiguration(ConfigurationUtils.defaults()));
+    }
+    mFsContext = fsContext;
+    mFileSystem = FileSystem.Factory.create(fsContext);
   }
 
   /**
-   * Run the command for a particular URI that does not contain wildcard in its path.
+   * Runs the command for a particular URI that does not contain wildcard in its path.
    *
    * @param plainPath an AlluxioURI that does not contain wildcard
    * @param cl object containing the original commandLine
-   * @throws AlluxioException
-   * @throws IOException
    */
   protected void runPlainPath(AlluxioURI plainPath, CommandLine cl)
       throws AlluxioException, IOException {
   }
 
   /**
-   * Run the command for a particular URI that may contain wildcard in its path.
+   * Processes the header of the command. Our input path may contain wildcard
+   * but we only want to print the header for once.
+   *
+   * @param cl object containing the original commandLine
+   */
+  protected void processHeader(CommandLine cl) throws IOException {
+  }
+
+  /**
+   * Runs the command for a particular URI that may contain wildcard in its path.
    *
    * @param wildCardPath an AlluxioURI that may or may not contain a wildcard
    * @param cl object containing the original commandLine
-   * @throws AlluxioException
-   * @throws IOException
    */
   protected void runWildCardCmd(AlluxioURI wildCardPath, CommandLine cl) throws IOException {
     List<AlluxioURI> paths = FileSystemShellUtils.getAlluxioURIs(mFileSystem, wildCardPath);
@@ -65,6 +82,9 @@ public abstract class AbstractFileSystemCommand implements Command {
       throw new IOException(wildCardPath + " does not exist.");
     }
     paths.sort(Comparator.comparing(AlluxioURI::getPath));
+
+    // TODO(lu) if errors occur in runPlainPath, we may not want to print header
+    processHeader(cl);
 
     List<String> errorMessages = new ArrayList<>();
     for (AlluxioURI path : paths) {
@@ -78,6 +98,5 @@ public abstract class AbstractFileSystemCommand implements Command {
     if (errorMessages.size() != 0) {
       throw new IOException(Joiner.on('\n').join(errorMessages));
     }
-
   }
 }

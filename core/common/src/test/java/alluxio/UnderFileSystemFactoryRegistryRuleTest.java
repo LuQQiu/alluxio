@@ -11,13 +11,17 @@
 
 package alluxio;
 
+import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.junit.Assert.assertEquals;
 
+import alluxio.conf.InstancedConfiguration;
+import alluxio.underfs.UnderFileSystemConfiguration;
 import alluxio.underfs.UnderFileSystemFactory;
 import alluxio.underfs.UnderFileSystemFactoryRegistry;
 
-import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runners.model.Statement;
 
@@ -28,24 +32,27 @@ public class UnderFileSystemFactoryRegistryRuleTest {
   private static final String UFS_PATH = "test://foo";
 
   private UnderFileSystemFactory mUnderFileSystemFactory;
+  private final InstancedConfiguration mConfiguration = ConfigurationTestUtils.defaults();
 
   private Statement mStatement = new Statement() {
     @Override
     public void evaluate() throws Throwable {
-      Assert.assertEquals(mUnderFileSystemFactory, UnderFileSystemFactoryRegistry
-          .find(UFS_PATH));
+      assertEquals(mUnderFileSystemFactory, UnderFileSystemFactoryRegistry
+          .find(UFS_PATH, mConfiguration));
     }
   };
 
   @Test
   public void testUnderFileSystemFactoryRegistryRule() throws Throwable {
     mUnderFileSystemFactory = mock(UnderFileSystemFactory.class);
-    when(mUnderFileSystemFactory.supportsPath(UFS_PATH, null)).thenReturn(true);
+    when(
+        mUnderFileSystemFactory.supportsPath(eq(UFS_PATH), any(UnderFileSystemConfiguration.class)))
+            .thenReturn(true);
     // check before
-    Assert.assertEquals(null, UnderFileSystemFactoryRegistry.find(UFS_PATH));
+    assertEquals(null, UnderFileSystemFactoryRegistry.find(UFS_PATH, mConfiguration));
     new UnderFileSystemFactoryRegistryRule(mUnderFileSystemFactory)
         .apply(mStatement, null).evaluate();
     // check after
-    Assert.assertEquals(null, UnderFileSystemFactoryRegistry.find(UFS_PATH));
+    assertEquals(null, UnderFileSystemFactoryRegistry.find(UFS_PATH, mConfiguration));
   }
 }

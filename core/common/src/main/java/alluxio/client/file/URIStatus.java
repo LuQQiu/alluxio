@@ -16,11 +16,12 @@ import alluxio.security.authorization.AccessControlList;
 import alluxio.security.authorization.DefaultAccessControlList;
 import alluxio.wire.FileBlockInfo;
 import alluxio.wire.FileInfo;
-import alluxio.wire.TtlAction;
+import alluxio.grpc.TtlAction;
 
 import com.google.common.base.Preconditions;
 
 import java.util.List;
+import java.util.Set;
 
 import javax.annotation.concurrent.ThreadSafe;
 
@@ -186,6 +187,20 @@ public class URIStatus {
   }
 
   /**
+   * @return the maximum number of replicas of the entity referenced by this uri, mutable
+   */
+  public int getReplicationMax() {
+    return mInfo.getReplicationMax();
+  }
+
+  /**
+   * @return the minimum number of replicas of the entity referenced by this uri, mutable
+   */
+  public int getReplicationMin() {
+    return mInfo.getReplicationMin();
+  }
+
+  /**
    * @return whether the entity referenced by this uri can be stored in Alluxio space, mutable
    */
   public boolean isCacheable() {
@@ -220,6 +235,13 @@ public class URIStatus {
    */
   public boolean isPinned() {
     return mInfo.isPinned();
+  }
+
+  /**
+   * @return the pinned location list
+   */
+  public Set<String> getPinnedMediumTypes() {
+    return mInfo.getMediumTypes();
   }
 
   /**

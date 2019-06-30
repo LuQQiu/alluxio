@@ -13,27 +13,31 @@ package alluxio.cli.fs.command;
 
 import alluxio.AlluxioURI;
 import alluxio.cli.CommandUtils;
-import alluxio.client.file.FileSystem;
+import alluxio.client.file.FileSystemContext;
 import alluxio.client.file.URIStatus;
-import alluxio.client.file.options.ListStatusOptions;
+import alluxio.conf.PropertyKey;
 import alluxio.exception.AlluxioException;
 import alluxio.exception.ExceptionMessage;
 import alluxio.exception.status.InvalidArgumentException;
+import alluxio.exception.status.UnavailableException;
+import alluxio.grpc.ListStatusPOptions;
+import alluxio.grpc.LoadMetadataPType;
 import alluxio.util.CommonUtils;
 import alluxio.util.FormatUtils;
 import alluxio.util.SecurityUtils;
-import alluxio.wire.LoadMetadataType;
 
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 
 import java.io.IOException;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.HashMap;
-import java.util.Comparator;
 import java.util.Optional;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.stream.Collectors;
 
 import javax.annotation.concurrent.ThreadSafe;
@@ -124,7 +128,7 @@ public final class LsCommand extends AbstractFileSystemCommand {
     SORT_FIELD_COMPARATORS.put("name",
         Comparator.comparing(URIStatus::getName, String.CASE_INSENSITIVE_ORDER));
     SORT_FIELD_COMPARATORS.put("path", Comparator.comparing(URIStatus::getPath));
-    SORT_FIELD_COMPARATORS.put("size", Comparator.comparingLong(URIStatus::getBlockSizeBytes));
+    SORT_FIELD_COMPARATORS.put("size", Comparator.comparingLong(URIStatus::getLength));
   }
 
   /**
@@ -141,12 +145,13 @@ public final class LsCommand extends AbstractFileSystemCommand {
    * @param inAlluxioPercentage whether the file is in Alluxio
    * @param persistenceState the persistence state of the file
    * @param path path of the file or folder
+   * @param dateFormatPattern the format to follow when printing dates
    * @return the formatted string according to acl and isFolder
    */
   public static String formatLsString(boolean hSize, boolean acl, boolean isFolder, String
       permission,
       String userName, String groupName, long size, long lastModifiedTime, int inAlluxioPercentage,
-      String persistenceState, String path) {
+      String persistenceState, String path, String dateFormatPattern) {
     String inAlluxioState;
     String sizeStr;
     if (isFolder) {
@@ -159,34 +164,39 @@ public final class LsCommand extends AbstractFileSystemCommand {
 
     if (acl) {
       return String.format(LS_FORMAT, permission, userName, groupName,
-          sizeStr, persistenceState, CommonUtils.convertMsToDate(lastModifiedTime),
-          inAlluxioState, path);
+          sizeStr, persistenceState, CommonUtils.convertMsToDate(lastModifiedTime,
+              dateFormatPattern), inAlluxioState, path);
     } else {
       return String.format(LS_FORMAT_NO_ACL, sizeStr,
-          persistenceState, CommonUtils.convertMsToDate(lastModifiedTime), inAlluxioState, path);
+          persistenceState, CommonUtils.convertMsToDate(lastModifiedTime, dateFormatPattern),
+          inAlluxioState, path);
     }
   }
 
-  private void printLsString(URIStatus status, boolean hSize) {
+  private void printLsString(URIStatus status, boolean hSize) throws UnavailableException {
     // detect the extended acls
     boolean hasExtended = status.getAcl().hasExtended()
         || !status.getDefaultAcl().isEmpty();
 
-    System.out.print(formatLsString(hSize, SecurityUtils.isSecurityEnabled(), status.isFolder(),
+    System.out.print(formatLsString(hSize,
+        SecurityUtils.isSecurityEnabled(mFsContext.getClusterConf()),
+        status.isFolder(),
         FormatUtils.formatMode((short) status.getMode(), status.isFolder(), hasExtended),
         status.getOwner(), status.getGroup(), status.getLength(),
         status.getLastModificationTimeMs(), status.getInAlluxioPercentage(),
-        status.getPersistenceState(), status.getPath()));
+        status.getPersistenceState(), status.getPath(),
+        mFsContext.getPathConf(new AlluxioURI(status.getPath())).get(
+            PropertyKey.USER_DATE_FORMAT_PATTERN)));
   }
 
   /**
    * Constructs a new instance to display information for all directories and files directly under
    * the path specified in args.
    *
-   * @param fs the filesystem of Alluxio
+   * @param fsContext the filesystem of Alluxio
    */
-  public LsCommand(FileSystem fs) {
-    super(fs);
+  public LsCommand(FileSystemContext fsContext) {
+    super(fsContext);
   }
 
   @Override
@@ -218,21 +228,35 @@ public final class LsCommand extends AbstractFileSystemCommand {
   private void ls(AlluxioURI path, boolean recursive, boolean forceLoadMetadata, boolean dirAsFile,
                   boolean hSize, boolean pinnedOnly, String sortField, boolean reverse)
       throws AlluxioException, IOException {
+    URIStatus pathStatus = mFileSystem.getStatus(path);
     if (dirAsFile) {
-      URIStatus status = mFileSystem.getStatus(path);
-      if (pinnedOnly && !status.isPinned()) {
+      if (pinnedOnly && !pathStatus.isPinned()) {
         return;
       }
-      printLsString(status, hSize);
+      printLsString(pathStatus, hSize);
       return;
     }
 
-    ListStatusOptions options = ListStatusOptions.defaults();
+    ListStatusPOptions.Builder optionsBuilder = ListStatusPOptions.newBuilder();
     if (forceLoadMetadata) {
-      options.setLoadMetadataType(LoadMetadataType.Always);
+      optionsBuilder.setLoadMetadataType(LoadMetadataPType.ALWAYS);
     }
-    options.setRecursive(recursive);
-    List<URIStatus> statuses = mFileSystem.listStatus(path, options);
+    optionsBuilder.setRecursive(recursive);
+
+    // If list status takes too long, print the message
+    Timer timer = new Timer();
+    if (pathStatus.isFolder()) {
+      timer.schedule(new TimerTask() {
+        @Override
+        public void run() {
+          System.out.printf("Getting directory status of %s files or sub-directories "
+              + "may take a while.%n", pathStatus.getLength());
+        }
+      }, 10000);
+    }
+    List<URIStatus> statuses = mFileSystem.listStatus(path, optionsBuilder.build());
+    timer.cancel();
+
     List<URIStatus> sorted = sortByFieldAndOrder(statuses, sortField, reverse);
     for (URIStatus status : sorted) {
       if (!pinnedOnly || status.isPinned()) {

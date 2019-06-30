@@ -11,90 +11,56 @@
 
 package alluxio.util;
 
-import alluxio.Configuration;
+import static org.junit.Assert.assertEquals;
+
 import alluxio.ConfigurationTestUtils;
-import alluxio.PropertyKey;
-import alluxio.security.LoginUserTestUtils;
+import alluxio.conf.InstancedConfiguration;
+import alluxio.conf.PropertyKey;
 import alluxio.security.authentication.AuthType;
 import alluxio.security.authentication.AuthenticatedClientUser;
 import alluxio.security.group.provider.IdentityUserGroupsMapping;
 
-import org.junit.After;
-import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Test;
 
 public final class SecurityUtilsTest {
 
-  @After
-  public void after() {
-    LoginUserTestUtils.resetLoginUser();
-    ConfigurationTestUtils.resetConfiguration();
+  private InstancedConfiguration mConfiguration;
+
+  @Before
+  public void before() {
+    mConfiguration = ConfigurationTestUtils.defaults();
   }
 
   /**
-   * Tests the {@link SecurityUtils#getOwnerFromThriftClient()} ()} method.
+   * Tests the {@link SecurityUtils#getOwnerFromGrpcClient()} ()} method.
    */
   @Test
-  public void getOwnerFromThriftClient() throws Exception {
+  public void getOwnerFromGrpcClient() throws Exception {
     // When security is not enabled, user and group are not set
-    Configuration.set(PropertyKey.SECURITY_AUTHENTICATION_TYPE, AuthType.NOSASL.getAuthName());
-    Assert.assertEquals("", SecurityUtils.getOwnerFromThriftClient());
+    mConfiguration.set(PropertyKey.SECURITY_AUTHENTICATION_TYPE, AuthType.NOSASL.getAuthName());
+    assertEquals("", SecurityUtils.getOwnerFromGrpcClient(mConfiguration));
 
-    Configuration.set(PropertyKey.SECURITY_AUTHENTICATION_TYPE, AuthType.SIMPLE.getAuthName());
-    Configuration.set(PropertyKey.SECURITY_GROUP_MAPPING_CLASS,
+    mConfiguration.set(PropertyKey.SECURITY_AUTHENTICATION_TYPE, AuthType.SIMPLE.getAuthName());
+    mConfiguration.set(PropertyKey.SECURITY_GROUP_MAPPING_CLASS,
         IdentityUserGroupsMapping.class.getName());
     AuthenticatedClientUser.set("test_client_user");
-    Assert.assertEquals("test_client_user", SecurityUtils.getOwnerFromThriftClient());
+    assertEquals("test_client_user", SecurityUtils.getOwnerFromGrpcClient(mConfiguration));
   }
 
   /**
-   * Tests the {@link SecurityUtils#getGroupFromThriftClient()} ()} method.
+   * Tests the {@link SecurityUtils#getGroupFromGrpcClient()} ()} method.
    */
   @Test
-  public void getGroupFromThriftClient() throws Exception {
+  public void getGroupFromGrpcClient() throws Exception {
     // When security is not enabled, user and group are not set
-    Configuration.set(PropertyKey.SECURITY_AUTHENTICATION_TYPE, AuthType.NOSASL.getAuthName());
-    Assert.assertEquals("", SecurityUtils.getGroupFromThriftClient());
+    mConfiguration.set(PropertyKey.SECURITY_AUTHENTICATION_TYPE, AuthType.NOSASL.getAuthName());
+    assertEquals("", SecurityUtils.getGroupFromGrpcClient(mConfiguration));
 
-    Configuration.set(PropertyKey.SECURITY_AUTHENTICATION_TYPE, AuthType.SIMPLE.getAuthName());
-    Configuration.set(PropertyKey.SECURITY_GROUP_MAPPING_CLASS,
+    mConfiguration.set(PropertyKey.SECURITY_AUTHENTICATION_TYPE, AuthType.SIMPLE.getAuthName());
+    mConfiguration.set(PropertyKey.SECURITY_GROUP_MAPPING_CLASS,
         IdentityUserGroupsMapping.class.getName());
     AuthenticatedClientUser.set("test_client_user");
-    Assert.assertEquals("test_client_user", SecurityUtils.getGroupFromThriftClient());
-  }
-
-  /**
-   * Tests the {@link SecurityUtils#getOwnerFromLoginModule()} method.
-   */
-  @Test
-  public void getOwnerFromLoginModule() throws Exception {
-    // When security is not enabled, user and group are not set
-    Configuration.set(PropertyKey.SECURITY_AUTHENTICATION_TYPE, AuthType.NOSASL.getAuthName());
-    Assert.assertEquals("", SecurityUtils.getOwnerFromLoginModule());
-
-    // When authentication is enabled, user and group are inferred from login module
-    Configuration.set(PropertyKey.SECURITY_AUTHENTICATION_TYPE, AuthType.SIMPLE.getAuthName());
-    Configuration.set(PropertyKey.SECURITY_LOGIN_USERNAME, "test_login_user");
-    Configuration.set(PropertyKey.SECURITY_GROUP_MAPPING_CLASS,
-        IdentityUserGroupsMapping.class.getName());
-    Assert.assertEquals("test_login_user", SecurityUtils.getOwnerFromLoginModule());
-  }
-
-  /**
-   * Tests the {@link SecurityUtils#getGroupFromLoginModule()} method.
-   */
-  @Test
-  public void getGroupFromLoginModuleError() throws Exception {
-    // When security is not enabled, user and group are not set
-    Configuration.set(PropertyKey.SECURITY_AUTHENTICATION_TYPE, AuthType.NOSASL.getAuthName());
-    Assert.assertEquals("", SecurityUtils.getGroupFromLoginModule());
-
-    // When authentication is enabled, user and group are inferred from login module
-    Configuration.set(PropertyKey.SECURITY_AUTHENTICATION_TYPE, AuthType.SIMPLE.getAuthName());
-    Configuration.set(PropertyKey.SECURITY_LOGIN_USERNAME, "test_login_user");
-    Configuration.set(PropertyKey.SECURITY_GROUP_MAPPING_CLASS,
-        IdentityUserGroupsMapping.class.getName());
-    LoginUserTestUtils.resetLoginUser();
-    Assert.assertEquals("test_login_user", SecurityUtils.getGroupFromLoginModule());
+    assertEquals("test_client_user", SecurityUtils.getGroupFromGrpcClient(mConfiguration));
   }
 }

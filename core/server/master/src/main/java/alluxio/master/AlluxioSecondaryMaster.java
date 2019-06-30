@@ -11,13 +11,16 @@
 
 package alluxio.master;
 
-import alluxio.Configuration;
 import alluxio.Process;
 import alluxio.ProcessUtils;
-import alluxio.PropertyKey;
 import alluxio.RuntimeConstants;
+import alluxio.conf.PropertyKey;
+import alluxio.conf.ServerConfiguration;
 import alluxio.master.journal.JournalSystem;
 import alluxio.master.journal.JournalUtils;
+import alluxio.util.CommonUtils;
+import alluxio.util.CommonUtils.ProcessType;
+import alluxio.util.WaitForOptions;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,6 +28,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.net.URI;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeoutException;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
@@ -42,21 +46,32 @@ public final class AlluxioSecondaryMaster implements Process {
   private final long mStartTimeMs;
   private final int mPort;
 
+  private volatile boolean mRunning = false;
+
   /**
    * Creates a {@link AlluxioSecondaryMaster}.
    */
   AlluxioSecondaryMaster() {
     try {
       URI journalLocation = JournalUtils.getJournalLocation();
-      mJournalSystem = new JournalSystem.Builder().setLocation(journalLocation).build();
+      mJournalSystem = new JournalSystem.Builder()
+          .setLocation(journalLocation).build(ProcessType.MASTER);
       mRegistry = new MasterRegistry();
       mSafeModeManager = new DefaultSafeModeManager();
       mBackupManager = new BackupManager(mRegistry);
       mStartTimeMs = System.currentTimeMillis();
-      mPort = Configuration.getInt(PropertyKey.MASTER_RPC_PORT);
+      mPort = ServerConfiguration.getInt(PropertyKey.MASTER_RPC_PORT);
+      String baseDir = ServerConfiguration.get(PropertyKey.SECONDARY_MASTER_METASTORE_DIR);
       // Create masters.
-      MasterUtils.createMasters(mRegistry,
-          new MasterContext(mJournalSystem, mSafeModeManager, mBackupManager, mStartTimeMs, mPort));
+      MasterUtils.createMasters(mRegistry, CoreMasterContext.newBuilder()
+          .setJournalSystem(mJournalSystem)
+          .setSafeModeManager(mSafeModeManager)
+          .setBackupManager(mBackupManager)
+          .setBlockStoreFactory(MasterUtils.getBlockStoreFactory(baseDir))
+          .setInodeStoreFactory(MasterUtils.getInodeStoreFactory(baseDir))
+          .setStartTimeMs(mStartTimeMs)
+          .setPort(mPort)
+          .build());
       // Check that journals of each service have been formatted.
       if (!mJournalSystem.isFormatted()) {
         throw new RuntimeException(
@@ -70,19 +85,31 @@ public final class AlluxioSecondaryMaster implements Process {
 
   @Override
   public void start() throws Exception {
-    mRegistry.start(false);
+    mJournalSystem.start();
+    mRunning = true;
     mLatch.await();
+    mJournalSystem.stop();
+    mRegistry.close();
+    mRunning = false;
   }
 
   @Override
   public void stop() throws Exception {
-    mRegistry.stop();
     mLatch.countDown();
   }
 
   @Override
   public boolean waitForReady(int timeoutMs) {
-    return true;
+    try {
+      CommonUtils.waitFor("Secondary master to start", () -> mRunning,
+          WaitForOptions.defaults().setTimeoutMs(timeoutMs));
+      return true;
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      return false;
+    } catch (TimeoutException e) {
+      return false;
+    }
   }
 
   @Override

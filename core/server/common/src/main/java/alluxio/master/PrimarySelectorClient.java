@@ -12,9 +12,9 @@
 package alluxio.master;
 
 import alluxio.AlluxioURI;
-import alluxio.Configuration;
+import alluxio.conf.ServerConfiguration;
 import alluxio.Constants;
-import alluxio.PropertyKey;
+import alluxio.conf.PropertyKey;
 
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
@@ -23,6 +23,7 @@ import org.apache.curator.framework.recipes.leader.LeaderSelectorListener;
 import org.apache.curator.framework.recipes.leader.Participant;
 import org.apache.curator.framework.state.ConnectionState;
 import org.apache.curator.retry.ExponentialBackoffRetry;
+import org.apache.zookeeper.CreateMode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -153,7 +154,8 @@ public final class PrimarySelectorClient extends AbstractPrimarySelector
       client.delete().forPath(mLeaderFolder + mName);
     }
     LOG.info("Creating zk path: {}{}", mLeaderFolder, mName);
-    client.create().creatingParentsIfNeeded().forPath(mLeaderFolder + mName);
+    client.create().creatingParentsIfNeeded().withMode(CreateMode.EPHEMERAL)
+        .forPath(mLeaderFolder + mName);
     LOG.info("{} is now the leader.", mName);
     try {
       waitForState(State.SECONDARY);
@@ -173,8 +175,8 @@ public final class PrimarySelectorClient extends AbstractPrimarySelector
    */
   private CuratorFramework getNewCuratorClient() {
     CuratorFramework client = CuratorFrameworkFactory.newClient(mZookeeperAddress,
-        (int) Configuration.getMs(PropertyKey.ZOOKEEPER_SESSION_TIMEOUT),
-        (int) Configuration.getMs(PropertyKey.ZOOKEEPER_CONNECTION_TIMEOUT),
+        (int) ServerConfiguration.getMs(PropertyKey.ZOOKEEPER_SESSION_TIMEOUT),
+        (int) ServerConfiguration.getMs(PropertyKey.ZOOKEEPER_CONNECTION_TIMEOUT),
         new ExponentialBackoffRetry(Constants.SECOND_MS, 3));
     client.start();
 
@@ -183,8 +185,8 @@ public final class PrimarySelectorClient extends AbstractPrimarySelector
     // state, explicitly close the "old" client and recreate a new one.
     client.close();
     client = CuratorFrameworkFactory.newClient(mZookeeperAddress,
-        (int) Configuration.getMs(PropertyKey.ZOOKEEPER_SESSION_TIMEOUT),
-        (int) Configuration.getMs(PropertyKey.ZOOKEEPER_CONNECTION_TIMEOUT),
+        (int) ServerConfiguration.getMs(PropertyKey.ZOOKEEPER_SESSION_TIMEOUT),
+        (int) ServerConfiguration.getMs(PropertyKey.ZOOKEEPER_CONNECTION_TIMEOUT),
         new ExponentialBackoffRetry(Constants.SECOND_MS, 3));
     client.start();
     return client;

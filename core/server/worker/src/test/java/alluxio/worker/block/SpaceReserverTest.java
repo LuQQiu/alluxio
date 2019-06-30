@@ -11,13 +11,20 @@
 
 package alluxio.worker.block;
 
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import alluxio.ConfigurationRule;
-import alluxio.PropertyKey;
+import alluxio.conf.PropertyKey;
 import alluxio.Sessions;
+import alluxio.conf.ServerConfiguration;
 import alluxio.heartbeat.HeartbeatContext;
 import alluxio.heartbeat.HeartbeatScheduler;
 import alluxio.heartbeat.HeartbeatThread;
 import alluxio.heartbeat.ManuallyScheduleHeartbeat;
+import alluxio.security.user.UserState;
 import alluxio.util.ThreadFactoryUtils;
 
 import com.google.common.collect.ImmutableMap;
@@ -27,7 +34,6 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import org.mockito.Matchers;
-import org.mockito.Mockito;
 
 import java.io.Closeable;
 import java.util.HashMap;
@@ -49,10 +55,13 @@ public class SpaceReserverTest {
   public ManuallyScheduleHeartbeat mSchedule = new ManuallyScheduleHeartbeat(
       HeartbeatContext.WORKER_SPACE_RESERVER);
 
+  private UserState mUserState;
+
   @Before
   public void before() {
     mExecutorService =
         Executors.newFixedThreadPool(1, ThreadFactoryUtils.build("space-reserver-test", true));
+    mUserState = UserState.Factory.create(ServerConfiguration.global());
   }
 
   @After
@@ -62,11 +71,13 @@ public class SpaceReserverTest {
 
   @Test
   public void reserveCorrectAmountsOfSpace() throws Exception {
-    BlockWorker blockWorker = Mockito.mock(BlockWorker.class);
-    BlockStoreMeta storeMeta = Mockito.mock(BlockStoreMeta.class);
-    Mockito.when(blockWorker.getStoreMeta()).thenReturn(storeMeta);
+    BlockWorker blockWorker = mock(BlockWorker.class);
+    BlockStoreMeta storeMeta = mock(BlockStoreMeta.class);
+    when(blockWorker.getStoreMeta()).thenReturn(storeMeta);
     Map<String, Long> capacityBytesOnTiers = ImmutableMap.of("MEM", 400L, "HDD", 1000L);
-    Mockito.when(storeMeta.getCapacityBytesOnTiers()).thenReturn(capacityBytesOnTiers);
+    Map<String, Long> usedCapacityBytesOnTiers = ImmutableMap.of("MEM", 390L, "HDD", 800L);
+    when(storeMeta.getCapacityBytesOnTiers()).thenReturn(capacityBytesOnTiers);
+    when(storeMeta.getUsedBytesOnTiers()).thenReturn(usedCapacityBytesOnTiers);
 
     String tmpFolderPath = mTempFolder.newFolder().getAbsolutePath();
 
@@ -74,37 +85,41 @@ public class SpaceReserverTest {
     TieredBlockStoreTestUtils.setupConfWithMultiTier(tmpFolderPath,
         new int[]{0, 1}, new String[] {"MEM", "HDD"},
         new String[][]{new String[]{"/a"}, new String[]{"/b"}},
-        new long[][]{new long[]{0}, new long[]{0}}, "/");
+        new long[][]{new long[]{0}, new long[]{0}},
+        new String[][]{new String[]{"MEM"}, new String[]{"HDD"}}, "/");
 
     try (Closeable c = new ConfigurationRule(ImmutableMap.of(
-        PropertyKey.WORKER_TIERED_STORE_LEVEL0_RESERVED_RATIO, "0.2",
-        PropertyKey.WORKER_TIERED_STORE_LEVEL1_RESERVED_RATIO, "0.3")).toResource()) {
+        PropertyKey.WORKER_TIERED_STORE_LEVEL0_HIGH_WATERMARK_RATIO, "0.81",
+        PropertyKey.WORKER_TIERED_STORE_LEVEL0_LOW_WATERMARK_RATIO, "0.8",
+        PropertyKey.WORKER_TIERED_STORE_LEVEL1_HIGH_WATERMARK_RATIO, "0.71",
+        PropertyKey.WORKER_TIERED_STORE_LEVEL1_LOW_WATERMARK_RATIO, "0.7"),
+        ServerConfiguration.global()).toResource()) {
       SpaceReserver spaceReserver = new SpaceReserver(blockWorker);
 
       mExecutorService.submit(new HeartbeatThread(HeartbeatContext.WORKER_SPACE_RESERVER,
-          spaceReserver, 0));
+          spaceReserver, 0, ServerConfiguration.global(), mUserState));
 
       // Run the space reserver once.
       HeartbeatScheduler.execute(HeartbeatContext.WORKER_SPACE_RESERVER);
 
       // 400 * 0.2 = 80
-      Mockito.verify(blockWorker).freeSpace(Sessions.MIGRATE_DATA_SESSION_ID, 80L, "MEM");
+      verify(blockWorker).freeSpace(Sessions.MIGRATE_DATA_SESSION_ID, 80L, "MEM");
       // 400 * 0.2 + 1000 * 0.3 = 380
-      Mockito.verify(blockWorker).freeSpace(Sessions.MIGRATE_DATA_SESSION_ID, 380L, "HDD");
+      verify(blockWorker).freeSpace(Sessions.MIGRATE_DATA_SESSION_ID, 380L, "HDD");
     }
   }
 
   @Test
   public void testLowWatermark() throws Exception {
-    BlockWorker blockWorker = Mockito.mock(BlockWorker.class);
-    BlockStoreMeta storeMeta = Mockito.mock(BlockStoreMeta.class);
-    Mockito.when(blockWorker.getStoreMeta()).thenReturn(storeMeta);
+    BlockWorker blockWorker = mock(BlockWorker.class);
+    BlockStoreMeta storeMeta = mock(BlockStoreMeta.class);
+    when(blockWorker.getStoreMeta()).thenReturn(storeMeta);
     Map<String, Long> capacityBytesOnTiers = ImmutableMap.of("MEM", 100L, "SSD", 200L, "HDD",
         1000L);
     Map<String, Long> usedCapacityBytesOnTiers = ImmutableMap.of("MEM", 100L, "SSD", 200L, "HDD",
         1000L);
-    Mockito.when(storeMeta.getCapacityBytesOnTiers()).thenReturn(capacityBytesOnTiers);
-    Mockito.when(storeMeta.getUsedBytesOnTiers()).thenReturn(usedCapacityBytesOnTiers);
+    when(storeMeta.getCapacityBytesOnTiers()).thenReturn(capacityBytesOnTiers);
+    when(storeMeta.getUsedBytesOnTiers()).thenReturn(usedCapacityBytesOnTiers);
 
     String tmpFolderPath = mTempFolder.newFolder().getAbsolutePath();
 
@@ -112,7 +127,9 @@ public class SpaceReserverTest {
     TieredBlockStoreTestUtils.setupConfWithMultiTier(tmpFolderPath,
         new int[]{0, 1, 2}, new String[] {"MEM", "SSD", "HDD"},
         new String[][]{new String[]{"/a"}, new String[]{"/b"}, new String[]{"/c"}},
-        new long[][]{new long[]{0}, new long[]{0}, new long[]{0}}, "/");
+        new long[][]{new long[]{0}, new long[]{0}, new long[]{0}},
+        new String[][]{new String[]{"MEM"}, new String[]{"SSD"}, new String[]{"HDD"}},
+        "/");
     try (Closeable c = new ConfigurationRule(new HashMap<PropertyKey, String>() {
       {
         put(PropertyKey.WORKER_TIERED_STORE_LEVEL0_HIGH_WATERMARK_RATIO, "0.9");
@@ -122,35 +139,35 @@ public class SpaceReserverTest {
         put(PropertyKey.WORKER_TIERED_STORE_LEVEL2_HIGH_WATERMARK_RATIO, "0.8");
         put(PropertyKey.WORKER_TIERED_STORE_LEVEL2_LOW_WATERMARK_RATIO, "0.6");
       }
-    }).toResource()) {
+    }, ServerConfiguration.global()).toResource()) {
       SpaceReserver spaceReserver = new SpaceReserver(blockWorker);
 
       mExecutorService.submit(new HeartbeatThread(HeartbeatContext.WORKER_SPACE_RESERVER,
-          spaceReserver, 0));
+          spaceReserver, 0, ServerConfiguration.global(), mUserState));
 
       // Run the space reserver once.
       HeartbeatScheduler.execute(HeartbeatContext.WORKER_SPACE_RESERVER);
 
       // 1000 * 0.4 + 200 * 0.3 + 100 * 0.2 = 480
-      Mockito.verify(blockWorker).freeSpace(Sessions.MIGRATE_DATA_SESSION_ID, 480L, "HDD");
+      verify(blockWorker).freeSpace(Sessions.MIGRATE_DATA_SESSION_ID, 480L, "HDD");
       // 200 * 0.3 + 100 * 0.2 = 80
-      Mockito.verify(blockWorker).freeSpace(Sessions.MIGRATE_DATA_SESSION_ID, 80L, "SSD");
+      verify(blockWorker).freeSpace(Sessions.MIGRATE_DATA_SESSION_ID, 80L, "SSD");
       // 100 * 0.2 = 20
-      Mockito.verify(blockWorker).freeSpace(Sessions.MIGRATE_DATA_SESSION_ID, 20L, "MEM");
+      verify(blockWorker).freeSpace(Sessions.MIGRATE_DATA_SESSION_ID, 20L, "MEM");
     }
   }
 
   @Test
   public void testHighWatermark() throws Exception {
-    BlockWorker blockWorker = Mockito.mock(BlockWorker.class);
-    BlockStoreMeta storeMeta = Mockito.mock(BlockStoreMeta.class);
-    Mockito.when(blockWorker.getStoreMeta()).thenReturn(storeMeta);
+    BlockWorker blockWorker = mock(BlockWorker.class);
+    BlockStoreMeta storeMeta = mock(BlockStoreMeta.class);
+    when(blockWorker.getStoreMeta()).thenReturn(storeMeta);
     Map<String, Long> capacityBytesOnTiers = ImmutableMap.of("MEM", 100L, "SSD", 200L, "HDD",
         1000L);
     Map<String, Long> usedCapacityBytesOnTiers =
         ImmutableMap.of("MEM", 100L, "SSD", 100L, "HDD", 0L);
-    Mockito.when(storeMeta.getCapacityBytesOnTiers()).thenReturn(capacityBytesOnTiers);
-    Mockito.when(storeMeta.getUsedBytesOnTiers()).thenReturn(usedCapacityBytesOnTiers);
+    when(storeMeta.getCapacityBytesOnTiers()).thenReturn(capacityBytesOnTiers);
+    when(storeMeta.getUsedBytesOnTiers()).thenReturn(usedCapacityBytesOnTiers);
 
     String tmpFolderPath = mTempFolder.newFolder().getAbsolutePath();
 
@@ -158,7 +175,8 @@ public class SpaceReserverTest {
     TieredBlockStoreTestUtils.setupConfWithMultiTier(tmpFolderPath,
         new int[]{0, 1, 2}, new String[]{"MEM", "SSD", "HDD"},
         new String[][]{new String[]{"/a"}, new String[]{"/b"}, new String[]{"/c"}},
-        new long[][]{new long[]{0}, new long[]{0}, new long[]{0}}, "/");
+        new long[][]{new long[]{0}, new long[]{0}, new long[]{0}},
+        new String[][]{new String[]{"MEM"}, new String[]{"SSD"}, new String[]{"HDD"}}, "/");
     try (Closeable c = new ConfigurationRule(new HashMap<PropertyKey, String>() {
       {
         put(PropertyKey.WORKER_TIERED_STORE_LEVEL0_HIGH_WATERMARK_RATIO, "0.9");
@@ -168,44 +186,45 @@ public class SpaceReserverTest {
         put(PropertyKey.WORKER_TIERED_STORE_LEVEL2_HIGH_WATERMARK_RATIO, "0.8");
         put(PropertyKey.WORKER_TIERED_STORE_LEVEL2_LOW_WATERMARK_RATIO, "0.6");
       }
-    }).toResource()) {
+    }, ServerConfiguration.global()).toResource()) {
       SpaceReserver spaceReserver = new SpaceReserver(blockWorker);
 
       mExecutorService.submit(new HeartbeatThread(HeartbeatContext.WORKER_SPACE_RESERVER,
-          spaceReserver, 0));
+          spaceReserver, 0, ServerConfiguration.global(), mUserState));
 
       // Run the space reserver once.
       HeartbeatScheduler.execute(HeartbeatContext.WORKER_SPACE_RESERVER);
 
       // 1000 * 0.4 + 200 * 0.3 + 100 * 0.2 = 480
-      Mockito.verify(blockWorker, Mockito.never()).freeSpace(
+      verify(blockWorker, never()).freeSpace(
           Matchers.eq(Sessions.MIGRATE_DATA_SESSION_ID), Matchers.anyLong(), Matchers.eq("HDD"));
       // 200 * 0.3 + 100 * 0.2 = 80
-      Mockito.verify(blockWorker, Mockito.never()).freeSpace(
+      verify(blockWorker, never()).freeSpace(
           Matchers.eq(Sessions.MIGRATE_DATA_SESSION_ID), Matchers.anyLong(), Matchers.eq("SSD"));
       // 100 * 0.2 = 20
-      Mockito.verify(blockWorker).freeSpace(Sessions.MIGRATE_DATA_SESSION_ID, 20L, "MEM");
+      verify(blockWorker).freeSpace(Sessions.MIGRATE_DATA_SESSION_ID, 20L, "MEM");
     }
   }
 
   @Test
   public void smallWatermarkValues() throws Exception {
-    BlockWorker blockWorker = Mockito.mock(BlockWorker.class);
-    BlockStoreMeta storeMeta = Mockito.mock(BlockStoreMeta.class);
-    Mockito.when(blockWorker.getStoreMeta()).thenReturn(storeMeta);
+    BlockWorker blockWorker = mock(BlockWorker.class);
+    BlockStoreMeta storeMeta = mock(BlockStoreMeta.class);
+    when(blockWorker.getStoreMeta()).thenReturn(storeMeta);
     Map<String, Long> capacityBytesOnTiers =
         ImmutableMap.of("MEM", 100L, "SSD", 200L, "HDD", 1000L);
     Map<String, Long> usedCapacityBytesOnTiers =
         ImmutableMap.of("MEM", 100L, "SSD", 100L, "HDD", 0L);
-    Mockito.when(storeMeta.getCapacityBytesOnTiers()).thenReturn(capacityBytesOnTiers);
-    Mockito.when(storeMeta.getUsedBytesOnTiers()).thenReturn(usedCapacityBytesOnTiers);
+    when(storeMeta.getCapacityBytesOnTiers()).thenReturn(capacityBytesOnTiers);
+    when(storeMeta.getUsedBytesOnTiers()).thenReturn(usedCapacityBytesOnTiers);
 
     String tmpFolderPath = mTempFolder.newFolder().getAbsolutePath();
     // Create two tiers named "MEM", "SSD" and "HDD" with aliases 0, 1 and 2.
     TieredBlockStoreTestUtils.setupConfWithMultiTier(tmpFolderPath,
         new int[]{0, 1, 2}, new String[]{"MEM", "SSD", "HDD"},
         new String[][]{new String[]{"/a"}, new String[]{"/b"}, new String[]{"/c"}},
-        new long[][]{new long[]{0}, new long[]{0}, new long[]{0}}, "/");
+        new long[][]{new long[]{0}, new long[]{0}, new long[]{0}},
+        new String[][]{new String[]{"MEM"}, new String[]{"SSD"}, new String[]{"HDD"}}, "/");
     try (Closeable c = new ConfigurationRule(new HashMap<PropertyKey, String>() {
       {
         put(PropertyKey.WORKER_TIERED_STORE_LEVEL0_HIGH_WATERMARK_RATIO, "0.4");
@@ -215,22 +234,22 @@ public class SpaceReserverTest {
         put(PropertyKey.WORKER_TIERED_STORE_LEVEL2_HIGH_WATERMARK_RATIO, "0.2");
         put(PropertyKey.WORKER_TIERED_STORE_LEVEL2_LOW_WATERMARK_RATIO, "0.1");
       }
-    }).toResource()) {
+    }, ServerConfiguration.global()).toResource()) {
       SpaceReserver spaceReserver = new SpaceReserver(blockWorker);
 
       mExecutorService.submit(new HeartbeatThread(HeartbeatContext.WORKER_SPACE_RESERVER,
-          spaceReserver, 0));
+          spaceReserver, 0, ServerConfiguration.global(), mUserState));
 
       // Run the space reserver once.
       HeartbeatScheduler.execute(HeartbeatContext.WORKER_SPACE_RESERVER);
 
       // 1000 * 0.1 + 200 = 300
-      Mockito.verify(blockWorker, Mockito.never()).freeSpace(
+      verify(blockWorker, never()).freeSpace(
           Matchers.eq(Sessions.MIGRATE_DATA_SESSION_ID), Matchers.anyLong(), Matchers.eq("HDD"));
       // 200 * 0.8 + 100 * 0.7 = 230 -> 200
-      Mockito.verify(blockWorker).freeSpace(Sessions.MIGRATE_DATA_SESSION_ID, 200L, "SSD");
+      verify(blockWorker).freeSpace(Sessions.MIGRATE_DATA_SESSION_ID, 200L, "SSD");
       // 100 * 0.7 = 70
-      Mockito.verify(blockWorker).freeSpace(Sessions.MIGRATE_DATA_SESSION_ID, 70L, "MEM");
+      verify(blockWorker).freeSpace(Sessions.MIGRATE_DATA_SESSION_ID, 70L, "MEM");
     }
   }
 }

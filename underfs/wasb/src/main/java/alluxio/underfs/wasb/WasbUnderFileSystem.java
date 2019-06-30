@@ -12,7 +12,7 @@
 package alluxio.underfs.wasb;
 
 import alluxio.AlluxioURI;
-import alluxio.PropertyKey;
+import alluxio.conf.PropertyKey;
 import alluxio.underfs.UnderFileSystem;
 import alluxio.underfs.UnderFileSystemConfiguration;
 import alluxio.underfs.hdfs.HdfsUnderFileSystem;
@@ -91,7 +91,7 @@ public class WasbUnderFileSystem extends HdfsUnderFileSystem {
   @Override
   public long getBlockSizeByte(String path) throws IOException {
     // wasb is an object store, so use the default block size, like other object stores.
-    return alluxio.Configuration.getBytes(PropertyKey.USER_BLOCK_SIZE_BYTES_DEFAULT);
+    return mUfsConf.getBytes(PropertyKey.USER_BLOCK_SIZE_BYTES_DEFAULT);
   }
 
   // Not supported

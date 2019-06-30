@@ -13,10 +13,10 @@ package alluxio.cli.fs.command;
 
 import alluxio.AlluxioURI;
 import alluxio.cli.CommandUtils;
-import alluxio.client.file.FileSystem;
-import alluxio.client.file.options.SetAttributeOptions;
+import alluxio.client.file.FileSystemContext;
 import alluxio.exception.AlluxioException;
 import alluxio.exception.status.InvalidArgumentException;
+import alluxio.grpc.SetAttributePOptions;
 import alluxio.security.authorization.Mode;
 import alluxio.security.authorization.ModeParser;
 
@@ -24,9 +24,8 @@ import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 
-import java.io.IOException;
-
 import javax.annotation.concurrent.ThreadSafe;
+import java.io.IOException;
 
 /**
  * Changes the permission of a file or directory specified by args.
@@ -46,10 +45,10 @@ public final class ChmodCommand extends AbstractFileSystemCommand {
   /**
    * Creates a new instance of {@link ChmodCommand}.
    *
-   * @param fs an Alluxio file system handle
+   * @param fsContext an Alluxio file system handle
    */
-  public ChmodCommand(FileSystem fs) {
-    super(fs);
+  public ChmodCommand(FileSystemContext fsContext) {
+    super(fsContext);
   }
 
   @Override
@@ -83,8 +82,8 @@ public final class ChmodCommand extends AbstractFileSystemCommand {
   private void chmod(AlluxioURI path, String modeStr, boolean recursive) throws
       AlluxioException, IOException {
     Mode mode = ModeParser.parse(modeStr);
-    SetAttributeOptions options =
-        SetAttributeOptions.defaults().setMode(mode).setRecursive(recursive);
+    SetAttributePOptions options =
+        SetAttributePOptions.newBuilder().setMode(mode.toProto()).setRecursive(recursive).build();
     mFileSystem.setAttribute(path, options);
     System.out
         .println("Changed permission of " + path + " to " + Integer.toOctalString(mode.toShort()));

@@ -11,9 +11,9 @@
 
 package alluxio.cli;
 
-import alluxio.Configuration;
+import alluxio.conf.ServerConfiguration;
 import alluxio.Constants;
-import alluxio.PropertyKey;
+import alluxio.conf.PropertyKey;
 import alluxio.cli.validation.ClusterConfConsistencyValidationTask;
 import alluxio.cli.validation.HdfsValidationTask;
 import alluxio.cli.validation.PortAvailabilityValidationTask;
@@ -100,10 +100,6 @@ public final class ValidateEnv {
         "validate master web port is available",
         new PortAvailabilityValidationTask(ServiceType.MASTER_WEB, ALLUXIO_MASTER_CLASS),
         MASTER_TASKS);
-    registerTask("worker.data.port.available",
-        "validate worker data port is available",
-        new PortAvailabilityValidationTask(ServiceType.WORKER_DATA, ALLUXIO_WORKER_CLASS),
-        WORKER_TASKS);
     registerTask("worker.rpc.port.available",
         "validate worker RPC port is available",
         new PortAvailabilityValidationTask(ServiceType.WORKER_RPC, ALLUXIO_WORKER_CLASS),
@@ -217,7 +213,7 @@ public final class ValidateEnv {
 
     // args is not null.
     String argStr = String.join(" ", cmd.getArgs());
-    String homeDir = Configuration.get(PropertyKey.HOME);
+    String homeDir = ServerConfiguration.get(PropertyKey.HOME);
     String remoteCommand = String.format(
         "%s/bin/alluxio validateEnv %s %s %s",
         homeDir, target, name == null ? "" : name, argStr);

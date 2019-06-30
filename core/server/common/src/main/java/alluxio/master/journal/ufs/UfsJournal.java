@@ -11,17 +11,19 @@
 
 package alluxio.master.journal.ufs;
 
-import alluxio.Configuration;
-import alluxio.PropertyKey;
-import alluxio.exception.InvalidJournalEntryException;
+import alluxio.conf.PropertyKey;
+import alluxio.conf.ServerConfiguration;
 import alluxio.exception.JournalClosedException;
+import alluxio.exception.status.CancelledException;
 import alluxio.exception.status.UnavailableException;
+import alluxio.master.Master;
 import alluxio.master.journal.AsyncJournalWriter;
 import alluxio.master.journal.Journal;
 import alluxio.master.journal.JournalContext;
-import alluxio.master.journal.JournalEntryStateMachine;
 import alluxio.master.journal.JournalReader;
+import alluxio.master.journal.JournalUtils;
 import alluxio.master.journal.MasterJournalContext;
+import alluxio.master.journal.sink.JournalSink;
 import alluxio.proto.journal.Journal.JournalEntry;
 import alluxio.retry.ExponentialTimeBoundedRetry;
 import alluxio.retry.RetryPolicy;
@@ -41,6 +43,8 @@ import java.io.IOException;
 import java.net.URI;
 import java.time.Duration;
 import java.util.Map;
+import java.util.Set;
+import java.util.function.Supplier;
 
 import javax.annotation.concurrent.ThreadSafe;
 
@@ -84,8 +88,8 @@ public class UfsJournal implements Journal {
 
   /** The location where this journal is stored. */
   private final URI mLocation;
-  /** The state machine managed by this journal. */
-  private final JournalEntryStateMachine mMaster;
+  /** The master managed by this journal. */
+  private final Master mMaster;
   /** The UFS where the journal is being written to. */
   private final UnderFileSystem mUfs;
   /** The amount of time to wait to pass without seeing a new journal entry when gaining primacy. */
@@ -93,7 +97,7 @@ public class UfsJournal implements Journal {
   /** The current log writer. Null when in secondary mode. */
   private UfsJournalLogWriter mWriter;
   /** Asynchronous journal writer. */
-  private AsyncJournalWriter mAsyncWriter;
+  private volatile AsyncJournalWriter mAsyncWriter;
   /**
    * Thread for tailing the journal, taking snapshots, and applying updates to the state machine.
    * Null when in primary mode.
@@ -106,41 +110,48 @@ public class UfsJournal implements Journal {
 
   private State mState;
 
+  /** A supplier of journal sinks for this journal. */
+  private final Supplier<Set<JournalSink>> mJournalSinks;
+
   /**
    * @return the ufs configuration to use for the journal operations
    */
   protected static UnderFileSystemConfiguration getJournalUfsConf() {
     Map<String, String> ufsConf =
-        Configuration.getNestedProperties(PropertyKey.MASTER_JOURNAL_UFS_OPTION);
-    return UnderFileSystemConfiguration.defaults().setUserSpecifiedConf(ufsConf);
+        ServerConfiguration.getNestedProperties(PropertyKey.MASTER_JOURNAL_UFS_OPTION);
+    return UnderFileSystemConfiguration.defaults(ServerConfiguration.global())
+               .createMountSpecificConf(ufsConf);
   }
 
   /**
    * Creates a new instance of {@link UfsJournal}.
    *
    * @param location the location for this journal
-   * @param stateMachine the state machine to manage
+   * @param master the master to manage
    * @param quietPeriodMs the amount of time to wait to pass without seeing a new journal entry when
    *        gaining primacy
+   * @param journalSinks a supplier for journal sinks
    */
-  public UfsJournal(URI location, JournalEntryStateMachine stateMachine, long quietPeriodMs) {
-    this(location, stateMachine,
-        UnderFileSystem.Factory.create(location.toString(), getJournalUfsConf()), quietPeriodMs);
+  public UfsJournal(URI location, Master master, long quietPeriodMs,
+      Supplier<Set<JournalSink>> journalSinks) {
+    this(location, master, UnderFileSystem.Factory.create(location.toString(), getJournalUfsConf()),
+        quietPeriodMs, journalSinks);
   }
 
   /**
    * Creates a new instance of {@link UfsJournal}.
    *
    * @param location the location for this journal
-   * @param stateMachine the state machine to manage
+   * @param master the state machine to manage
    * @param ufs the under file system
    * @param quietPeriodMs the amount of time to wait to pass without seeing a new journal entry when
    *        gaining primacy
+   * @param journalSinks a supplier for journal sinks
    */
-  UfsJournal(URI location, JournalEntryStateMachine stateMachine, UnderFileSystem ufs,
-      long quietPeriodMs) {
+  UfsJournal(URI location, Master master, UnderFileSystem ufs,
+      long quietPeriodMs, Supplier<Set<JournalSink>> journalSinks) {
     mLocation = URIUtils.appendPathOrDie(location, VERSION);
-    mMaster = stateMachine;
+    mMaster = master;
     mUfs = ufs;
     mQuietPeriodMs = quietPeriodMs;
 
@@ -148,6 +159,7 @@ public class UfsJournal implements Journal {
     mCheckpointDir = URIUtils.appendPathOrDie(mLocation, CHECKPOINT_DIRNAME);
     mTmpDir = URIUtils.appendPathOrDie(mLocation, TMP_DIRNAME);
     mState = State.SECONDARY;
+    mJournalSinks = journalSinks;
   }
 
   @Override
@@ -191,7 +203,7 @@ public class UfsJournal implements Journal {
    */
   public synchronized void start() throws IOException {
     mMaster.resetState();
-    mTailerThread = new UfsJournalCheckpointThread(mMaster, this);
+    mTailerThread = new UfsJournalCheckpointThread(mMaster, this, mJournalSinks);
     mTailerThread.start();
   }
 
@@ -208,7 +220,7 @@ public class UfsJournal implements Journal {
     mTailerThread = null;
     nextSequenceNumber = catchUp(nextSequenceNumber);
     mWriter = new UfsJournalLogWriter(this, nextSequenceNumber);
-    mAsyncWriter = new AsyncJournalWriter(mWriter);
+    mAsyncWriter = new AsyncJournalWriter(mWriter, mJournalSinks);
     mState = State.PRIMARY;
   }
 
@@ -224,7 +236,7 @@ public class UfsJournal implements Journal {
     mWriter = null;
     mAsyncWriter = null;
     mMaster.resetState();
-    mTailerThread = new UfsJournalCheckpointThread(mMaster, this);
+    mTailerThread = new UfsJournalCheckpointThread(mMaster, this, mJournalSinks);
     mTailerThread.start();
     mState = State.SECONDARY;
   }
@@ -250,7 +262,7 @@ public class UfsJournal implements Journal {
    */
   public UfsJournalCheckpointWriter getCheckpointWriter(long checkpointSequenceNumber)
       throws IOException {
-    return new UfsJournalCheckpointWriter(this, checkpointSequenceNumber);
+    return UfsJournalCheckpointWriter.create(this, checkpointSequenceNumber);
   }
 
   /**
@@ -276,7 +288,7 @@ public class UfsJournal implements Journal {
       return false;
     }
     // Search for the format file.
-    String formatFilePrefix = Configuration.get(PropertyKey.MASTER_FORMAT_FILE_PREFIX);
+    String formatFilePrefix = ServerConfiguration.get(PropertyKey.MASTER_FORMAT_FILE_PREFIX);
     for (UfsStatus file : files) {
       if (file.getName().startsWith(formatFilePrefix)) {
         return true;
@@ -306,8 +318,31 @@ public class UfsJournal implements Journal {
 
     // Create a breadcrumb that indicates that the journal folder has been formatted.
     UnderFileSystemUtils.touch(mUfs, URIUtils.appendPathOrDie(location,
-        Configuration.get(PropertyKey.MASTER_FORMAT_FILE_PREFIX) + System.currentTimeMillis())
+        ServerConfiguration.get(PropertyKey.MASTER_FORMAT_FILE_PREFIX) + System.currentTimeMillis())
         .toString());
+  }
+
+  /**
+   * Creates a checkpoint in this ufs journal.
+   */
+  public synchronized void checkpoint() throws IOException {
+    long nextSequenceNumber = getNextSequenceNumberToWrite();
+    if (nextSequenceNumber == getNextSequenceNumberToCheckpoint()) {
+      LOG.info("{}: No entries have been written since the last checkpoint.",
+          mMaster.getName());
+      return;
+    }
+    try (UfsJournalCheckpointWriter journalWriter
+             = getCheckpointWriter(nextSequenceNumber)) {
+      LOG.info("{}: Writing checkpoint [sequence number {}].",
+          mMaster.getName(), nextSequenceNumber);
+      mMaster.writeToCheckpoint(journalWriter);
+      LOG.info("{}: Finished checkpoint [sequence number {}].",
+          mMaster.getName(), nextSequenceNumber);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new CancelledException("Checkpoint is interrupted");
+    }
   }
 
   /**
@@ -366,27 +401,30 @@ public class UfsJournal implements Journal {
             .withMaxDuration(Duration.ofDays(365))
             .build();
     while (true) {
-      JournalEntry entry;
       try {
-        entry = journalReader.read();
+        switch (journalReader.advance()) {
+          case CHECKPOINT:
+            mMaster.restoreFromCheckpoint(journalReader.getCheckpoint());
+            break;
+          case LOG:
+            JournalEntry entry = journalReader.getEntry();
+            try {
+              mMaster.processJournalEntry(entry);
+              JournalUtils.sinkAppend(mJournalSinks, entry);
+            }  catch (Throwable t) {
+              JournalUtils.handleJournalReplayFailure(LOG, t,
+                    "%s: Failed to process journal entry %s", mMaster.getName(), entry);
+            }
+            break;
+          default:
+            return journalReader.getNextSequenceNumber();
+        }
       } catch (IOException e) {
         LOG.warn("{}: Failed to read from journal: {}", mMaster.getName(), e);
         if (retry.attempt()) {
           continue;
         }
         throw new RuntimeException(e);
-      } catch (InvalidJournalEntryException e) {
-        LOG.error("{}: Invalid journal entry detected.", mMaster.getName(), e);
-        // We found an invalid journal entry, nothing we can do but crash.
-        throw new RuntimeException(e);
-      }
-      if (entry == null) {
-        return journalReader.getNextSequenceNumber();
-      }
-      try {
-        mMaster.processJournalEntry(entry);
-      } catch (IOException e) {
-        throw new RuntimeException(String.format("Failed to process journal entry %s", entry), e);
       }
     }
   }
@@ -401,6 +439,9 @@ public class UfsJournal implements Journal {
     if (mWriter != null) {
       mWriter.close();
       mWriter = null;
+    }
+    if (mAsyncWriter != null) {
+      mAsyncWriter.close();
       mAsyncWriter = null;
     }
     if (mTailerThread != null) {

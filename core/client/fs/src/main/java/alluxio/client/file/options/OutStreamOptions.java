@@ -11,21 +11,27 @@
 
 package alluxio.client.file.options;
 
-import alluxio.Configuration;
-import alluxio.Constants;
-import alluxio.PropertyKey;
+import alluxio.ClientContext;
 import alluxio.annotation.PublicApi;
 import alluxio.client.AlluxioStorageType;
 import alluxio.client.UnderStorageType;
 import alluxio.client.WriteType;
-import alluxio.client.file.policy.FileWriteLocationPolicy;
+import alluxio.client.block.policy.BlockLocationPolicy;
+import alluxio.conf.AlluxioConfiguration;
+import alluxio.conf.PropertyKey;
+import alluxio.grpc.CreateFilePOptions;
+import alluxio.grpc.FileSystemMasterCommonPOptions;
+import alluxio.security.authorization.AccessControlList;
 import alluxio.security.authorization.Mode;
 import alluxio.util.CommonUtils;
+import alluxio.util.FileSystemOptions;
 import alluxio.util.IdUtils;
-import alluxio.util.SecurityUtils;
-import alluxio.wire.TtlAction;
+import alluxio.util.ModeUtils;
 
+import com.google.common.base.MoreObjects;
 import com.google.common.base.Objects;
+
+import java.io.IOException;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
@@ -35,39 +41,123 @@ import javax.annotation.concurrent.NotThreadSafe;
 @PublicApi
 @NotThreadSafe
 public final class OutStreamOptions {
+  private FileSystemMasterCommonPOptions mCommonOptions;
   private long mBlockSizeBytes;
-  private long mTtl;
-  private TtlAction mTtlAction;
-  private FileWriteLocationPolicy mLocationPolicy;
+  private BlockLocationPolicy mLocationPolicy;
   private int mWriteTier;
   private WriteType mWriteType;
   private String mOwner;
   private String mGroup;
   private Mode mMode;
+  private AccessControlList mAcl;
+  private long mPersistenceWaitTime;
+  private int mReplicationDurable;
+  private int mReplicationMax;
+  private int mReplicationMin;
   private String mUfsPath;
   private long mMountId;
+  private String mMediumType;
 
   /**
+   * @param context Alluxio client context
+   * @param alluxioConf the Alluxio configuration
    * @return the default {@link OutStreamOptions}
    */
-  public static OutStreamOptions defaults() {
-    return new OutStreamOptions();
+  public static OutStreamOptions defaults(ClientContext context, AlluxioConfiguration alluxioConf) {
+    return new OutStreamOptions(context, alluxioConf);
   }
 
-  private OutStreamOptions() {
-    mBlockSizeBytes = Configuration.getBytes(PropertyKey.USER_BLOCK_SIZE_BYTES_DEFAULT);
-    mTtl = Constants.NO_TTL;
-    mTtlAction = TtlAction.DELETE;
+  /**
+   * @param context Alluxio client context
+   * @return the default {@link OutStreamOptions}
+   */
+  public static OutStreamOptions defaults(ClientContext context) {
+    return new OutStreamOptions(context, context.getClusterConf());
+  }
 
-    mLocationPolicy =
-        CommonUtils.createNewClassInstance(Configuration.<FileWriteLocationPolicy>getClass(
-            PropertyKey.USER_FILE_WRITE_LOCATION_POLICY), new Class[] {}, new Object[] {});
-    mWriteTier = Configuration.getInt(PropertyKey.USER_FILE_WRITE_TIER_DEFAULT);
-    mWriteType = Configuration.getEnum(PropertyKey.USER_FILE_WRITE_TYPE_DEFAULT, WriteType.class);
-    mOwner = SecurityUtils.getOwnerFromLoginModule();
-    mGroup = SecurityUtils.getGroupFromLoginModule();
-    mMode = Mode.defaults().applyFileUMask();
+  /**
+   * Creates an {@link OutStreamOptions} instance from given options.
+   *
+   * @param options CreateFile options
+   * @param context Alluxio client context
+   * @param alluxioConf the Alluxio configuration
+   * @throws Exception if {@link BlockLocationPolicy} can't be loaded
+   */
+  public OutStreamOptions(CreateFilePOptions options, ClientContext context,
+      AlluxioConfiguration alluxioConf) {
+    this(context, alluxioConf);
+    if (options.hasCommonOptions()) {
+      mCommonOptions = mCommonOptions.toBuilder().mergeFrom(options.getCommonOptions()).build();
+    }
+    if (options.hasBlockSizeBytes()) {
+      mBlockSizeBytes = options.getBlockSizeBytes();
+    }
+    if (options.hasMode()) {
+      mMode = Mode.fromProto(options.getMode());
+    }
+    if (options.hasPersistenceWaitTime()) {
+      mPersistenceWaitTime = options.getPersistenceWaitTime();
+    }
+    if (options.hasReplicationDurable()) {
+      mReplicationDurable = options.getReplicationDurable();
+    }
+    if (options.hasReplicationMin()) {
+      mReplicationMin = options.getReplicationMin();
+    }
+    if (options.hasReplicationMax()) {
+      mReplicationMax = options.getReplicationMax();
+    }
+    if (options.hasWriteTier()) {
+      mWriteTier = options.getWriteTier();
+    }
+    if (options.hasWriteType()) {
+      mWriteType = WriteType.fromProto(options.getWriteType());
+    }
+    try {
+      mLocationPolicy = BlockLocationPolicy.Factory.create(
+          alluxioConf.get(PropertyKey.USER_BLOCK_WRITE_LOCATION_POLICY), alluxioConf);
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  private OutStreamOptions(ClientContext context, AlluxioConfiguration alluxioConf) {
+    mCommonOptions = FileSystemOptions.commonDefaults(alluxioConf);
+    mBlockSizeBytes = alluxioConf.getBytes(PropertyKey.USER_BLOCK_SIZE_BYTES_DEFAULT);
+    mLocationPolicy = BlockLocationPolicy.Factory.create(
+        alluxioConf.get(PropertyKey.USER_BLOCK_WRITE_LOCATION_POLICY),
+        alluxioConf);
+    mWriteTier = alluxioConf.getInt(PropertyKey.USER_FILE_WRITE_TIER_DEFAULT);
+    mWriteType = alluxioConf.getEnum(PropertyKey.USER_FILE_WRITE_TYPE_DEFAULT, WriteType.class);
+    try {
+      mOwner = context.getUserState().getUser().getName();
+      mGroup = CommonUtils.getPrimaryGroupName(mOwner, context.getClusterConf());
+    } catch (IOException e) {
+      mOwner = "";
+      mGroup = "";
+    }
+    mMode = ModeUtils.applyFileUMask(Mode.defaults(), alluxioConf
+        .get(PropertyKey.SECURITY_AUTHORIZATION_PERMISSION_UMASK));
     mMountId = IdUtils.INVALID_MOUNT_ID;
+    mPersistenceWaitTime = alluxioConf.getMs(PropertyKey.USER_FILE_PERSISTENCE_INITIAL_WAIT_TIME);
+    mReplicationDurable = alluxioConf.getInt(PropertyKey.USER_FILE_REPLICATION_DURABLE);
+    mReplicationMax = alluxioConf.getInt(PropertyKey.USER_FILE_REPLICATION_MAX);
+    mReplicationMin = alluxioConf.getInt(PropertyKey.USER_FILE_REPLICATION_MIN);
+    mMediumType = "";
+  }
+
+  /**
+   * @return the write medium type
+   */
+  public String getMediumType() {
+    return mMediumType;
+  }
+
+  /**
+   * @return the acl
+   */
+  public AccessControlList getAcl() {
+    return mAcl;
   }
 
   /**
@@ -80,7 +170,7 @@ public final class OutStreamOptions {
   /**
    * @return the file write location policy
    */
-  public FileWriteLocationPolicy getLocationPolicy() {
+  public BlockLocationPolicy getLocationPolicy() {
     return mLocationPolicy;
   }
 
@@ -92,18 +182,10 @@ public final class OutStreamOptions {
   }
 
   /**
-   * @return the TTL (time to live) value; it identifies duration (in milliseconds) the created file
-   *         should be kept around before it is automatically deleted
+   * @return the common options
    */
-  public long getTtl() {
-    return mTtl;
-  }
-
-  /**
-   * @return the {@link TtlAction}
-   */
-  public TtlAction getTtlAction() {
-    return mTtlAction;
+  public FileSystemMasterCommonPOptions getCommonOptions() {
+    return mCommonOptions;
   }
 
   /**
@@ -135,6 +217,34 @@ public final class OutStreamOptions {
   }
 
   /**
+   * @return the persistence initial wait time
+   */
+  public long getPersistenceWaitTime() {
+    return mPersistenceWaitTime;
+  }
+
+  /**
+   * @return the number of block replication for durable write
+   */
+  public int getReplicationDurable() {
+    return mReplicationDurable;
+  }
+
+  /**
+   * @return the maximum number of block replication
+   */
+  public int getReplicationMax() {
+    return mReplicationMax;
+  }
+
+  /**
+   * @return the minimum number of block replication
+   */
+  public int getReplicationMin() {
+    return mReplicationMin;
+  }
+
+  /**
    * @return the mount id
    */
   public long getMountId() {
@@ -163,6 +273,28 @@ public final class OutStreamOptions {
   }
 
   /**
+   * Set the write medium type of the file.
+   *
+   * @param mediumType write medium type
+   * @return the updated options object
+   */
+  public OutStreamOptions setMediumType(String mediumType) {
+    mMediumType = mediumType;
+    return this;
+  }
+
+  /**
+   * Sets the acl of the file.
+   *
+   * @param acl the acl to use
+   * @return the updated options object
+   */
+  public OutStreamOptions setAcl(AccessControlList acl) {
+    mAcl = acl;
+    return this;
+  }
+
+  /**
    * Sets the size of the block in bytes.
    *
    * @param blockSizeBytes the block size to use
@@ -174,32 +306,10 @@ public final class OutStreamOptions {
   }
 
   /**
-   * Sets the time to live.
-   *
-   * @param ttl the TTL (time to live) value to use; it identifies duration (in milliseconds) the
-   *        created file should be kept around before it is automatically deleted, no matter
-   *        whether the file is pinned
-   * @return the updated options object
-   */
-  public OutStreamOptions setTtl(long ttl) {
-    mTtl = ttl;
-    return this;
-  }
-
-  /**
-   * @param ttlAction the {@link TtlAction} to use
-   * @return the updated options object
-   */
-  public OutStreamOptions setTtlAction(TtlAction ttlAction) {
-    mTtlAction = ttlAction;
-    return this;
-  }
-
-  /**
    * @param locationPolicy the file write location policy
    * @return the updated options object
    */
-  public OutStreamOptions setLocationPolicy(FileWriteLocationPolicy locationPolicy) {
+  public OutStreamOptions setLocationPolicy(BlockLocationPolicy locationPolicy) {
     mLocationPolicy = locationPolicy;
     return this;
   }
@@ -264,6 +374,42 @@ public final class OutStreamOptions {
   }
 
   /**
+   * @param persistenceWaitTime the persistence initial wait time
+   * @return the updated options object
+   */
+  public OutStreamOptions setPersistenceWaitTime(long persistenceWaitTime) {
+    mPersistenceWaitTime = persistenceWaitTime;
+    return this;
+  }
+
+  /**
+   * @param replicationDurable the number of block replication for durable write
+   * @return the updated options object
+   */
+  public OutStreamOptions setReplicationDurable(int replicationDurable) {
+    mReplicationDurable = replicationDurable;
+    return this;
+  }
+
+  /**
+   * @param replicationMax the maximum number of block replication
+   * @return the updated options object
+   */
+  public OutStreamOptions setReplicationMax(int replicationMax) {
+    mReplicationMax = replicationMax;
+    return this;
+  }
+
+  /**
+   * @param replicationMin the minimum number of block replication
+   * @return the updated options object
+   */
+  public OutStreamOptions setReplicationMin(int replicationMin) {
+    mReplicationMin = replicationMin;
+    return this;
+  }
+
+  /**
    * @param mode the permission
    * @return the updated options object
    */
@@ -281,14 +427,19 @@ public final class OutStreamOptions {
       return false;
     }
     OutStreamOptions that = (OutStreamOptions) o;
-    return Objects.equal(mBlockSizeBytes, that.mBlockSizeBytes)
+    return Objects.equal(mAcl, that.mAcl)
+        && Objects.equal(mBlockSizeBytes, that.mBlockSizeBytes)
+        && Objects.equal(mCommonOptions, that.mCommonOptions)
         && Objects.equal(mGroup, that.mGroup)
         && Objects.equal(mLocationPolicy, that.mLocationPolicy)
+        && Objects.equal(mMediumType, that.mMediumType)
         && Objects.equal(mMode, that.mMode)
         && Objects.equal(mMountId, that.mMountId)
         && Objects.equal(mOwner, that.mOwner)
-        && Objects.equal(mTtl, that.mTtl)
-        && Objects.equal(mTtlAction, that.mTtlAction)
+        && Objects.equal(mPersistenceWaitTime, that.mPersistenceWaitTime)
+        && Objects.equal(mReplicationDurable, that.mReplicationDurable)
+        && Objects.equal(mReplicationMax, that.mReplicationMax)
+        && Objects.equal(mReplicationMin, that.mReplicationMin)
         && Objects.equal(mUfsPath, that.mUfsPath)
         && Objects.equal(mWriteTier, that.mWriteTier)
         && Objects.equal(mWriteType, that.mWriteType);
@@ -297,14 +448,19 @@ public final class OutStreamOptions {
   @Override
   public int hashCode() {
     return Objects.hashCode(
+        mAcl,
         mBlockSizeBytes,
+        mCommonOptions,
         mGroup,
         mLocationPolicy,
+        mMediumType,
         mMode,
         mMountId,
         mOwner,
-        mTtl,
-        mTtlAction,
+        mPersistenceWaitTime,
+        mReplicationDurable,
+        mReplicationMax,
+        mReplicationMin,
         mUfsPath,
         mWriteTier,
         mWriteType
@@ -313,18 +469,23 @@ public final class OutStreamOptions {
 
   @Override
   public String toString() {
-    return Objects.toStringHelper(this)
+    return MoreObjects.toStringHelper(this)
+        .add("acl", mAcl)
         .add("blockSizeBytes", mBlockSizeBytes)
+        .add("commonOptions", mCommonOptions)
         .add("group", mGroup)
         .add("locationPolicy", mLocationPolicy)
+        .add("mediumType", mMediumType)
         .add("mode", mMode)
         .add("mountId", mMountId)
         .add("owner", mOwner)
-        .add("ttl", mTtl)
-        .add("ttlAction", mTtlAction)
         .add("ufsPath", mUfsPath)
         .add("writeTier", mWriteTier)
         .add("writeType", mWriteType)
+        .add("persistenceWaitTime", mPersistenceWaitTime)
+        .add("replicationDurable", mReplicationDurable)
+        .add("replicationMax", mReplicationMax)
+        .add("replicationMin", mReplicationMin)
         .toString();
   }
 }

@@ -14,26 +14,30 @@ package alluxio.master.file;
 import static org.mockito.Mockito.mock;
 
 import alluxio.AlluxioURI;
-import alluxio.Configuration;
-import alluxio.ConfigurationTestUtils;
 import alluxio.Constants;
-import alluxio.PropertyKey;
+import alluxio.conf.PropertyKey;
+import alluxio.conf.ServerConfiguration;
 import alluxio.exception.AccessControlException;
 import alluxio.exception.ExceptionMessage;
 import alluxio.exception.InvalidPathException;
-import alluxio.master.MasterContext;
+import alluxio.grpc.CreateFilePOptions;
+import alluxio.master.CoreMasterContext;
 import alluxio.master.MasterRegistry;
 import alluxio.master.MasterTestUtils;
 import alluxio.master.block.BlockMaster;
 import alluxio.master.block.BlockMasterFactory;
+import alluxio.master.file.contexts.CreateFileContext;
 import alluxio.master.file.meta.Inode;
 import alluxio.master.file.meta.InodeDirectoryIdGenerator;
-import alluxio.master.file.meta.InodeFile;
+import alluxio.master.file.meta.InodeLockManager;
 import alluxio.master.file.meta.InodeTree;
+import alluxio.master.file.meta.InodeTree.LockPattern;
 import alluxio.master.file.meta.LockedInodePath;
 import alluxio.master.file.meta.MountTable;
-import alluxio.master.file.options.CreateFileOptions;
+import alluxio.master.file.meta.MutableInode;
+import alluxio.master.file.meta.options.MountInfo;
 import alluxio.master.journal.NoopJournalContext;
+import alluxio.master.metastore.InodeStore;
 import alluxio.master.metrics.MetricsMaster;
 import alluxio.master.metrics.MetricsMasterFactory;
 import alluxio.security.GroupMappingServiceTestUtils;
@@ -97,10 +101,11 @@ public final class PermissionCheckerTest {
   private static final Mode TEST_NORMAL_MODE = new Mode((short) 0755);
   private static final Mode TEST_WEIRD_MODE = new Mode((short) 0157);
 
-  private static CreateFileOptions sFileOptions;
-  private static CreateFileOptions sWeirdFileOptions;
-  private static CreateFileOptions sNestedFileOptions;
+  private static CreateFileContext sFileContext;
+  private static CreateFileContext sWeirdFileContext;
+  private static CreateFileContext sNestedFileContext;
 
+  private static InodeStore sInodeStore;
   private static InodeTree sTree;
   private static MasterRegistry sRegistry;
   private static MetricsMaster sMetricsMaster;
@@ -163,49 +168,56 @@ public final class PermissionCheckerTest {
 
   @BeforeClass
   public static void beforeClass() throws Exception {
-    sFileOptions =
-        CreateFileOptions.defaults().setBlockSizeBytes(Constants.KB).setOwner(TEST_USER_2.getUser())
-            .setGroup(TEST_USER_2.getGroup()).setMode(TEST_NORMAL_MODE);
-    sWeirdFileOptions =
-        CreateFileOptions.defaults().setBlockSizeBytes(Constants.KB).setOwner(TEST_USER_1.getUser())
-            .setGroup(TEST_USER_1.getGroup()).setMode(TEST_WEIRD_MODE);
-    sNestedFileOptions =
-        CreateFileOptions.defaults().setBlockSizeBytes(Constants.KB).setOwner(TEST_USER_1.getUser())
-            .setGroup(TEST_USER_1.getGroup()).setMode(TEST_NORMAL_MODE).setRecursive(true);
+    sFileContext = CreateFileContext
+        .mergeFrom(CreateFilePOptions.newBuilder().setBlockSizeBytes(Constants.KB)
+            .setMode(TEST_NORMAL_MODE.toProto()))
+        .setOwner(TEST_USER_2.getUser()).setGroup(TEST_USER_2.getGroup());
+    sWeirdFileContext = CreateFileContext
+        .mergeFrom(CreateFilePOptions.newBuilder().setBlockSizeBytes(Constants.KB)
+            .setMode(TEST_WEIRD_MODE.toProto()))
+        .setOwner(TEST_USER_1.getUser()).setGroup(TEST_USER_1.getGroup());
+    sNestedFileContext = CreateFileContext
+        .mergeFrom(CreateFilePOptions.newBuilder().setBlockSizeBytes(Constants.KB)
+            .setMode(TEST_NORMAL_MODE.toProto()).setRecursive(true))
+        .setOwner(TEST_USER_1.getUser()).setGroup(TEST_USER_1.getGroup());
 
     // setup an InodeTree
     sRegistry = new MasterRegistry();
-    MasterContext masterContext = MasterTestUtils.testMasterContext();
+    CoreMasterContext masterContext = MasterTestUtils.testMasterContext();
     sMetricsMaster = new MetricsMasterFactory().create(sRegistry, masterContext);
     sRegistry.add(MetricsMaster.class, sMetricsMaster);
     BlockMaster blockMaster = new BlockMasterFactory().create(sRegistry, masterContext);
     InodeDirectoryIdGenerator directoryIdGenerator = new InodeDirectoryIdGenerator(blockMaster);
     UfsManager ufsManager = mock(UfsManager.class);
-    MountTable mountTable = new MountTable(ufsManager);
-    sTree = new InodeTree(blockMaster, directoryIdGenerator, mountTable);
+    MountTable mountTable = new MountTable(ufsManager, mock(MountInfo.class));
+    InodeLockManager lockManager = new InodeLockManager();
+    sInodeStore = masterContext.getInodeStoreFactory().apply(lockManager);
+    sTree = new InodeTree(sInodeStore, blockMaster, directoryIdGenerator, mountTable, lockManager);
 
     sRegistry.start(true);
 
     GroupMappingServiceTestUtils.resetCache();
-    Configuration.set(PropertyKey.SECURITY_GROUP_MAPPING_CLASS,
+    ServerConfiguration.set(PropertyKey.SECURITY_GROUP_MAPPING_CLASS,
         FakeUserGroupsMapping.class.getName());
-    Configuration.set(PropertyKey.SECURITY_AUTHENTICATION_TYPE, AuthType.SIMPLE.getAuthName());
-    Configuration.set(PropertyKey.SECURITY_AUTHORIZATION_PERMISSION_ENABLED, "true");
-    Configuration.set(PropertyKey.SECURITY_AUTHORIZATION_PERMISSION_SUPERGROUP, TEST_SUPER_GROUP);
+    ServerConfiguration.set(PropertyKey.SECURITY_AUTHENTICATION_TYPE,
+        AuthType.SIMPLE.getAuthName());
+    ServerConfiguration.set(PropertyKey.SECURITY_AUTHORIZATION_PERMISSION_ENABLED, "true");
+    ServerConfiguration
+        .set(PropertyKey.SECURITY_AUTHORIZATION_PERMISSION_SUPERGROUP, TEST_SUPER_GROUP);
     sTree.initializeRoot(TEST_USER_ADMIN.getUser(), TEST_USER_ADMIN.getGroup(), TEST_NORMAL_MODE,
         NoopJournalContext.INSTANCE);
 
     // build file structure
-    createAndSetPermission(TEST_DIR_FILE_URI, sNestedFileOptions);
-    createAndSetPermission(TEST_FILE_URI, sFileOptions);
-    createAndSetPermission(TEST_WEIRD_FILE_URI, sWeirdFileOptions);
+    createAndSetPermission(TEST_DIR_FILE_URI, sNestedFileContext);
+    createAndSetPermission(TEST_FILE_URI, sFileContext);
+    createAndSetPermission(TEST_WEIRD_FILE_URI, sWeirdFileContext);
   }
 
   @AfterClass
   public static void afterClass() throws Exception {
     sRegistry.stop();
     AuthenticatedClientUser.remove();
-    ConfigurationTestUtils.resetConfiguration();
+    ServerConfiguration.reset();
   }
 
   @Before
@@ -218,17 +230,18 @@ public final class PermissionCheckerTest {
    * Helper function to create a path and set the permission to what specified in option.
    *
    * @param path path to construct the {@link AlluxioURI} from
-   * @param option method options for creating a file
+   * @param context method context for creating a file
    */
-  private static void createAndSetPermission(String path, CreateFileOptions option)
+  private static void createAndSetPermission(String path, CreateFileContext context)
       throws Exception {
-    try (
-        LockedInodePath inodePath = sTree
-            .lockInodePath(new AlluxioURI(path), InodeTree.LockMode.WRITE)) {
-      InodeTree.CreatePathResult result = sTree.createPath(RpcContext.NOOP, inodePath, option);
-      ((InodeFile) result.getCreated().get(result.getCreated().size() - 1))
-          .setOwner(option.getOwner()).setGroup(option.getGroup())
-          .setMode(option.getMode().toShort());
+    try (LockedInodePath inodePath =
+        sTree.lockInodePath(new AlluxioURI(path), LockPattern.WRITE_EDGE)) {
+      List<Inode> result = sTree.createPath(RpcContext.NOOP, inodePath, context);
+      MutableInode<?> inode = sInodeStore.getMutable(result.get(result.size() - 1).getId()).get();
+      inode.setOwner(context.getOwner())
+          .setGroup(context.getGroup())
+          .setMode(context.getMode().toShort());
+      sInodeStore.writeInode(inode);
     }
   }
 
@@ -237,7 +250,7 @@ public final class PermissionCheckerTest {
    * @param expectedInodes the expected inodes names
    * @param inodes the inodes for test
    */
-  private static void verifyInodesList(String[] expectedInodes, List<Inode<?>> inodes) {
+  private static void verifyInodesList(String[] expectedInodes, List<Inode> inodes) {
     String[] inodesName = new String[inodes.size()];
     for (int i = 0; i < inodes.size(); i++) {
       inodesName[i] = inodes.get(i).getName();
@@ -249,19 +262,19 @@ public final class PermissionCheckerTest {
   @Test
   public void createFileAndDirs() throws Exception {
     try (LockedInodePath inodePath = sTree.lockInodePath(new AlluxioURI(TEST_DIR_FILE_URI),
-        InodeTree.LockMode.READ)) {
+        LockPattern.READ)) {
       verifyInodesList(TEST_DIR_FILE_URI.split("/"), inodePath.getInodeList());
     }
     try (LockedInodePath inodePath = sTree.lockInodePath(new AlluxioURI(TEST_FILE_URI),
-        InodeTree.LockMode.READ)) {
+        LockPattern.READ)) {
       verifyInodesList(TEST_FILE_URI.split("/"), inodePath.getInodeList());
     }
     try (LockedInodePath inodePath = sTree.lockInodePath(new AlluxioURI(TEST_WEIRD_FILE_URI),
-        InodeTree.LockMode.READ)) {
+        LockPattern.READ)) {
       verifyInodesList(TEST_WEIRD_FILE_URI.split("/"), inodePath.getInodeList());
     }
     try (LockedInodePath inodePath = sTree.lockInodePath(new AlluxioURI(TEST_NOT_EXIST_URI),
-        InodeTree.LockMode.READ)) {
+        LockPattern.READ)) {
       verifyInodesList(new String[]{"", "testDir"}, inodePath.getInodeList());
     }
   }
@@ -382,7 +395,7 @@ public final class PermissionCheckerTest {
   public void invalidPath() throws Exception {
     mThrown.expect(InvalidPathException.class);
     try (LockedInodePath inodePath = sTree
-        .lockInodePath(new AlluxioURI(""), InodeTree.LockMode.READ)) {
+        .lockInodePath(new AlluxioURI(""), LockPattern.READ)) {
       mPermissionChecker.checkPermission(Mode.Bits.WRITE, inodePath);
     }
   }
@@ -390,7 +403,7 @@ public final class PermissionCheckerTest {
   @Test
   public void getPermission() throws Exception {
     try (LockedInodePath path =
-             sTree.lockInodePath(new AlluxioURI(TEST_WEIRD_FILE_URI), InodeTree.LockMode.READ)) {
+             sTree.lockInodePath(new AlluxioURI(TEST_WEIRD_FILE_URI), LockPattern.READ)) {
       // user is admin
       AuthenticatedClientUser.set(TEST_USER_ADMIN.getUser());
       Mode.Bits perm = mPermissionChecker.getPermission(path);
@@ -420,7 +433,7 @@ public final class PermissionCheckerTest {
       throws Exception {
     AuthenticatedClientUser.set(user.getUser());
     try (LockedInodePath inodePath = sTree
-        .lockInodePath(new AlluxioURI(path), InodeTree.LockMode.READ)) {
+        .lockInodePath(new AlluxioURI(path), LockPattern.READ)) {
       mPermissionChecker.checkPermission(action, inodePath);
     }
   }
@@ -437,7 +450,7 @@ public final class PermissionCheckerTest {
       throws Exception {
     AuthenticatedClientUser.set(user.getUser());
     try (LockedInodePath inodePath = sTree
-        .lockInodePath(new AlluxioURI(path), InodeTree.LockMode.READ)) {
+        .lockInodePath(new AlluxioURI(path), LockPattern.READ)) {
       mPermissionChecker.checkParentPermission(action, inodePath);
     }
   }

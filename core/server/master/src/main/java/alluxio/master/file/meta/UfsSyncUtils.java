@@ -12,7 +12,6 @@
 package alluxio.master.file.meta;
 
 import alluxio.underfs.Fingerprint;
-import alluxio.underfs.UfsStatus;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
@@ -25,7 +24,7 @@ public final class UfsSyncUtils {
   private UfsSyncUtils() {} // prevent instantiation
 
   /**
-   * Given an {@link Inode} and {@link UfsStatus}, returns a {@link SyncPlan} describing how to
+   * Given an inode and ufs status, returns a sync plan describing how to
    * sync the inode with the ufs.
    *
    * @param inode the inode to sync
@@ -35,8 +34,9 @@ public final class UfsSyncUtils {
    */
   public static SyncPlan computeSyncPlan(Inode inode, Fingerprint ufsFingerprint,
       boolean containsMountPoint) {
-    boolean isContentSynced = inodeUfsIsContentSynced(inode, ufsFingerprint);
-    boolean isMetadataSynced = inodeUfsIsMetadataSynced(inode, ufsFingerprint);
+    Fingerprint inodeFingerprint =  Fingerprint.parse(inode.getUfsFingerprint());
+    boolean isContentSynced = inodeUfsIsContentSynced(inode, inodeFingerprint, ufsFingerprint);
+    boolean isMetadataSynced = inodeUfsIsMetadataSynced(inode, inodeFingerprint, ufsFingerprint);
     boolean ufsExists = ufsFingerprint.isValid();
     boolean ufsIsDir = ufsFingerprint != null
         && Fingerprint.Type.DIRECTORY.name().equals(ufsFingerprint.getTag(Fingerprint.Tag.TYPE));
@@ -88,15 +88,16 @@ public final class UfsSyncUtils {
    * check, so for directory inodes, this does not consider the children inodes.
    *
    * @param inode the inode to check for sync
+   * @param inodeFingerprint the inode's parsed fingerprint
    * @param ufsFingerprint the ufs fingerprint to check for the sync
    * @return true of the inode is synced with the ufs status
    */
-  public static boolean inodeUfsIsContentSynced(Inode inode, Fingerprint ufsFingerprint) {
+  public static boolean inodeUfsIsContentSynced(Inode inode, Fingerprint inodeFingerprint,
+      Fingerprint ufsFingerprint) {
     boolean isSyncedUnpersisted =
         !inode.isPersisted() && !ufsFingerprint.isValid();
     boolean isSyncedPersisted;
 
-    Fingerprint inodeFingerprint =  Fingerprint.parse(inode.getUfsFingerprint());
     isSyncedPersisted = inode.isPersisted()
         && inodeFingerprint.matchContent(ufsFingerprint)
         && inodeFingerprint.isValid();
@@ -108,11 +109,12 @@ public final class UfsSyncUtils {
    * Returns true if the given inode's metadata matches the ufs fingerprint.
    *
    * @param inode the inode to check for sync
+   * @param inodeFingerprint the inode's parsed fingerprint
    * @param ufsFingerprint the ufs fingerprint to check for the sync
    * @return true of the inode is synced with the ufs status
    */
-  public static boolean inodeUfsIsMetadataSynced(Inode inode, Fingerprint ufsFingerprint) {
-    Fingerprint inodeFingerprint = Fingerprint.parse(inode.getUfsFingerprint());
+  public static boolean inodeUfsIsMetadataSynced(Inode inode, Fingerprint inodeFingerprint,
+      Fingerprint ufsFingerprint) {
     return inodeFingerprint.isValid() && inodeFingerprint.matchMetadata(ufsFingerprint);
   }
 

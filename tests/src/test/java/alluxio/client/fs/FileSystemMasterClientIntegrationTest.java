@@ -12,16 +12,18 @@
 package alluxio.client.fs;
 
 import alluxio.AlluxioURI;
-import alluxio.PropertyKey;
+import alluxio.ClientContext;
+import alluxio.conf.PropertyKey;
 import alluxio.client.file.FileSystem;
 import alluxio.client.file.FileSystemMasterClient;
-import alluxio.client.file.options.CreateFileOptions;
-import alluxio.client.file.options.GetStatusOptions;
+import alluxio.conf.ServerConfiguration;
 import alluxio.exception.AlluxioException;
 import alluxio.exception.status.NotFoundException;
-import alluxio.master.MasterClientConfig;
+import alluxio.grpc.GetStatusPOptions;
+import alluxio.master.MasterClientContext;
 import alluxio.testutils.BaseIntegrationTest;
 import alluxio.testutils.LocalAlluxioClusterResource;
+import alluxio.util.FileSystemOptions;
 
 import com.google.common.base.Throwables;
 import org.junit.Assert;
@@ -34,22 +36,24 @@ import java.io.IOException;
  * Tests the internal implementation of alluxio Master via a {@link FileSystemMasterClient}.
  */
 public final class FileSystemMasterClientIntegrationTest extends BaseIntegrationTest {
-  private static final GetStatusOptions GET_STATUS_OPTIONS = GetStatusOptions.defaults();
+  private static final GetStatusPOptions GET_STATUS_OPTIONS =
+      FileSystemOptions.getStatusDefaults(ServerConfiguration.global());
 
   @Rule
   public LocalAlluxioClusterResource mLocalAlluxioClusterResource =
-      new LocalAlluxioClusterResource.Builder()
-          .setProperty(PropertyKey.USER_RPC_RETRY_MAX_NUM_RETRY, 30).build();
+      new LocalAlluxioClusterResource.Builder().build();
 
   @Test
   public void openClose() throws AlluxioException, IOException {
     FileSystemMasterClient fsMasterClient =
-        FileSystemMasterClient.Factory.create(MasterClientConfig.defaults());
+        FileSystemMasterClient.Factory.create(MasterClientContext
+            .newBuilder(ClientContext.create(ServerConfiguration.global())).build());
     AlluxioURI file = new AlluxioURI("/file");
     Assert.assertFalse(fsMasterClient.isConnected());
     fsMasterClient.connect();
     Assert.assertTrue(fsMasterClient.isConnected());
-    fsMasterClient.createFile(file, CreateFileOptions.defaults());
+    fsMasterClient.createFile(file,
+        FileSystemOptions.createFileDefaults(ServerConfiguration.global()));
     Assert.assertNotNull(fsMasterClient.getStatus(file, GET_STATUS_OPTIONS));
     fsMasterClient.disconnect();
     Assert.assertFalse(fsMasterClient.isConnected());
@@ -65,7 +69,8 @@ public final class FileSystemMasterClientIntegrationTest extends BaseIntegration
     // The timeout will protect against this, and the change was to throw a IOException
     // in the cases we don't want to disconnect from master
     FileSystemMasterClient fsMasterClient =
-        FileSystemMasterClient.Factory.create(MasterClientConfig.defaults());
+        FileSystemMasterClient.Factory.create(MasterClientContext
+            .newBuilder(ClientContext.create(ServerConfiguration.global())).build());
     fsMasterClient.getStatus(new AlluxioURI("/doesNotExist"), GET_STATUS_OPTIONS);
     fsMasterClient.close();
   }
@@ -74,7 +79,6 @@ public final class FileSystemMasterClientIntegrationTest extends BaseIntegration
   @LocalAlluxioClusterResource.Config(
       confParams = {PropertyKey.Name.USER_RPC_RETRY_MAX_DURATION, "10s"})
   public void masterUnavailable() throws Exception {
-    FileSystem fileSystem = mLocalAlluxioClusterResource.get().getClient();
     mLocalAlluxioClusterResource.get().getLocalAlluxioMaster().stop();
 
     Thread thread = new Thread(new Runnable() {
@@ -89,7 +93,7 @@ public final class FileSystemMasterClientIntegrationTest extends BaseIntegration
       }
     });
     thread.start();
-
+    FileSystem fileSystem = mLocalAlluxioClusterResource.get().getClient();
     fileSystem.listStatus(new AlluxioURI("/"));
     thread.join();
   }

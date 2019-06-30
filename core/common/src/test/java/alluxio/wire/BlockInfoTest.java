@@ -11,8 +11,11 @@
 
 package alluxio.wire;
 
+import static org.junit.Assert.assertEquals;
+
+import alluxio.grpc.GrpcUtils;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.junit.Assert;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -33,12 +36,12 @@ public final class BlockInfoTest {
   }
 
   /**
-   * Test to convert between a thrift type and a wire type.
+   * Test to convert between a proto type and a wire type.
    */
   @Test
-  public void thrift() {
+  public void proto() {
     BlockInfo blockInfo = createRandom();
-    BlockInfo other = BlockInfo.fromThrift(blockInfo.toThrift());
+    BlockInfo other = GrpcUtils.fromProto(GrpcUtils.toProto(blockInfo));
     checkEquality(blockInfo, other);
   }
 
@@ -49,10 +52,10 @@ public final class BlockInfoTest {
    * @param b the second BlockInfo object to be checked
    */
   public void checkEquality(BlockInfo a, BlockInfo b) {
-    Assert.assertEquals(a.getBlockId(), b.getBlockId());
-    Assert.assertEquals(a.getLength(), b.getLength());
-    Assert.assertEquals(a.getLocations(), b.getLocations());
-    Assert.assertEquals(a, b);
+    assertEquals(a.getBlockId(), b.getBlockId());
+    assertEquals(a.getLength(), b.getLength());
+    assertEquals(a.getLocations(), b.getLocations());
+    assertEquals(a, b);
   }
 
   /**

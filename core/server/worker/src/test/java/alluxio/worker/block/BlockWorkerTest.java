@@ -24,10 +24,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import alluxio.AlluxioTestDirectory;
-import alluxio.Configuration;
+import alluxio.conf.ServerConfiguration;
 import alluxio.ConfigurationRule;
 import alluxio.Constants;
-import alluxio.PropertyKey;
+import alluxio.conf.PropertyKey;
 import alluxio.Sessions;
 import alluxio.WorkerStorageTierAssoc;
 import alluxio.exception.BlockAlreadyExistsException;
@@ -61,7 +61,7 @@ import java.util.Set;
 @RunWith(PowerMockRunner.class)
 @PrepareForTest({BlockMasterClient.class, BlockMasterClientPool.class, FileSystemMasterClient.class,
     BlockHeartbeatReporter.class, BlockMetricsReporter.class, BlockMeta.class,
-    BlockStoreLocation.class, StorageDir.class, Configuration.class, UnderFileSystem.class,
+    BlockStoreLocation.class, StorageDir.class, ServerConfiguration.class, UnderFileSystem.class,
     BlockWorker.class, Sessions.class})
 public class BlockWorkerTest {
 
@@ -84,11 +84,11 @@ public class BlockWorkerTest {
           .put(PropertyKey.WORKER_TIERED_STORE_LEVEL0_DIRS_PATH,
               AlluxioTestDirectory.createTemporaryDirectory("WORKER_TIERED_STORE_LEVEL0_DIRS_PATH")
                   .getAbsolutePath())
-          .put(PropertyKey.WORKER_DATA_PORT, Integer.toString(0))
+          .put(PropertyKey.WORKER_RPC_PORT, Integer.toString(0))
           .put(PropertyKey.WORKER_TIERED_STORE_LEVEL1_ALIAS, "HDD")
           .put(PropertyKey.WORKER_TIERED_STORE_LEVEL1_DIRS_PATH, AlluxioTestDirectory
               .createTemporaryDirectory("WORKER_TIERED_STORE_LEVEL1_DIRS_PATH").getAbsolutePath())
-          .build());
+          .build(), ServerConfiguration.global());
 
   /**
    * Sets up all dependencies before a test runs.
@@ -171,6 +171,7 @@ public class BlockWorkerTest {
     long sessionId = mRandom.nextLong();
     long usedBytes = mRandom.nextLong();
     String tierAlias = "MEM";
+    String mediumType = "MEM";
     HashMap<String, Long> usedBytesOnTiers = new HashMap<>();
     usedBytesOnTiers.put(tierAlias, usedBytes);
     BlockMeta blockMeta = PowerMockito.mock(BlockMeta.class);
@@ -181,14 +182,16 @@ public class BlockWorkerTest {
     when(mBlockStore.getBlockMeta(sessionId, blockId, lockId)).thenReturn(blockMeta);
     when(mBlockStore.getBlockStoreMeta()).thenReturn(blockStoreMeta);
     when(mBlockStore.getBlockStoreMetaFull()).thenReturn(blockStoreMeta);
+
     when(blockMeta.getBlockLocation()).thenReturn(blockStoreLocation);
     when(blockStoreLocation.tierAlias()).thenReturn(tierAlias);
+    when(blockStoreLocation.mediumType()).thenReturn(mediumType);
     when(blockMeta.getBlockSize()).thenReturn(length);
     when(blockStoreMeta.getUsedBytesOnTiers()).thenReturn(usedBytesOnTiers);
 
-    mBlockWorker.commitBlock(sessionId, blockId);
-    verify(mBlockMasterClient).commitBlock(anyLong(), eq(usedBytes), eq(tierAlias), eq(blockId),
-        eq(length));
+    mBlockWorker.commitBlock(sessionId, blockId, mRandom.nextBoolean());
+    verify(mBlockMasterClient).commitBlock(anyLong(), eq(usedBytes), eq(tierAlias), eq(mediumType),
+        eq(blockId), eq(length));
     verify(mBlockStore).unlockBlock(lockId);
   }
 
@@ -218,12 +221,13 @@ public class BlockWorkerTest {
     when(blockMeta.getBlockSize()).thenReturn(length);
     when(blockStoreMeta.getUsedBytesOnTiers()).thenReturn(usedBytesOnTiers);
 
-    doThrow(new BlockAlreadyExistsException("")).when(mBlockStore).commitBlock(sessionId, blockId);
-    mBlockWorker.commitBlock(sessionId, blockId);
+    doThrow(new BlockAlreadyExistsException("")).when(mBlockStore).commitBlock(sessionId, blockId,
+        false);
+    mBlockWorker.commitBlock(sessionId, blockId, mRandom.nextBoolean());
   }
 
   /**
-   * Tests the {@link BlockWorker#createBlock(long, long, String, long)} method.
+   * Tests the {@link BlockWorker#createBlock(long, long, String, String, long)} method.
    */
   @Test
   public void createBlock() throws Exception {
@@ -240,12 +244,12 @@ public class BlockWorkerTest {
     assertEquals(
         PathUtils.concatPath("/tmp", ".tmp_blocks", sessionId % 1024,
             String.format("%x-%x", sessionId, blockId)),
-        mBlockWorker.createBlock(sessionId, blockId, tierAlias, initialBytes));
+        mBlockWorker.createBlock(sessionId, blockId, tierAlias, "", initialBytes));
   }
 
   /**
-   * Tests the {@link BlockWorker#createBlock(long, long, String, long)} method with a tier other
-   * than MEM.
+   * Tests the {@link BlockWorker#createBlock(long, long, String, String,  long)} method with
+   * a tier other than MEM.
    */
   @Test
   public void createBlockLowerTier() throws Exception {
@@ -262,11 +266,11 @@ public class BlockWorkerTest {
     assertEquals(
         PathUtils.concatPath("/tmp", ".tmp_blocks", sessionId % 1024,
             String.format("%x-%x", sessionId, blockId)),
-        mBlockWorker.createBlock(sessionId, blockId, tierAlias, initialBytes));
+        mBlockWorker.createBlock(sessionId, blockId, tierAlias, "", initialBytes));
   }
 
   /**
-   * Tests the {@link BlockWorker#createBlockRemote(long, long, String, long)} method.
+   * Tests the {@link BlockWorker#createBlockRemote(long, long, String, String, long)} method.
    */
   @Test
   public void createBlockRemote() throws Exception {
@@ -283,7 +287,7 @@ public class BlockWorkerTest {
     assertEquals(
         PathUtils.concatPath("/tmp", ".tmp_blocks", sessionId % 1024,
             String.format("%x-%x", sessionId, blockId)),
-        mBlockWorker.createBlock(sessionId, blockId, tierAlias, initialBytes));
+        mBlockWorker.createBlock(sessionId, blockId, tierAlias, "", initialBytes));
   }
 
   /**

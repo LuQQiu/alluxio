@@ -13,13 +13,13 @@ package alluxio.cli.fsadmin.report;
 
 import alluxio.cli.fsadmin.FileSystemAdminShellUtils;
 import alluxio.client.block.BlockMasterClient;
-import alluxio.client.MetaMasterClient;
+import alluxio.client.meta.MetaMasterClient;
+import alluxio.grpc.MasterInfo;
+import alluxio.grpc.MasterInfoField;
 import alluxio.util.CommonUtils;
 import alluxio.util.FormatUtils;
 import alluxio.wire.BlockMasterInfo;
 import alluxio.wire.BlockMasterInfo.BlockMasterInfoField;
-import alluxio.wire.MasterInfo;
-import alluxio.wire.MasterInfo.MasterInfoField;
 
 import com.google.common.base.Strings;
 
@@ -42,19 +42,22 @@ public class SummaryCommand {
   private MetaMasterClient mMetaMasterClient;
   private BlockMasterClient mBlockMasterClient;
   private PrintStream mPrintStream;
+  private final String mDateFormatPattern;
 
   /**
    * Creates a new instance of {@link SummaryCommand}.
    *
    * @param metaMasterClient client to connect to meta master
    * @param blockMasterClient client to connect to block master
+   * @param dateFormatPattern the pattern to follow when printing the date
    * @param printStream stream to print summary information to
    */
   public SummaryCommand(MetaMasterClient metaMasterClient,
-      BlockMasterClient blockMasterClient, PrintStream printStream) {
+      BlockMasterClient blockMasterClient, String dateFormatPattern, PrintStream printStream) {
     mMetaMasterClient = metaMasterClient;
     mBlockMasterClient = blockMasterClient;
     mPrintStream = printStream;
+    mDateFormatPattern = dateFormatPattern;
   }
 
   /**
@@ -84,12 +87,13 @@ public class SummaryCommand {
     print("Master Address: " + masterInfo.getLeaderMasterAddress());
     print("Web Port: " + masterInfo.getWebPort());
     print("Rpc Port: " + masterInfo.getRpcPort());
-    print("Started: " + CommonUtils.convertMsToDate(masterInfo.getStartTimeMs()));
+    print("Started: " + CommonUtils.convertMsToDate(masterInfo.getStartTimeMs(),
+        mDateFormatPattern));
     print("Uptime: " + CommonUtils.convertMsToClockTime(masterInfo.getUpTimeMs()));
     print("Version: " + masterInfo.getVersion());
-    print("Safe Mode: " + masterInfo.isSafeMode());
+    print("Safe Mode: " + masterInfo.getSafeMode());
 
-    List<String> zookeeperAddresses = masterInfo.getZookeeperAddresses();
+    List<String> zookeeperAddresses = masterInfo.getZookeeperAddressesList();
     if (zookeeperAddresses == null || zookeeperAddresses.isEmpty()) {
       print("Zookeeper Enabled: false");
     } else {
@@ -101,7 +105,6 @@ public class SummaryCommand {
       }
       mIndentationLevel--;
     }
-
   }
 
   /**

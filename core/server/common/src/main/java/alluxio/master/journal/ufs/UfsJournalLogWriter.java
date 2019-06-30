@@ -11,18 +11,18 @@
 
 package alluxio.master.journal.ufs;
 
-import alluxio.Configuration;
-import alluxio.PropertyKey;
 import alluxio.RuntimeConstants;
+import alluxio.conf.PropertyKey;
+import alluxio.conf.ServerConfiguration;
 import alluxio.exception.ExceptionMessage;
-import alluxio.exception.InvalidJournalEntryException;
 import alluxio.exception.JournalClosedException;
 import alluxio.exception.JournalClosedException.IOJournalClosedException;
-import alluxio.master.journal.JournalReader;
+import alluxio.master.journal.JournalEntryStreamReader;
 import alluxio.master.journal.JournalWriter;
 import alluxio.proto.journal.Journal.JournalEntry;
 import alluxio.underfs.UnderFileSystem;
 import alluxio.underfs.options.CreateOptions;
+import alluxio.underfs.options.OpenOptions;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
@@ -98,7 +98,7 @@ final class UfsJournalLogWriter implements JournalWriter {
     mJournal = Preconditions.checkNotNull(journal, "journal");
     mUfs = mJournal.getUfs();
     mNextSequenceNumber = nextSequenceNumber;
-    mMaxLogSize = Configuration.getBytes(PropertyKey.MASTER_JOURNAL_LOG_SIZE_BYTES_MAX);
+    mMaxLogSize = ServerConfiguration.getBytes(PropertyKey.MASTER_JOURNAL_LOG_SIZE_BYTES_MAX);
 
     mRotateLogForNextWrite = true;
     UfsJournalFile currentLog = UfsJournalSnapshot.getCurrentLog(mJournal);
@@ -160,7 +160,7 @@ final class UfsJournalLogWriter implements JournalWriter {
 
     long lastPersistSeq = recoverLastPersistedJournalEntry();
 
-    createNewLogFile();
+    createNewLogFile(lastPersistSeq + 1);
     if (!mEntriesToFlush.isEmpty()) {
       JournalEntry firstEntryToFlush = mEntriesToFlush.peek();
       if (firstEntryToFlush.getSequenceNumber() > lastPersistSeq + 1) {
@@ -210,18 +210,17 @@ final class UfsJournalLogWriter implements JournalWriter {
     long lastPersistSeq = -1;
     UfsJournalFile currentLog = snapshot.getCurrentLog(mJournal);
     if (currentLog != null) {
-      long startSeq = currentLog.getStart();
       LOG.info("Recovering from previous UFS journal write failure."
           + " Scanning for the last persisted journal entry.");
-      try (JournalReader reader = new UfsJournalReader(mJournal, startSeq, true)) {
+      try (JournalEntryStreamReader reader =
+          new JournalEntryStreamReader(mUfs.open(currentLog.getLocation().toString(),
+              OpenOptions.defaults().setRecoverFailedOpen(true)))) {
         JournalEntry entry;
-        while ((entry = reader.read()) != null) {
+        while ((entry = reader.readEntry()) != null) {
           if (entry.getSequenceNumber() > lastPersistSeq) {
             lastPersistSeq = entry.getSequenceNumber();
           }
         }
-      } catch (InvalidJournalEntryException e) {
-        LOG.info("Found last persisted journal entry with seq={}.", lastPersistSeq);
       } catch (IOException e) {
         throw e;
       }
@@ -258,17 +257,18 @@ final class UfsJournalLogWriter implements JournalWriter {
       mJournalOutputStream = null;
     }
 
-    createNewLogFile();
+    createNewLogFile(mNextSequenceNumber);
     mRotateLogForNextWrite = false;
   }
 
-  private void createNewLogFile() throws IOException {
+  private void createNewLogFile(long startSequenceNumber) throws IOException {
     URI newLog = UfsJournalFile
-        .encodeLogFileLocation(mJournal, mNextSequenceNumber, UfsJournal.UNKNOWN_SEQUENCE_NUMBER);
-    UfsJournalFile currentLog = UfsJournalFile.createLogFile(newLog, mNextSequenceNumber,
+        .encodeLogFileLocation(mJournal, startSequenceNumber, UfsJournal.UNKNOWN_SEQUENCE_NUMBER);
+    UfsJournalFile currentLog = UfsJournalFile.createLogFile(newLog, startSequenceNumber,
         UfsJournal.UNKNOWN_SEQUENCE_NUMBER);
     OutputStream outputStream = mUfs.create(currentLog.getLocation().toString(),
-        CreateOptions.defaults().setEnsureAtomic(false).setCreateParent(true));
+        CreateOptions.defaults(ServerConfiguration.global()).setEnsureAtomic(false)
+            .setCreateParent(true));
     mJournalOutputStream = new JournalOutputStream(currentLog, outputStream);
     LOG.info("Created current log file: {}", currentLog);
   }
@@ -329,9 +329,19 @@ final class UfsJournalLogWriter implements JournalWriter {
     } catch (IOJournalClosedException e) {
       throw e.toJournalClosedException();
     } catch (IOException e) {
-      mRotateLogForNextWrite = true;
       UfsJournalFile currentLog = mJournalOutputStream.currentLog();
-      mJournalOutputStream = null;
+      // Try to close and complete the current file.
+      try {
+        closeAndCompleteCurrentStream();
+      } catch (IOException ioExc) {
+        // Journal file left in uncompleted state after flush failure.
+        LOG.error("Journal flush mitigation failure. Flush failure:{}. Mitigation failure:{}", e,
+            ioExc);
+        System.exit(-1);
+      } finally {
+        mRotateLogForNextWrite = true;
+        mJournalOutputStream = null;
+      }
       throw new IOException(ExceptionMessage.JOURNAL_FLUSH_FAILURE
           .getMessageWithUrl(RuntimeConstants.ALLUXIO_DEBUG_DOCS_URL,
               currentLog, e.getMessage()), e);
@@ -346,6 +356,26 @@ final class UfsJournalLogWriter implements JournalWriter {
             mMaxLogSize);
       }
       mRotateLogForNextWrite = true;
+    }
+  }
+
+  /**
+   * Used to close the current stream during failure. If close fails, it tries to complete the
+   * underlying log file regardless.
+   */
+  private void closeAndCompleteCurrentStream() throws IOException {
+    // Try to close and complete the current file.
+    try {
+      mJournalOutputStream.close();
+    } catch (IOException ioExc) {
+      LOG.warn("Failed to close current journal output stream at: {}. Error: {}",
+          mJournalOutputStream.currentLog().getLocation(), ioExc);
+      // Couldn't close the output stream.
+      // Try to complete the file.
+      completeLog(mJournalOutputStream.currentLog(), mNextSequenceNumber);
+    } finally {
+      mRotateLogForNextWrite = true;
+      mJournalOutputStream = null;
     }
   }
 

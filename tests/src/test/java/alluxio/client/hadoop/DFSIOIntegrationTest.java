@@ -12,7 +12,10 @@
 package alluxio.client.hadoop;
 
 import alluxio.Constants;
+import alluxio.conf.PropertyKey;
+import alluxio.conf.ServerConfiguration;
 import alluxio.hadoop.FileSystem;
+import alluxio.hadoop.HadoopConfigurationUtils;
 import alluxio.testutils.BaseIntegrationTest;
 import alluxio.testutils.LocalAlluxioClusterResource;
 
@@ -37,9 +40,13 @@ import org.apache.hadoop.util.StringUtils;
 import org.apache.hadoop.util.Tool;
 import org.apache.hadoop.util.ToolRunner;
 import org.junit.AfterClass;
+import org.junit.AssumptionViolatedException;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
+import org.junit.rules.TestRule;
+import org.junit.runner.Description;
+import org.junit.runners.model.Statement;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -87,6 +94,28 @@ import javax.annotation.Nullable;
  * </ul>
  */
 public class DFSIOIntegrationTest extends BaseIntegrationTest implements Tool {
+  /**
+   * A rule that is used to enforce supported hadoop client versions before running this test.
+   * Value for system property, "alluxio.hadoop.version", is injected by surefire plugin.
+   */
+  private static class HadoopVersionRule implements TestRule {
+    @Override
+    public Statement apply(Statement base, Description description) {
+      return new Statement() {
+        @Override
+        public void evaluate() throws Throwable {
+          String hadoopVersion = System.getProperty("alluxio.hadoop.version");
+          if (hadoopVersion != null && (hadoopVersion.startsWith("2.4")
+              || hadoopVersion.startsWith("2.5") || hadoopVersion.startsWith("2.6"))) {
+            throw new AssumptionViolatedException("Hadoop version not supported. Skipping test!");
+          } else {
+            base.evaluate();
+          }
+        }
+      };
+    }
+  }
+
   // Constants for DFSIOIntegrationTest
   private static final Logger LOG = LoggerFactory.getLogger(DFSIOIntegrationTest.class);
 
@@ -107,7 +136,8 @@ public class DFSIOIntegrationTest extends BaseIntegrationTest implements Tool {
 
   @ClassRule
   public static LocalAlluxioClusterResource sLocalAlluxioClusterResource =
-      new LocalAlluxioClusterResource.Builder().build();
+      new LocalAlluxioClusterResource.Builder()
+          .setProperty(PropertyKey.USER_FILE_WRITE_TYPE_DEFAULT, "CACHE_THROUGH").build();
   private static URI sLocalAlluxioClusterUri = null;
 
   static {
@@ -212,6 +242,9 @@ public class DFSIOIntegrationTest extends BaseIntegrationTest implements Tool {
 
   private static DFSIOIntegrationTest sBench;
 
+  @ClassRule
+  public static HadoopVersionRule sHadoopVersionRule = new HadoopVersionRule();
+
   @BeforeClass
   public static void beforeClass() throws Exception {
     // Init DFSIOIntegrationTest
@@ -224,7 +257,9 @@ public class DFSIOIntegrationTest extends BaseIntegrationTest implements Tool {
     sBench.getConf().set("fs." + Constants.SCHEME + ".impl", FileSystem.class.getName());
 
     org.apache.hadoop.fs.FileSystem fs =
-        org.apache.hadoop.fs.FileSystem.get(sLocalAlluxioClusterUri, sBench.getConf());
+        org.apache.hadoop.fs.FileSystem.get(sLocalAlluxioClusterUri,
+            HadoopConfigurationUtils
+                .mergeAlluxioConfiguration(sBench.getConf(), ServerConfiguration.global()));
     sBench.createControlFile(fs, DEFAULT_NR_BYTES, DEFAULT_NR_FILES);
 
     /** Check write here, as it is required for other tests */
@@ -235,7 +270,8 @@ public class DFSIOIntegrationTest extends BaseIntegrationTest implements Tool {
   public static void afterClass() throws Exception {
     // Clear DFSIOIntegrationTest
     org.apache.hadoop.fs.FileSystem fs =
-        org.apache.hadoop.fs.FileSystem.get(sLocalAlluxioClusterUri, sBench.getConf());
+        org.apache.hadoop.fs.FileSystem.get(sLocalAlluxioClusterUri, HadoopConfigurationUtils
+            .mergeAlluxioConfiguration(sBench.getConf(), ServerConfiguration.global()));
     sBench.cleanup(fs);
   }
 
@@ -244,7 +280,8 @@ public class DFSIOIntegrationTest extends BaseIntegrationTest implements Tool {
    */
   public static void writeTest() throws Exception {
     org.apache.hadoop.fs.FileSystem fs =
-        org.apache.hadoop.fs.FileSystem.get(sLocalAlluxioClusterUri, sBench.getConf());
+        org.apache.hadoop.fs.FileSystem.get(sLocalAlluxioClusterUri, HadoopConfigurationUtils
+            .mergeAlluxioConfiguration(sBench.getConf(), ServerConfiguration.global()));
     long tStart = System.currentTimeMillis();
     sBench.mapperWriteTest(fs);
     long execTime = System.currentTimeMillis() - tStart;
@@ -254,7 +291,8 @@ public class DFSIOIntegrationTest extends BaseIntegrationTest implements Tool {
   @Test(timeout = 50000)
   public void read() throws Exception {
     org.apache.hadoop.fs.FileSystem fs =
-        org.apache.hadoop.fs.FileSystem.get(sLocalAlluxioClusterUri, sBench.getConf());
+        org.apache.hadoop.fs.FileSystem.get(sLocalAlluxioClusterUri, HadoopConfigurationUtils
+            .mergeAlluxioConfiguration(sBench.getConf(), ServerConfiguration.global()));
     long tStart = System.currentTimeMillis();
     sBench.mapperReadTest(fs);
     long execTime = System.currentTimeMillis() - tStart;
@@ -264,7 +302,8 @@ public class DFSIOIntegrationTest extends BaseIntegrationTest implements Tool {
   @Test(timeout = 50000)
   public void readRandom() throws Exception {
     org.apache.hadoop.fs.FileSystem fs =
-        org.apache.hadoop.fs.FileSystem.get(sLocalAlluxioClusterUri, sBench.getConf());
+        org.apache.hadoop.fs.FileSystem.get(sLocalAlluxioClusterUri, HadoopConfigurationUtils
+            .mergeAlluxioConfiguration(sBench.getConf(), ServerConfiguration.global()));
     long tStart = System.currentTimeMillis();
     sBench.getConf().setLong("test.io.skip.size", 0);
     sBench.randomReadTest(fs);
@@ -275,7 +314,8 @@ public class DFSIOIntegrationTest extends BaseIntegrationTest implements Tool {
   @Test(timeout = 50000)
   public void readBackward() throws Exception {
     org.apache.hadoop.fs.FileSystem fs =
-        org.apache.hadoop.fs.FileSystem.get(sLocalAlluxioClusterUri, sBench.getConf());
+        org.apache.hadoop.fs.FileSystem.get(sLocalAlluxioClusterUri, HadoopConfigurationUtils
+            .mergeAlluxioConfiguration(sBench.getConf(), ServerConfiguration.global()));
     long tStart = System.currentTimeMillis();
     sBench.getConf().setLong("test.io.skip.size", -DEFAULT_BUFFER_SIZE);
     sBench.randomReadTest(fs);
@@ -286,7 +326,8 @@ public class DFSIOIntegrationTest extends BaseIntegrationTest implements Tool {
   @Test(timeout = 50000)
   public void readSkip() throws Exception {
     org.apache.hadoop.fs.FileSystem fs =
-        org.apache.hadoop.fs.FileSystem.get(sLocalAlluxioClusterUri, sBench.getConf());
+        org.apache.hadoop.fs.FileSystem.get(sLocalAlluxioClusterUri, HadoopConfigurationUtils
+            .mergeAlluxioConfiguration(sBench.getConf(), ServerConfiguration.global()));
     long tStart = System.currentTimeMillis();
     sBench.getConf().setLong("test.io.skip.size", 1);
     sBench.randomReadTest(fs);
@@ -297,7 +338,8 @@ public class DFSIOIntegrationTest extends BaseIntegrationTest implements Tool {
   @Test(timeout = 50000)
   public void readLargeSkip() throws Exception {
     org.apache.hadoop.fs.FileSystem fs =
-        org.apache.hadoop.fs.FileSystem.get(sLocalAlluxioClusterUri, sBench.getConf());
+        org.apache.hadoop.fs.FileSystem.get(sLocalAlluxioClusterUri, HadoopConfigurationUtils
+            .mergeAlluxioConfiguration(sBench.getConf(), ServerConfiguration.global()));
     long tStart = System.currentTimeMillis();
     sBench.getConf().setLong("test.io.skip.size", 5000);
     sBench.randomReadTest(fs);
@@ -309,7 +351,8 @@ public class DFSIOIntegrationTest extends BaseIntegrationTest implements Tool {
   // @Test (timeout = 50000)
   public void append() throws Exception {
     org.apache.hadoop.fs.FileSystem fs =
-        org.apache.hadoop.fs.FileSystem.get(sLocalAlluxioClusterUri, sBench.getConf());
+        org.apache.hadoop.fs.FileSystem.get(sLocalAlluxioClusterUri, HadoopConfigurationUtils
+            .mergeAlluxioConfiguration(sBench.getConf(), ServerConfiguration.global()));
     long tStart = System.currentTimeMillis();
     sBench.mapperAppendTest(fs);
     long execTime = System.currentTimeMillis() - tStart;

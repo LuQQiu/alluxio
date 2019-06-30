@@ -13,7 +13,8 @@ package alluxio.client.block;
 
 import alluxio.Client;
 import alluxio.client.block.options.GetWorkerReportOptions;
-import alluxio.master.MasterClientConfig;
+import alluxio.grpc.WorkerLostStorageInfo;
+import alluxio.master.MasterClientContext;
 import alluxio.wire.BlockInfo;
 import alluxio.wire.BlockMasterInfo;
 import alluxio.wire.BlockMasterInfo.BlockMasterInfoField;
@@ -44,7 +45,7 @@ public interface BlockMasterClient extends Client {
      * @param conf master client configuration
      * @return a new {@link BlockMasterClient} instance
      */
-    public static BlockMasterClient create(MasterClientConfig conf) {
+    public static BlockMasterClient create(MasterClientContext conf) {
       return new RetryHandlingBlockMasterClient(conf);
     }
   }
@@ -64,6 +65,11 @@ public interface BlockMasterClient extends Client {
    */
   List<WorkerInfo> getWorkerReport(final GetWorkerReportOptions options)
       throws IOException;
+
+  /**
+   * @return a list of worker lost storage information
+   */
+  List<WorkerLostStorageInfo> getWorkerLostStorage() throws IOException;
 
   /**
    * Returns the {@link BlockInfo} for a block id.

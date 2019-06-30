@@ -14,15 +14,12 @@ package alluxio.client.rest;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-import alluxio.Configuration;
-import alluxio.ConfigurationTestUtils;
-import alluxio.PropertyKey;
 import alluxio.RuntimeConstants;
-import alluxio.master.meta.AlluxioMasterRestServiceHandler;
+import alluxio.conf.PropertyKey;
+import alluxio.conf.ServerConfiguration;
 import alluxio.master.file.FileSystemMaster;
-import alluxio.master.file.StartupConsistencyCheck;
+import alluxio.master.meta.AlluxioMasterRestServiceHandler;
 import alluxio.metrics.MetricsSystem;
-import alluxio.testutils.master.MasterTestUtils;
 import alluxio.testutils.underfs.UnderFileSystemTestUtils;
 import alluxio.util.network.NetworkAddressUtils;
 import alluxio.util.network.NetworkAddressUtils.ServiceType;
@@ -61,7 +58,7 @@ public final class AlluxioMasterRestApiTest extends RestApiTest {
 
   @After
   public void after() {
-    ConfigurationTestUtils.resetConfiguration();
+    ServerConfiguration.reset();
   }
 
   private AlluxioMasterInfo getInfo(Map<String, String> params) throws Exception {
@@ -74,7 +71,7 @@ public final class AlluxioMasterRestApiTest extends RestApiTest {
 
   @Test
   public void getCapacity() throws Exception {
-    long total = Configuration.getBytes(PropertyKey.WORKER_MEMORY_SIZE);
+    long total = ServerConfiguration.getBytes(PropertyKey.WORKER_MEMORY_SIZE);
     Capacity capacity = getInfo(NO_PARAMS).getCapacity();
     assertEquals(total, capacity.getTotal());
     assertEquals(0, capacity.getUsed());
@@ -85,8 +82,8 @@ public final class AlluxioMasterRestApiTest extends RestApiTest {
     String home = "home";
     String rawConfDir = String.format("${%s}/conf", PropertyKey.Name.HOME);
     String resolvedConfDir = String.format("%s/conf", home);
-    Configuration.set(PropertyKey.HOME, home);
-    Configuration.set(PropertyKey.CONF_DIR, rawConfDir);
+    ServerConfiguration.set(PropertyKey.HOME, home);
+    ServerConfiguration.set(PropertyKey.CONF_DIR, rawConfDir);
 
     // with out any query parameter, configuration values are resolved.
     checkConfiguration(PropertyKey.CONF_DIR, resolvedConfDir, NO_PARAMS);
@@ -134,7 +131,8 @@ public final class AlluxioMasterRestApiTest extends RestApiTest {
   @Test
   public void getRpcAddress() throws Exception {
     assertTrue(getInfo(NO_PARAMS).getRpcAddress()
-        .contains(String.valueOf(NetworkAddressUtils.getPort(ServiceType.MASTER_RPC))));
+        .contains(String.valueOf(NetworkAddressUtils.getPort(ServiceType.MASTER_RPC,
+            ServerConfiguration.global()))));
   }
 
   @Test
@@ -143,19 +141,8 @@ public final class AlluxioMasterRestApiTest extends RestApiTest {
   }
 
   @Test
-  public void getStartupConsistencyCheckStatus() throws Exception {
-    MasterTestUtils.waitForStartupConsistencyCheck(mFileSystemMaster);
-    alluxio.wire.StartupConsistencyCheck status = getInfo(NO_PARAMS)
-        .getStartupConsistencyCheck();
-    assertEquals(
-        StartupConsistencyCheck.Status.COMPLETE.toString().toLowerCase(),
-        status.getStatus());
-    assertEquals(0, status.getInconsistentUris().size());
-  }
-
-  @Test
   public void getTierCapacity() throws Exception {
-    long total = Configuration.getBytes(PropertyKey.WORKER_MEMORY_SIZE);
+    long total = ServerConfiguration.getBytes(PropertyKey.WORKER_MEMORY_SIZE);
     Capacity capacity = getInfo(NO_PARAMS).getTierCapacity().get("MEM");
     assertEquals(total, capacity.getTotal());
     assertEquals(0, capacity.getUsed());
@@ -183,7 +170,7 @@ public final class AlluxioMasterRestApiTest extends RestApiTest {
     assertEquals(1, workerInfos.size());
     WorkerInfo workerInfo = workerInfos.get(0);
     assertEquals(0, workerInfo.getUsedBytes());
-    long bytes = Configuration.getBytes(PropertyKey.WORKER_MEMORY_SIZE);
+    long bytes = ServerConfiguration.getBytes(PropertyKey.WORKER_MEMORY_SIZE);
     assertEquals(bytes, workerInfo.getCapacityBytes());
   }
 

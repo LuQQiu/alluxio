@@ -13,20 +13,22 @@ package alluxio.client.meta;
 
 import static org.junit.Assert.assertEquals;
 
-import alluxio.client.MetaMasterClient;
-import alluxio.client.RetryHandlingMetaMasterClient;
-import alluxio.master.MasterClientConfig;
+import alluxio.ClientContext;
+import alluxio.conf.ServerConfiguration;
+import alluxio.grpc.GetConfigurationPOptions;
+import alluxio.grpc.MasterInfo;
+import alluxio.grpc.MasterInfoField;
+import alluxio.master.MasterClientContext;
 import alluxio.testutils.BaseIntegrationTest;
 import alluxio.testutils.LocalAlluxioClusterResource;
-import alluxio.wire.ConfigProperty;
-import alluxio.wire.MasterInfo;
-import alluxio.wire.MasterInfo.MasterInfoField;
+import alluxio.wire.Property;
 
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 
@@ -47,8 +49,9 @@ public final class MetaMasterIntegrationTest extends BaseIntegrationTest {
   @Test
   public void getInfoAllFields() throws Exception {
     try (MetaMasterClient client =
-        new RetryHandlingMetaMasterClient(MasterClientConfig.defaults())) {
-      MasterInfo info = client.getMasterInfo(null);
+        new RetryHandlingMetaMasterClient(MasterClientContext
+            .newBuilder(ClientContext.create(ServerConfiguration.global())).build())) {
+      MasterInfo info = client.getMasterInfo(Collections.emptySet());
       assertEquals(mWebPort, info.getWebPort());
     }
   }
@@ -56,7 +59,8 @@ public final class MetaMasterIntegrationTest extends BaseIntegrationTest {
   @Test
   public void getMasterInfoWebPort() throws Exception {
     try (MetaMasterClient client =
-        new RetryHandlingMetaMasterClient(MasterClientConfig.defaults())) {
+        new RetryHandlingMetaMasterClient(MasterClientContext
+            .newBuilder(ClientContext.create(ServerConfiguration.global())).build())) {
       MasterInfo info = client.getMasterInfo(new HashSet<>(Arrays
           .asList(MasterInfoField.WEB_PORT)));
       assertEquals(mWebPort, info.getWebPort());
@@ -65,11 +69,13 @@ public final class MetaMasterIntegrationTest extends BaseIntegrationTest {
 
   @Test
   public void getConfigurationWebPort() throws Exception {
-    try (MetaMasterClient client =
-             new RetryHandlingMetaMasterClient(MasterClientConfig.defaults())) {
-      List<ConfigProperty> configList = client.getConfiguration();
+    try (MetaMasterConfigClient client =
+             new RetryHandlingMetaMasterConfigClient(MasterClientContext
+                 .newBuilder(ClientContext.create(ServerConfiguration.global())).build())) {
+      List<Property> configList = client.getConfiguration(GetConfigurationPOptions.newBuilder()
+          .setIgnorePathConf(true).build()).getClusterConf();
       int configWebPort = -1;
-      for (ConfigProperty info : configList) {
+      for (Property info : configList) {
         if (info.getName().equals("alluxio.master.web.port")) {
           configWebPort = Integer.valueOf(info.getValue());
         }

@@ -15,13 +15,13 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.fail;
 
 import alluxio.AlluxioURI;
-import alluxio.client.WriteType;
 import alluxio.client.file.FileSystem;
 import alluxio.client.file.FileSystemTestUtils;
 import alluxio.client.file.URIStatus;
 import alluxio.exception.BlockInfoException;
+import alluxio.grpc.WritePType;
+import alluxio.master.AlluxioMasterProcess;
 import alluxio.master.LocalAlluxioCluster;
-import alluxio.master.MasterProcess;
 import alluxio.master.block.BlockMaster;
 import alluxio.testutils.LocalAlluxioClusterResource;
 import alluxio.wire.WorkerNetAddress;
@@ -34,10 +34,10 @@ import org.junit.Test;
  * Integration tests for block master functionality.
  */
 public class BlockMasterJournalIntegrationTest {
-
   @Rule
   public LocalAlluxioClusterResource mClusterResource =
-      new LocalAlluxioClusterResource.Builder().build();
+      new LocalAlluxioClusterResource.Builder()
+          .build();
   private LocalAlluxioCluster mCluster;
 
   @Before
@@ -51,13 +51,13 @@ public class BlockMasterJournalIntegrationTest {
     BlockMaster blockMaster =
         mCluster.getLocalAlluxioMaster().getMasterProcess().getMaster(BlockMaster.class);
     AlluxioURI file = new AlluxioURI("/test");
-    FileSystemTestUtils.createByteFile(fs, file, WriteType.MUST_CACHE, 10);
+    FileSystemTestUtils.createByteFile(fs, file, WritePType.MUST_CACHE, 10);
     URIStatus status = fs.getStatus(file);
     Long blockId = status.getBlockIds().get(0);
     assertNotNull(blockMaster.getBlockInfo(blockId));
     mCluster.stopMasters();
     mCluster.startMasters();
-    MasterProcess masterProcess = mCluster.getLocalAlluxioMaster().getMasterProcess();
+    AlluxioMasterProcess masterProcess = mCluster.getLocalAlluxioMaster().getMasterProcess();
     assertNotNull(masterProcess.getMaster(BlockMaster.class).getBlockInfo(blockId));
   }
 
@@ -67,7 +67,7 @@ public class BlockMasterJournalIntegrationTest {
     BlockMaster blockMaster =
         mCluster.getLocalAlluxioMaster().getMasterProcess().getMaster(BlockMaster.class);
     AlluxioURI file = new AlluxioURI("/test");
-    FileSystemTestUtils.createByteFile(fs, file, WriteType.MUST_CACHE, 10);
+    FileSystemTestUtils.createByteFile(fs, file, WritePType.MUST_CACHE, 10);
     URIStatus status = fs.getStatus(file);
     Long blockId = status.getBlockIds().get(0);
     assertNotNull(blockMaster.getBlockInfo(blockId));
@@ -81,7 +81,7 @@ public class BlockMasterJournalIntegrationTest {
     }
     mCluster.stopMasters();
     mCluster.startMasters();
-    MasterProcess masterProcess = mCluster.getLocalAlluxioMaster().getMasterProcess();
+    AlluxioMasterProcess masterProcess = mCluster.getLocalAlluxioMaster().getMasterProcess();
     try {
       masterProcess.getMaster(BlockMaster.class).getBlockInfo(blockId);
       fail("Expected the block to be deleted after restart");

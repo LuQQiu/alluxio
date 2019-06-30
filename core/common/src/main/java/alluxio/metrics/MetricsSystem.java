@@ -12,10 +12,12 @@
 package alluxio.metrics;
 
 import alluxio.AlluxioURI;
-import alluxio.Configuration;
-import alluxio.PropertyKey;
+import alluxio.conf.InstancedConfiguration;
+import alluxio.conf.PropertyKey;
+import alluxio.grpc.MetricType;
 import alluxio.metrics.sink.Sink;
 import alluxio.util.CommonUtils;
+import alluxio.util.ConfigurationUtils;
 import alluxio.util.network.NetworkAddressUtils;
 
 import com.codahale.metrics.Counter;
@@ -53,11 +55,18 @@ public final class MetricsSystem {
   private static final Logger LOG = LoggerFactory.getLogger(MetricsSystem.class);
 
   private static final ConcurrentHashMap<String, String> CACHED_METRICS = new ConcurrentHashMap<>();
+  private static int sResolveTimeout =
+      (int) new InstancedConfiguration(ConfigurationUtils.defaults())
+          .getMs(PropertyKey.NETWORK_HOST_RESOLUTION_TIMEOUT_MS);
+  private static final ConcurrentHashMap<String, Metric> LAST_REPORTED_METRICS =
+      new ConcurrentHashMap<>();
 
   /**
    * An enum of supported instance type.
    */
   public enum InstanceType {
+    JOB_MASTER("JobMaster"),
+    JOB_WORKER("JobWorker"),
     MASTER("Master"),
     WORKER("Worker"),
     CLUSTER("Cluster"),
@@ -118,15 +127,16 @@ public final class MetricsSystem {
   /**
    * Starts sinks specified in the configuration. This is an no-op if the sinks have already been
    * started. Note: This has to be called after Alluxio configuration is initialized.
+   *
+   * @param metricsConfFile the location of the metrics configuration file
    */
-  public static void startSinks() {
+  public static void startSinks(String metricsConfFile) {
     synchronized (MetricsSystem.class) {
       if (sSinks != null) {
         LOG.info("Sinks have already been started.");
         return;
       }
     }
-    String metricsConfFile = Configuration.get(PropertyKey.METRICS_CONF_FILE);
     if (metricsConfFile.isEmpty()) {
       LOG.info("Metrics is not enabled.");
       return;
@@ -205,6 +215,10 @@ public final class MetricsSystem {
         return getProxyMetricName(name);
       case WORKER:
         return getWorkerMetricName(name);
+      case JOB_MASTER:
+        return getJobMasterMetricName(name);
+      case JOB_WORKER:
+        return getJobWorkerMetricName(name);
       default:
         throw new IllegalStateException("Unknown process type");
     }
@@ -275,6 +289,27 @@ public final class MetricsSystem {
   }
 
   /**
+   * Builds metric registry names for the job master instance. The pattern is instance.metricName.
+   *
+   * @param name the metric name
+   * @return the metric registry name
+   */
+  private static String getJobMasterMetricName(String name) {
+    return Joiner.on(".").join(InstanceType.JOB_MASTER, name);
+  }
+
+  /**
+   * Builds metric registry name for job worker instance. The pattern is
+   * instance.uniqueId.metricName.
+   *
+   * @param name the metric name
+   * @return the metric registry name
+   */
+  public static String getJobWorkerMetricName(String name) {
+    return getMetricNameWithUniqueId(InstanceType.JOB_WORKER, name);
+  }
+
+  /**
    * Builds unique metric registry names with unique ID (set to host name). The pattern is
    * instance.hostname.metricName.
    *
@@ -283,7 +318,10 @@ public final class MetricsSystem {
    * @return the metric registry name
    */
   private static String getMetricNameWithUniqueId(InstanceType instance, String name) {
-    return instance + "." + NetworkAddressUtils.getLocalHostMetricName() + "." + name;
+    return instance
+        + "."
+        + NetworkAddressUtils.getLocalHostMetricName(sResolveTimeout)
+        + "." + name;
   }
 
   /**
@@ -319,14 +357,27 @@ public final class MetricsSystem {
   }
 
   /**
-   * Escapes a URI, replacing "/" and "." with "_" so that when the URI is used in a metric name,
-   * the "/" and "." won't be interpreted as path separators.
+   * Escapes a URI, replacing "/" with "%2F".
+   * Replaces "." with "%2E" because dots are used as tag separators in metric names.
+   * Replaces "%" with "%25" because it now has special use.
+   * So when the URI is used in a metric name, the "." and "/" won't be interpreted as
+   * path separators unescaped and interfere with the internal logic of AlluxioURI.
    *
    * @param uri the URI to escape
    * @return the string representing the escaped URI
    */
   public static String escape(AlluxioURI uri) {
-    return uri.toString().replace("/", "_").replace(".", "_");
+    return uri.toString().replace("%", "%25").replace("/", "%2F").replace(".", "%2E");
+  }
+
+  /**
+   * Unescapes a URI, reverts it to before the escape, to display it correctly.
+   *
+   * @param uri the escaped URI to unescape
+   * @return the string representing the unescaped original URI
+   */
+  public static String unescape(String uri) {
+    return uri.replace("%2F", "/").replace("%2E", ".").replace("%25", "%");
   }
 
   // Some helper functions.
@@ -378,6 +429,52 @@ public final class MetricsSystem {
   }
 
   /**
+   * This method is used to return a list of RPC metric objects which will be sent to the
+   * MetricsMaster.
+   *
+   * It is mainly useful for metrics which have a {@link MetricType} of COUNTER. The metric values
+   * with this type will be only include value of the difference since the last time that
+   * {@code reportMetrics} was called.
+   *
+   * By sending only the difference since the last RPC, this method will allow the master to
+   * track the metrics for a given worker, even if the worker is restarted.
+   */
+  private static List<alluxio.grpc.Metric> reportMetrics(InstanceType instanceType) {
+    List<alluxio.grpc.Metric> rpcMetrics = new ArrayList<>(20);
+    for (Metric m : allMetrics(instanceType)) {
+      // last reported metrics only need to be tracked for COUNTER metrics
+      // Store the last metric value which was sent, but the rpc metric returned should only
+      // contain the difference of the current value, and the last value sent. If it doesn't
+      // yet exist, just send the current value
+      if (m.getMetricType() == MetricType.COUNTER) {
+        Metric prev = LAST_REPORTED_METRICS.replace(m.getFullMetricName(), m);
+        // On restarts counters will be reset to 0, so whatever the value is the first time
+        // this method is called represents the value which should be added to the master's
+        // counter.
+        double diff = prev != null ? m.getValue() - prev.getValue() : m.getValue();
+        rpcMetrics.add(m.toProto().toBuilder().setValue(diff).build());
+      } else {
+        rpcMetrics.add(m.toProto());
+      }
+    }
+    return rpcMetrics;
+  }
+
+  /**
+   * @return the worker metrics to send via RPC
+   */
+  public static List<alluxio.grpc.Metric> reportWorkerMetrics() {
+    return reportMetrics(InstanceType.WORKER);
+  }
+
+  /**
+   * @return the client metrics to send via RPC
+   */
+  public static List<alluxio.grpc.Metric> reportClientMetrics() {
+    return reportMetrics(InstanceType.CLIENT);
+  }
+
+  /**
    * @return all the master's metrics in the format of {@link Metric}
    */
   public static List<Metric> allMasterMetrics() {
@@ -404,26 +501,26 @@ public final class MetricsSystem {
       if (entry.getKey().startsWith(instanceType.toString())) {
         Object value = entry.getValue().getValue();
         if (!(value instanceof Number)) {
-          LOG.warn(
-              "The value of metric {} of type {} is not sent to metrics master,"
+          LOG.warn("The value of metric {} of type {} is not sent to metrics master,"
                   + " only metrics value of number can be collected",
               entry.getKey(), entry.getValue().getClass().getSimpleName());
           continue;
         }
-        metrics.add(Metric.from(entry.getKey(), ((Number) value).longValue()));
+        metrics.add(Metric.from(entry.getKey(), ((Number) value).longValue(), MetricType.GAUGE));
       }
     }
     for (Entry<String, Counter> entry : METRIC_REGISTRY.getCounters().entrySet()) {
-      metrics.add(Metric.from(entry.getKey(), entry.getValue().getCount()));
+      metrics.add(Metric.from(entry.getKey(), entry.getValue().getCount(), MetricType.COUNTER));
     }
     for (Entry<String, Meter> entry : METRIC_REGISTRY.getMeters().entrySet()) {
       // TODO(yupeng): From Meter's implementation, getOneMinuteRate can only report at rate of at
       // least seconds. if the client's duration is too short (i.e. < 1s), then getOneMinuteRate
       // would return 0
-      metrics.add(Metric.from(entry.getKey(), entry.getValue().getOneMinuteRate()));
+      metrics.add(Metric.from(entry.getKey(), entry.getValue().getOneMinuteRate(),
+          MetricType.METER));
     }
     for (Entry<String, Timer> entry : METRIC_REGISTRY.getTimers().entrySet()) {
-      metrics.add(Metric.from(entry.getKey(), entry.getValue().getCount()));
+      metrics.add(Metric.from(entry.getKey(), entry.getValue().getCount(), MetricType.TIMER));
     }
     return metrics;
   }

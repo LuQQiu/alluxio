@@ -19,6 +19,7 @@ import alluxio.proto.journal.Journal.JournalEntry;
 import com.google.common.base.Throwables;
 
 import java.io.Closeable;
+import java.util.function.Supplier;
 
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.NotThreadSafe;
@@ -31,7 +32,7 @@ import javax.annotation.concurrent.NotThreadSafe;
  * guarantees about the order in which resources are closed.
  */
 @NotThreadSafe
-public final class RpcContext implements Closeable {
+public final class RpcContext implements Closeable, Supplier<JournalContext> {
   public static final RpcContext NOOP =
       new RpcContext(NoopBlockDeletionContext.INSTANCE, NoopJournalContext.INSTANCE);
 
@@ -80,7 +81,7 @@ public final class RpcContext implements Closeable {
   @Override
   public void close() throws UnavailableException {
     // JournalContext is closed before block deletion context so that file system master changes
-    // get written before block master changes. If a failure occurs between deleting an inode and
+    // are written before block master changes. If a failure occurs between deleting an inode and
     // remove its blocks, it's better to have an orphaned block than an inode with a missing block.
     closeQuietly(mJournalContext);
     closeQuietly(mBlockDeletionContext);
@@ -103,5 +104,10 @@ public final class RpcContext implements Closeable {
         }
       }
     }
+  }
+
+  @Override
+  public JournalContext get() {
+    return mJournalContext;
   }
 }

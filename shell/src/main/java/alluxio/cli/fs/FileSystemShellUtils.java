@@ -12,9 +12,10 @@
 package alluxio.cli.fs;
 
 import alluxio.AlluxioURI;
-import alluxio.Configuration;
+import alluxio.client.file.FileSystemContext;
+import alluxio.conf.AlluxioConfiguration;
 import alluxio.Constants;
-import alluxio.PropertyKey;
+import alluxio.conf.PropertyKey;
 import alluxio.cli.Command;
 import alluxio.cli.CommandUtils;
 import alluxio.client.file.FileSystem;
@@ -27,6 +28,8 @@ import alluxio.util.network.NetworkAddressUtils;
 import alluxio.util.network.NetworkAddressUtils.ServiceType;
 
 import com.google.common.collect.Lists;
+import org.apache.commons.cli.CommandLine;
+import org.apache.commons.cli.Option;
 
 import java.io.File;
 import java.io.IOException;
@@ -50,10 +53,12 @@ public final class FileSystemShellUtils {
    * from a path, leaving only the local file path.
    *
    * @param path the path to obtain the local path from
+   * @param alluxioConf Alluxio configuration
    * @return the local path in string format
    */
-  public static String getFilePath(String path) throws IOException {
-    path = validatePath(path);
+  public static String getFilePath(String path, AlluxioConfiguration alluxioConf)
+      throws IOException {
+    path = validatePath(path, alluxioConf);
     if (path.startsWith(Constants.HEADER)) {
       path = path.substring(Constants.HEADER.length());
     } else if (path.startsWith(Constants.HEADER_FT)) {
@@ -67,11 +72,13 @@ public final class FileSystemShellUtils {
    * {@link Constants#HEADER_FT} and a hostname:port specified.
    *
    * @param path the path to be verified
+   * @param alluxioConf Alluxio configuration
    * @return the verified path in a form like alluxio://host:port/dir. If only the "/dir" or "dir"
    *         part is provided, the host and port are retrieved from property,
    *         alluxio.master.hostname and alluxio.master.port, respectively.
    */
-  public static String validatePath(String path) throws IOException {
+  public static String validatePath(String path, AlluxioConfiguration alluxioConf)
+      throws IOException {
     if (path.startsWith(Constants.HEADER) || path.startsWith(Constants.HEADER_FT)) {
       if (!path.contains(":")) {
         throw new IOException("Invalid Path: " + path + ". Use " + Constants.HEADER
@@ -80,9 +87,9 @@ public final class FileSystemShellUtils {
         return path;
       }
     } else {
-      String hostname = NetworkAddressUtils.getConnectHost(ServiceType.MASTER_RPC);
-      int port =  Configuration.getInt(PropertyKey.MASTER_RPC_PORT);
-      if (Configuration.getBoolean(PropertyKey.ZOOKEEPER_ENABLED)) {
+      String hostname = NetworkAddressUtils.getConnectHost(ServiceType.MASTER_RPC, alluxioConf);
+      int port =  alluxioConf.getInt(PropertyKey.MASTER_RPC_PORT);
+      if (alluxioConf.getBoolean(PropertyKey.ZOOKEEPER_ENABLED)) {
         return PathUtils.concatPath(Constants.HEADER_FT + hostname + ":" + port, path);
       }
       return PathUtils.concatPath(Constants.HEADER + hostname + ":" + port, path);
@@ -214,15 +221,49 @@ public final class FileSystemShellUtils {
   }
 
   /**
+   * Gets the value of an option from the command line.
+   *
+   * @param cl command line object
+   * @param option the option to check for in the command line
+   * @param defaultValue default value for the option
+   * @return argument from command line or default if not present
+   */
+  public static int getIntArg(CommandLine cl, Option option, int defaultValue) {
+    int arg = defaultValue;
+    if (cl.hasOption(option.getLongOpt())) {
+      String argOption = cl.getOptionValue(option.getLongOpt());
+      arg = Integer.parseInt(argOption);
+    }
+    return arg;
+  }
+
+  /**
+   * Gets the value of an option from the command line.
+   *
+   * @param cl command line object
+   * @param option the option to check for in the command line
+   * @param defaultValue default value for the option
+   * @return argument from command line or default if not present
+   */
+  public static long getMsArg(CommandLine cl, Option option, long defaultValue) {
+    long arg = defaultValue;
+    if (cl.hasOption(option.getLongOpt())) {
+      String argOption = cl.getOptionValue(option.getLongOpt());
+      arg = FormatUtils.parseTimeSize(argOption);
+    }
+    return arg;
+  }
+
+  /**
    * Gets all {@link Command} instances in the same package as {@link FileSystemShell} and load them
    * into a map. Provides a way to gain these commands information by their CommandName.
    *
-   * @param fileSystem the {@link FileSystem} instance to construct the command
+   * @param fsContext the {@link FileSystemContext} instance to construct the command
    * @return a mapping from command name to command instance
    */
-  public static Map<String, Command> loadCommands(FileSystem fileSystem) {
+  public static Map<String, Command> loadCommands(FileSystemContext fsContext) {
     return CommandUtils.loadCommands(FileSystemShell.class.getPackage().getName(),
-        new Class[] {FileSystem.class}, new Object[] {fileSystem});
+        new Class[] {FileSystemContext.class}, new Object[] {fsContext});
   }
 
   /**

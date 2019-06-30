@@ -12,8 +12,6 @@
 package alluxio.util.io;
 
 import alluxio.AlluxioURI;
-import alluxio.Configuration;
-import alluxio.PropertyKey;
 import alluxio.exception.InvalidPathException;
 
 import org.slf4j.Logger;
@@ -184,10 +182,12 @@ public final class FileUtils {
    * permissions.
    *
    * @param path the path of the block
+   * @param workerDataFolderPermissions The permissions to set on the worker's data folder
    */
-  public static void createBlockPath(String path) throws IOException {
+  public static void createBlockPath(String path, String workerDataFolderPermissions)
+      throws IOException {
     try {
-      createStorageDirPath(PathUtils.getParent(path));
+      createStorageDirPath(PathUtils.getParent(path), workerDataFolderPermissions);
     } catch (InvalidPathException e) {
       throw new IOException("Failed to create block path, get parent path of " + path + "failed",
           e);
@@ -221,9 +221,14 @@ public final class FileUtils {
   /**
    * Deletes a file or a directory, recursively if it is a directory.
    *
+   * If the path does not exist, nothing happens.
+   *
    * @param path pathname to be deleted
    */
   public static void deletePathRecursively(String path) throws IOException {
+    if (!exists(path)) {
+      return;
+    }
     Path root = Paths.get(path);
     Files.walkFileTree(root, new SimpleFileVisitor<Path>() {
       @Override
@@ -251,9 +256,11 @@ public final class FileUtils {
    * Also, appropriate directory permissions (w/ StickyBit) are set.
    *
    * @param path storage directory path to create
+   * @param workerDataFolderPermissions the permissions to set for the worker's data folder
    * @return true if the directory is created and false if the directory already exists
    */
-  public static boolean createStorageDirPath(String path) throws IOException {
+  public static boolean createStorageDirPath(String path, String workerDataFolderPermissions)
+      throws IOException {
     if (Files.exists(Paths.get(path))) {
       return false;
     }
@@ -264,8 +271,7 @@ public final class FileUtils {
       throw new IOException("Failed to create folder " + path, e);
     }
     String absolutePath = storagePath.toAbsolutePath().toString();
-    String perms = Configuration.get(PropertyKey.WORKER_DATA_FOLDER_PERMISSIONS);
-    changeLocalFilePermission(absolutePath, perms);
+    changeLocalFilePermission(absolutePath, workerDataFolderPermissions);
     setLocalDirStickyBit(absolutePath);
     return true;
   }
@@ -298,6 +304,20 @@ public final class FileUtils {
    */
   public static boolean exists(String path) {
     return Files.exists(Paths.get(path));
+  }
+
+  /**
+   * Checks if a storage directory path is accessible.
+   *
+   * @param path the given path
+   * @return true if path exists, false otherwise
+   */
+  public static boolean isStorageDirAccessible(String path) {
+    Path filePath = Paths.get(path);
+    return Files.exists(filePath)
+        && Files.isReadable(filePath)
+        && Files.isWritable(filePath)
+        && Files.isExecutable(filePath);
   }
 
   private FileUtils() {} // prevent instantiation

@@ -11,8 +11,8 @@
 
 package alluxio.cli.validation;
 
-import alluxio.Configuration;
-import alluxio.PropertyKey;
+import alluxio.conf.ServerConfiguration;
+import alluxio.conf.PropertyKey;
 import alluxio.util.ShellUtils;
 import alluxio.util.UnixMountInfo;
 
@@ -27,6 +27,8 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
+
+import javax.annotation.Nullable;
 
 /**
  * Utilities for validating Alluxio environment.
@@ -78,8 +80,9 @@ public final class Utils {
    * @param fileName name of a file that contains the list of the nodes
    * @return list of the node names, null when file fails to read
    */
+  @Nullable
   public static List<String> readNodeList(String fileName) {
-    String confDir = Configuration.get(PropertyKey.CONF_DIR);
+    String confDir = ServerConfiguration.get(PropertyKey.CONF_DIR);
     List<String> lines;
     try {
       lines = Files.readAllLines(Paths.get(confDir, fileName), StandardCharsets.UTF_8);

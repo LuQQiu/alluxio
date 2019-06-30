@@ -20,19 +20,19 @@ import static org.mockito.Mockito.any;
 
 import alluxio.AlluxioTestDirectory;
 import alluxio.AlluxioURI;
-import alluxio.Configuration;
+import alluxio.conf.ServerConfiguration;
 import alluxio.ConfigurationRule;
-import alluxio.PropertyKey;
+import alluxio.conf.PropertyKey;
 import alluxio.exception.WorkerOutOfSpaceException;
 import alluxio.proto.dataserver.Protocol;
 import alluxio.underfs.UfsManager;
 import alluxio.underfs.UfsManager.UfsClient;
 import alluxio.underfs.UnderFileSystem;
+import alluxio.underfs.UnderFileSystemConfiguration;
 import alluxio.util.io.BufferUtils;
 import alluxio.worker.block.io.BlockReader;
 import alluxio.worker.block.meta.UnderFileSystemBlockMeta;
 
-import com.google.common.base.Suppliers;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.PooledByteBufAllocator;
 import org.junit.Assert;
@@ -74,11 +74,11 @@ public final class UnderFileSystemBlockReaderTest {
               .getAbsolutePath());
           put(PropertyKey.WORKER_TIERED_STORE_LEVELS, "1");
         }
-      });
+      }, ServerConfiguration.global());
 
   @Before
   public void before() throws Exception {
-    String ufsFolder = Configuration.get(PropertyKey.MASTER_MOUNT_TABLE_ROOT_UFS);
+    String ufsFolder = ServerConfiguration.get(PropertyKey.MASTER_MOUNT_TABLE_ROOT_UFS);
     String testFilePath = File.createTempFile("temp", null, new File(ufsFolder)).getAbsolutePath();
     byte[] buffer = BufferUtils.getIncreasingByteArray((int) TEST_BLOCK_SIZE * 2);
     BufferUtils.writeBufferToFile(testFilePath, buffer);
@@ -87,7 +87,8 @@ public final class UnderFileSystemBlockReaderTest {
     mUfsManager = mock(UfsManager.class);
     mUfsInstreamManager = new UfsInputStreamManager();
     UfsClient ufsClient = new UfsClient(
-        Suppliers.ofInstance(UnderFileSystem.Factory.create(testFilePath)),
+        () -> UnderFileSystem.Factory.create(testFilePath.toString(),
+            UnderFileSystemConfiguration.defaults(ServerConfiguration.global())),
         new AlluxioURI(testFilePath));
     when(mUfsManager.get(anyLong())).thenReturn(ufsClient);
 
@@ -100,7 +101,7 @@ public final class UnderFileSystemBlockReaderTest {
 
   private void checkTempBlock(long start, long length) throws Exception {
     Assert.assertNotNull(mAlluxioBlockStore.getTempBlockMeta(SESSION_ID, BLOCK_ID));
-    mAlluxioBlockStore.commitBlock(SESSION_ID, BLOCK_ID);
+    mAlluxioBlockStore.commitBlock(SESSION_ID, BLOCK_ID, false);
     long lockId = mAlluxioBlockStore.lockBlock(SESSION_ID, BLOCK_ID);
     BlockReader reader = mAlluxioBlockStore.getBlockReader(SESSION_ID, BLOCK_ID, lockId);
     Assert.assertEquals(length, reader.getLength());

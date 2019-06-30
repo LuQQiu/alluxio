@@ -11,8 +11,10 @@
 
 package alluxio.wire;
 
+import com.google.common.base.MoreObjects;
 import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
+import io.swagger.annotations.ApiModelProperty;
 
 import java.io.Serializable;
 import java.util.Comparator;
@@ -46,6 +48,7 @@ public final class WorkerInfo implements Serializable {
   /**
    * @return the worker id
    */
+  @ApiModelProperty(value = "Worker id, used to identify the worker internally")
   public long getId() {
     return mId;
   }
@@ -53,6 +56,7 @@ public final class WorkerInfo implements Serializable {
   /**
    * @return the worker address
    */
+  @ApiModelProperty(value = "Address of the worker")
   public WorkerNetAddress getAddress() {
     return mAddress;
   }
@@ -60,6 +64,7 @@ public final class WorkerInfo implements Serializable {
   /**
    * @return the worker last contact (in seconds)
    */
+  @ApiModelProperty(value = "Seconds since the worker's last contact")
   public int getLastContactSec() {
     return mLastContactSec;
   }
@@ -67,6 +72,7 @@ public final class WorkerInfo implements Serializable {
   /**
    * @return the worker state
    */
+  @ApiModelProperty(value = "Operation state of the worker", example = "In Service")
   public String getState() {
     return mState;
   }
@@ -74,6 +80,7 @@ public final class WorkerInfo implements Serializable {
   /**
    * @return the worker total capacity (in bytes)
    */
+  @ApiModelProperty(value = "Size of the worker's local storage in bytes")
   public long getCapacityBytes() {
     return mCapacityBytes;
   }
@@ -81,6 +88,7 @@ public final class WorkerInfo implements Serializable {
   /**
    * @return the worker used capacity (in bytes)
    */
+  @ApiModelProperty(value = "Number of bytes used of the worker's local storage")
   public long getUsedBytes() {
     return mUsedBytes;
   }
@@ -88,6 +96,7 @@ public final class WorkerInfo implements Serializable {
   /**
    * @return the worker start time (in milliseconds)
    */
+  @ApiModelProperty(value = "Start time of the worker in epoch time in milliseconds")
   public long getStartTimeMs() {
     return mStartTimeMs;
   }
@@ -95,6 +104,7 @@ public final class WorkerInfo implements Serializable {
   /**
    * @return the worker total capacity (in bytes) on tiers
    */
+  @ApiModelProperty(value = "The max capacity of each of the worker's tiers in bytes")
   public Map<String, Long> getCapacityBytesOnTiers() {
     return mCapacityBytesOnTiers;
   }
@@ -102,6 +112,7 @@ public final class WorkerInfo implements Serializable {
   /**
    * @return the worker used capacity (in bytes) on tiers
    */
+  @ApiModelProperty(value = "The number of bytes currently used on each of the worker's tiers")
   public Map<String, Long> getUsedBytesOnTiers() {
     return mUsedBytesOnTiers;
   }
@@ -189,33 +200,6 @@ public final class WorkerInfo implements Serializable {
     return this;
   }
 
-  /**
-   * @return thrift representation of the worker information
-   */
-  public  alluxio.thrift.WorkerInfo toThrift() {
-    return new alluxio.thrift.WorkerInfo(mId, mAddress.toThrift(), mLastContactSec,
-        mState, mCapacityBytes, mUsedBytes, mStartTimeMs, mCapacityBytesOnTiers, mUsedBytesOnTiers);
-  }
-
-  /**
-   * Creates a new instance of {@link WorkerInfo} from a thrift representation.
-   *
-   * @param workerInfo the thrift representation of a worker information
-   * @return the instance
-   */
-  public static WorkerInfo fromThrift(alluxio.thrift.WorkerInfo workerInfo) {
-    return new WorkerInfo()
-        .setAddress(WorkerNetAddress.fromThrift(workerInfo.getAddress()))
-        .setCapacityBytes(workerInfo.getCapacityBytes())
-        .setCapacityBytesOnTiers(workerInfo.getCapacityBytesOnTiers())
-        .setId(workerInfo.getId())
-        .setLastContactSec(workerInfo.getLastContactSec())
-        .setStartTimeMs(workerInfo.getStartTimeMs())
-        .setState(workerInfo.getState())
-        .setUsedBytes(workerInfo.getUsedBytes())
-        .setUsedBytesOnTiers(workerInfo.getUsedBytesOnTiers());
-  }
-
   @Override
   public boolean equals(Object o) {
     if (this == o) {
@@ -256,7 +240,7 @@ public final class WorkerInfo implements Serializable {
 
   @Override
   public String toString() {
-    return Objects.toStringHelper(this).add("id", mId).add("address", mAddress)
+    return MoreObjects.toStringHelper(this).add("id", mId).add("address", mAddress)
         .add("lastContactSec", mLastContactSec).add("state", mState)
         .add("capacityBytes", mCapacityBytes).add("usedBytes", mUsedBytes)
         .add("startTimeMs", mStartTimeMs).add("capacityBytesOnTiers", mCapacityBytesOnTiers)

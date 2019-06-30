@@ -13,6 +13,7 @@ package alluxio.metrics;
 
 import static org.junit.Assert.assertEquals;
 
+import alluxio.grpc.MetricType;
 import alluxio.util.CommonUtils;
 
 import org.junit.Test;
@@ -25,16 +26,16 @@ import java.util.Random;
 public final class MetricTest {
 
   @Test
-  public void thrift() {
+  public void proto() {
     Metric metric = createRandom();
-    Metric other = Metric.from(metric.toThrift());
+    Metric other = Metric.fromProto(metric.toProto());
     checkEquality(metric, other);
   }
 
   @Test
   public void testFullNameParsing() {
     String fullName = "Client.192_1_1_1|A.metric.tag1:A::/.tag2:B:/";
-    Metric metric = Metric.from(fullName, 1);
+    Metric metric = Metric.from(fullName, 1, MetricType.COUNTER);
     assertEquals(fullName, metric.getFullMetricName());
   }
 
@@ -59,6 +60,7 @@ public final class MetricTest {
     String hostname = CommonUtils.randomAlphaNumString(random.nextInt(10));
     String name = CommonUtils.randomAlphaNumString(random.nextInt(10));
     double value = random.nextLong();
-    return new Metric(instance, hostname, name, value);
+    MetricType metricType = MetricType.forNumber(random.nextInt(MetricType.values().length));
+    return new Metric(instance, hostname, metricType, name, value);
   }
 }

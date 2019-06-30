@@ -11,12 +11,12 @@
 
 package alluxio.cli.fs.command;
 
-import alluxio.cli.CommandUtils;
-import alluxio.client.file.FileSystem;
+import alluxio.client.file.FileSystemContext;
 import alluxio.exception.AlluxioException;
 import alluxio.exception.status.InvalidArgumentException;
 
 import org.apache.commons.cli.CommandLine;
+import org.apache.commons.cli.Options;
 
 import java.io.File;
 import java.io.IOException;
@@ -32,11 +32,11 @@ public final class CopyToLocalCommand extends AbstractFileSystemCommand {
   private CpCommand mCpCommand;
 
   /**
-   * @param fs the filesystem of Alluxio
+   * @param fsContext the filesystem of Alluxio
    */
-  public CopyToLocalCommand(FileSystem fs) {
-    super(fs);
-    mCpCommand = new CpCommand(fs);
+  public CopyToLocalCommand(FileSystemContext fsContext) {
+    super(fsContext);
+    mCpCommand = new CpCommand(fsContext);
   }
 
   @Override
@@ -45,8 +45,13 @@ public final class CopyToLocalCommand extends AbstractFileSystemCommand {
   }
 
   @Override
+  public Options getOptions() {
+    return new Options().addOption(CpCommand.BUFFER_SIZE_OPTION);
+  }
+
+  @Override
   public void validateArgs(CommandLine cl) throws InvalidArgumentException {
-    CommandUtils.checkNumOfArgsEquals(this, cl, 2);
+    mCpCommand.validateArgs(cl);
   }
 
   @Override
@@ -60,7 +65,9 @@ public final class CopyToLocalCommand extends AbstractFileSystemCommand {
 
   @Override
   public String getUsage() {
-    return "copyToLocal <src> <localDst>";
+    return "copyToLocal "
+        + "[--buffersize <bytes>] "
+        + " <src> <localDst>";
   }
 
   @Override

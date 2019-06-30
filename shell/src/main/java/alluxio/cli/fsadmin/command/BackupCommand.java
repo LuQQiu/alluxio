@@ -12,7 +12,10 @@
 package alluxio.cli.fsadmin.command;
 
 import alluxio.cli.CommandUtils;
+import alluxio.conf.AlluxioConfiguration;
 import alluxio.exception.status.InvalidArgumentException;
+import alluxio.grpc.BackupPOptions;
+import alluxio.grpc.BackupPOptions.Builder;
 import alluxio.wire.BackupResponse;
 
 import org.apache.commons.cli.CommandLine;
@@ -36,8 +39,9 @@ public class BackupCommand extends AbstractFsAdminCommand {
           .build();
   /**
    * @param context fsadmin command context
+   * @param alluxioConf Alluxio configuration
    */
-  public BackupCommand(Context context) {
+  public BackupCommand(Context context, AlluxioConfiguration alluxioConf) {
     super(context);
   }
 
@@ -54,15 +58,13 @@ public class BackupCommand extends AbstractFsAdminCommand {
   @Override
   public int run(CommandLine cl) throws IOException {
     String[] args = cl.getArgs();
-    String dir;
-    if (args.length < 1) {
-      dir = null;
-    } else {
-      dir = args[0];
+    Builder opts = BackupPOptions.newBuilder();
+    if (args.length >= 1) {
+      opts.setTargetDirectory(args[0]);
     }
-    boolean local = cl.hasOption(LOCAL_OPTION.getLongOpt());
-    BackupResponse resp = mMetaClient.backup(dir, local);
-    if (local) {
+    opts.setLocalFileSystem(cl.hasOption(LOCAL_OPTION.getLongOpt()));
+    BackupResponse resp = mMetaClient.backup(opts.build());
+    if (opts.getLocalFileSystem()) {
       mPrintStream.printf("Successfully backed up journal to %s on master %s%n",
           resp.getBackupUri(), resp.getHostname());
     } else {

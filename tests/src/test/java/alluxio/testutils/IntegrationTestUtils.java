@@ -11,15 +11,26 @@
 
 package alluxio.testutils;
 
+import static alluxio.util.network.NetworkAddressUtils.ServiceType;
+
 import alluxio.AlluxioURI;
+import alluxio.ClientContext;
 import alluxio.Constants;
 import alluxio.client.file.FileSystem;
 import alluxio.client.file.FileSystemMasterClient;
-import alluxio.client.file.options.GetStatusOptions;
+import alluxio.conf.PropertyKey;
+import alluxio.conf.ServerConfiguration;
 import alluxio.heartbeat.HeartbeatContext;
 import alluxio.heartbeat.HeartbeatScheduler;
-import alluxio.master.MasterClientConfig;
+import alluxio.master.MasterClientContext;
+import alluxio.master.NoopMaster;
+import alluxio.master.PortRegistry;
+import alluxio.master.journal.JournalUtils;
+import alluxio.master.journal.ufs.UfsJournal;
+import alluxio.master.journal.ufs.UfsJournalSnapshot;
 import alluxio.util.CommonUtils;
+import alluxio.util.FileSystemOptions;
+import alluxio.util.URIUtils;
 import alluxio.util.WaitForOptions;
 import alluxio.worker.block.BlockHeartbeatReporter;
 import alluxio.worker.block.BlockWorker;
@@ -28,7 +39,9 @@ import com.google.common.base.Throwables;
 import org.powermock.reflect.Whitebox;
 
 import java.io.IOException;
+import java.net.URI;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeoutException;
 
@@ -36,6 +49,7 @@ import java.util.concurrent.TimeoutException;
  * Util methods for writing integration tests.
  */
 public final class IntegrationTestUtils {
+
   /**
    * Convenience method for calling
    * {@link #waitForPersist(LocalAlluxioClusterResource, AlluxioURI, int)} with a default timeout.
@@ -58,10 +72,12 @@ public final class IntegrationTestUtils {
   public static void waitForPersist(final LocalAlluxioClusterResource localAlluxioClusterResource,
       final AlluxioURI uri, int timeoutMs) throws InterruptedException, TimeoutException {
     try (FileSystemMasterClient client =
-        FileSystemMasterClient.Factory.create(MasterClientConfig.defaults())) {
+        FileSystemMasterClient.Factory.create(MasterClientContext
+            .newBuilder(ClientContext.create(ServerConfiguration.global())).build())) {
       CommonUtils.waitFor(uri + " to be persisted", () -> {
         try {
-          return client.getStatus(uri, GetStatusOptions.defaults()).isPersisted();
+          return client.getStatus(uri,
+              FileSystemOptions.getStatusDefaults(ServerConfiguration.global())).isPersisted();
         } catch (Exception e) {
           throw Throwables.propagate(e);
         }
@@ -117,6 +133,53 @@ public final class IntegrationTestUtils {
       Thread.currentThread().interrupt();
       throw new RuntimeException(e);
     }
+  }
+
+  /**
+   * Waits for a checkpoint to be written in the specified master's journal.
+   *
+   * @param masterName the name of the master
+   */
+  public static void waitForUfsJournalCheckpoint(String masterName)
+      throws TimeoutException, InterruptedException {
+    waitForUfsJournalCheckpoint(masterName, JournalUtils.getJournalLocation());
+  }
+
+  /**
+   * Waits for a checkpoint to be written in the specified master's journal.
+   *
+   * @param masterName the name of the master
+   * @param journalLocation the location of the journal
+   */
+  public static void waitForUfsJournalCheckpoint(String masterName, URI journalLocation)
+      throws TimeoutException, InterruptedException {
+    UfsJournal journal = new UfsJournal(URIUtils.appendPathOrDie(journalLocation,
+        masterName), new NoopMaster(""), 0, Collections::emptySet);
+    CommonUtils.waitFor("checkpoint to be written", () -> {
+      UfsJournalSnapshot snapshot;
+      try {
+        snapshot = UfsJournalSnapshot.getSnapshot(journal);
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+      return !snapshot.getCheckpoints().isEmpty();
+    });
+  }
+
+  /**
+   * Reserves ports for each master service and updates the server configuration.
+   */
+  public static void reserveMasterPorts() {
+    for (ServiceType service : Arrays.asList(ServiceType.MASTER_RPC, ServiceType.MASTER_WEB,
+        ServiceType.MASTER_RAFT, ServiceType.JOB_MASTER_RPC, ServiceType.JOB_MASTER_WEB,
+        ServiceType.JOB_MASTER_RAFT)) {
+      PropertyKey key = service.getPortKey();
+      ServerConfiguration.set(key, PortRegistry.reservePort());
+    }
+  }
+
+  public static void releaseMasterPorts() {
+    PortRegistry.clear();
   }
 
   private IntegrationTestUtils() {} // This is a utils class not intended for instantiation

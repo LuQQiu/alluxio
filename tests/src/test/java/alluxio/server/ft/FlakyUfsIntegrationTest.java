@@ -15,16 +15,20 @@ import static org.junit.Assert.assertThat;
 import static org.junit.Assert.fail;
 
 import alluxio.AlluxioURI;
+import alluxio.ClientContext;
 import alluxio.Constants;
-import alluxio.PropertyKey;
+import alluxio.conf.PropertyKey;
 import alluxio.UnderFileSystemFactoryRegistryRule;
-import alluxio.client.WriteType;
 import alluxio.client.block.BlockMasterClient;
 import alluxio.client.file.FileSystem;
 import alluxio.client.file.FileSystemTestUtils;
-import alluxio.client.file.options.FreeOptions;
+import alluxio.conf.ServerConfiguration;
 import alluxio.exception.AlluxioException;
-import alluxio.master.MasterClientConfig;
+import alluxio.grpc.CreateFilePOptions;
+import alluxio.grpc.DeletePOptions;
+import alluxio.grpc.FreePOptions;
+import alluxio.grpc.WritePType;
+import alluxio.master.MasterClientContext;
 import alluxio.testutils.BaseIntegrationTest;
 import alluxio.testutils.LocalAlluxioClusterResource;
 import alluxio.testutils.underfs.delegating.DelegatingUnderFileSystem;
@@ -46,12 +50,10 @@ import java.util.concurrent.ThreadLocalRandom;
 
 public final class FlakyUfsIntegrationTest extends BaseIntegrationTest {
   private static final String LOCAL_UFS_PATH = Files.createTempDir().getAbsolutePath();
-
-  private FileSystem mFs;
-
   // An under file system which fails 90% of its renames.
   private static final UnderFileSystem UFS =
-      new DelegatingUnderFileSystem(UnderFileSystem.Factory.create(LOCAL_UFS_PATH)) {
+      new DelegatingUnderFileSystem(UnderFileSystem.Factory.create(LOCAL_UFS_PATH,
+          ServerConfiguration.global())) {
         @Override
         public boolean deleteFile(String path) throws IOException {
           if (ThreadLocalRandom.current().nextBoolean()) {
@@ -60,18 +62,24 @@ public final class FlakyUfsIntegrationTest extends BaseIntegrationTest {
             return false;
           }
         }
-      };
 
+        @Override
+        public boolean deleteExistingFile(String path) throws IOException {
+          if (ThreadLocalRandom.current().nextBoolean()) {
+            return mUfs.deleteExistingFile(path);
+          } else {
+            return false;
+          }
+        }
+      };
   @ClassRule
   public static UnderFileSystemFactoryRegistryRule sUnderfilesystemfactoryregistry =
       new UnderFileSystemFactoryRegistryRule(new DelegatingUnderFileSystemFactory(UFS));
-
   @Rule
   public LocalAlluxioClusterResource mLocalAlluxioClusterResource =
-      new LocalAlluxioClusterResource.Builder()
-          .setProperty(PropertyKey.MASTER_MOUNT_TABLE_ROOT_UFS,
-              DelegatingUnderFileSystemFactory.DELEGATING_SCHEME + "://" + LOCAL_UFS_PATH)
-          .build();
+      new LocalAlluxioClusterResource.Builder().setProperty(PropertyKey.MASTER_MOUNT_TABLE_ROOT_UFS,
+          DelegatingUnderFileSystemFactory.DELEGATING_SCHEME + "://" + LOCAL_UFS_PATH).build();
+  private FileSystem mFs;
 
   @Before
   public void before() throws Exception {
@@ -83,15 +91,13 @@ public final class FlakyUfsIntegrationTest extends BaseIntegrationTest {
     mFs.createDirectory(new AlluxioURI("/dir"));
     for (int i = 0; i < 100; i++) {
       FileSystemTestUtils.createByteFile(mFs, "/dir/test" + i, 100,
-          alluxio.client.file.options.CreateFileOptions.defaults()
-              .setWriteType(WriteType.CACHE_THROUGH));
+          CreateFilePOptions.newBuilder().setWriteType(WritePType.CACHE_THROUGH).build());
     }
     String ufs = LOCAL_UFS_PATH;
     // This will make the "/dir" directory out of sync so that the files are deleted individually.
     java.nio.file.Files.createDirectory(Paths.get(ufs, "/dir/testunknown"));
     try {
-      mFs.delete(new AlluxioURI("/dir"),
-          alluxio.client.file.options.DeleteOptions.defaults().setRecursive(true));
+      mFs.delete(new AlluxioURI("/dir"), DeletePOptions.newBuilder().setRecursive(true).build());
       fail("Expected an exception to be thrown");
     } catch (AlluxioException e) {
       // expected
@@ -106,8 +112,10 @@ public final class FlakyUfsIntegrationTest extends BaseIntegrationTest {
     // 90 deletes should succeed.
     assertThat(deleted, Matchers.greaterThan(10));
     assertThat(deleted, Matchers.lessThan(90));
-    mFs.free(new AlluxioURI("/"), FreeOptions.defaults().setRecursive(true));
-    BlockMasterClient blockClient = BlockMasterClient.Factory.create(MasterClientConfig.defaults());
+    mFs.free(new AlluxioURI("/"), FreePOptions.newBuilder().setRecursive(true).build());
+    BlockMasterClient blockClient =
+        BlockMasterClient.Factory.create(MasterClientContext
+            .newBuilder(ClientContext.create(ServerConfiguration.global())).build());
     CommonUtils.waitFor("data to be freed", () -> {
       try {
         return blockClient.getUsedBytes() == 0;

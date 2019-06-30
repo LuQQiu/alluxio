@@ -12,11 +12,16 @@
 package alluxio.master.file.meta.options;
 
 import alluxio.AlluxioURI;
-import alluxio.master.file.options.MountOptions;
+import alluxio.conf.AlluxioProperties;
+import alluxio.conf.ConfigurationValueOptions;
+import alluxio.conf.InstancedConfiguration;
+import alluxio.grpc.MountPOptions;
+import alluxio.underfs.UnderFileSystemConfiguration;
 import alluxio.wire.MountPointInfo;
 
 import com.google.common.base.Preconditions;
 
+import java.util.Map;
 import java.util.Objects;
 
 import javax.annotation.concurrent.ThreadSafe;
@@ -25,10 +30,10 @@ import javax.annotation.concurrent.ThreadSafe;
  * This class holds information about a mount point.
  */
 @ThreadSafe
-public final class MountInfo {
+public class MountInfo {
   private final AlluxioURI mAlluxioUri;
   private final AlluxioURI mUfsUri;
-  private final MountOptions mOptions;
+  private final MountPOptions mOptions;
   private final long mMountId;
 
   /**
@@ -39,7 +44,7 @@ public final class MountInfo {
    * @param mountId the id of the mount
    * @param options the mount options
    */
-  public MountInfo(AlluxioURI alluxioUri, AlluxioURI ufsUri, long mountId, MountOptions options) {
+  public MountInfo(AlluxioURI alluxioUri, AlluxioURI ufsUri, long mountId, MountPOptions options) {
     mAlluxioUri = Preconditions.checkNotNull(alluxioUri, "alluxioUri");
     mUfsUri = Preconditions.checkNotNull(ufsUri, "ufsUri");
     mMountId = mountId;
@@ -61,9 +66,9 @@ public final class MountInfo {
   }
 
   /**
-   * @return the {@link MountOptions} for the mount point
+   * @return the {@link MountPOptions} for the mount point
    */
-  public MountOptions getOptions() {
+  public MountPOptions getOptions() {
     return mOptions;
   }
 
@@ -80,9 +85,24 @@ public final class MountInfo {
   public MountPointInfo toMountPointInfo() {
     MountPointInfo info = new MountPointInfo();
     info.setUfsUri(mUfsUri.toString());
-    info.setReadOnly(mOptions.isReadOnly());
+    info.setReadOnly(mOptions.getReadOnly());
     info.setProperties(mOptions.getProperties());
-    info.setShared(mOptions.isShared());
+    info.setShared(mOptions.getShared());
+    return info;
+  }
+
+  /**
+   * @return the {@link MountPointInfo} for the mount point. Some information is formatted
+   * for display purpose.
+   */
+  public MountPointInfo toDisplayMountPointInfo() {
+    MountPointInfo info = toMountPointInfo();
+    UnderFileSystemConfiguration conf =
+        UnderFileSystemConfiguration.defaults(new InstancedConfiguration(
+            new AlluxioProperties())).createMountSpecificConf(info.getProperties());
+    Map<String, String> displayConf = conf.toUserPropertyMap(
+        ConfigurationValueOptions.defaults().useDisplayValue(true));
+    info.setProperties(displayConf);
     return info;
   }
 
@@ -98,7 +118,8 @@ public final class MountInfo {
     return mMountId == that.getMountId()
         && mAlluxioUri.equals(that.getAlluxioUri())
         && mUfsUri.equals(that.getUfsUri())
-        && mOptions.equals(that.getOptions());
+        && mOptions.getReadOnly() == (that.getOptions().getReadOnly())
+        && mOptions.getShared() == (that.getOptions().getShared());
   }
 
   @Override

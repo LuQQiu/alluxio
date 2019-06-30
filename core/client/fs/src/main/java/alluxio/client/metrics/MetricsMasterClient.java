@@ -13,44 +13,38 @@ package alluxio.client.metrics;
 
 import alluxio.AbstractMasterClient;
 import alluxio.Constants;
-import alluxio.client.file.FileSystemContext;
-import alluxio.exception.status.AlluxioStatusException;
 import alluxio.exception.status.UnavailableException;
-import alluxio.master.MasterClientConfig;
+import alluxio.grpc.ClientMetrics;
+import alluxio.grpc.MetricsHeartbeatPOptions;
+import alluxio.grpc.MetricsHeartbeatPRequest;
+import alluxio.grpc.MetricsMasterClientServiceGrpc;
+import alluxio.grpc.ServiceType;
+import alluxio.master.MasterClientContext;
 import alluxio.retry.RetryUtils;
-import alluxio.thrift.AlluxioService.Client;
-import alluxio.thrift.AlluxioTException;
-import alluxio.thrift.Metric;
-import alluxio.thrift.MetricsHeartbeatTOptions;
-import alluxio.thrift.MetricsMasterClientService;
-import alluxio.util.network.NetworkAddressUtils;
-
-import org.apache.thrift.TException;
-
-import java.io.IOException;
-import java.util.List;
 
 import javax.annotation.concurrent.ThreadSafe;
+import java.io.IOException;
+import java.util.List;
 
 /**
  * A client to use for interacting with a metrics master.
  */
 @ThreadSafe
 public class MetricsMasterClient extends AbstractMasterClient {
-  private MetricsMasterClientService.Client mClient = null;
+  private MetricsMasterClientServiceGrpc.MetricsMasterClientServiceBlockingStub mClient = null;
 
   /**
    * Creates a new metrics master client.
    *
    * @param conf master client configuration
    */
-  public MetricsMasterClient(MasterClientConfig conf) {
+  public MetricsMasterClient(MasterClientContext conf) {
     super(conf, null, RetryUtils::defaultMetricsClientRetry);
   }
 
   @Override
-  protected Client getClient() {
-    return mClient;
+  protected ServiceType getRemoteServiceType() {
+    return ServiceType.METRICS_MASTER_CLIENT_SERVICE;
   }
 
   @Override
@@ -65,7 +59,7 @@ public class MetricsMasterClient extends AbstractMasterClient {
 
   @Override
   protected void afterConnect() {
-    mClient = new MetricsMasterClientService.Client(mProtocol);
+    mClient = MetricsMasterClientServiceGrpc.newBlockingStub(mChannel);
   }
 
   /**
@@ -73,14 +67,15 @@ public class MetricsMasterClient extends AbstractMasterClient {
    *
    * @param metrics a list of client metrics
    */
-  public synchronized void heartbeat(final List<Metric> metrics) throws IOException {
+  public void heartbeat(final List<ClientMetrics> metrics) throws IOException {
     connect();
     try {
-      mClient.metricsHeartbeat(FileSystemContext.get().getId(),
-          NetworkAddressUtils.getClientHostName(), new MetricsHeartbeatTOptions(metrics));
-    } catch (AlluxioTException e) {
-      throw AlluxioStatusException.fromThrift(e);
-    } catch (TException e) {
+      MetricsHeartbeatPRequest.Builder request = MetricsHeartbeatPRequest.newBuilder();
+      request.setOptions(MetricsHeartbeatPOptions.newBuilder()
+          .addAllClientMetrics(metrics).build());
+      mClient.metricsHeartbeat(request.build());
+    } catch (io.grpc.StatusRuntimeException e) {
+      disconnect();
       throw new UnavailableException(e);
     }
   }

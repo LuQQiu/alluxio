@@ -11,7 +11,9 @@
 
 package alluxio.master.file.meta;
 
-import alluxio.master.file.options.CreateFileOptions;
+import static org.mockito.Mockito.mock;
+
+import alluxio.master.metastore.InodeStore;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
@@ -31,13 +33,13 @@ public final class TtlBucketListTest {
   private static final long BUCKET1_START = 0;
   private static final long BUCKET1_END = BUCKET1_START + BUCKET_INTERVAL;
   private static final long BUCKET2_START = BUCKET1_END;
-  private static final long BUCKET2_END =  BUCKET2_START + BUCKET_INTERVAL;
-  private static final InodeFile BUCKET1_FILE1 =
-      InodeFile.create(0, 0, "ignored", 0, CreateFileOptions.defaults().setTtl(BUCKET1_START));
-  private static final InodeFile BUCKET1_FILE2 =
-      InodeFile.create(1, 0, "ignored", 0, CreateFileOptions.defaults().setTtl(BUCKET1_END - 1));
-  private static final InodeFile BUCKET2_FILE =
-      InodeFile.create(2, 0, "ignored", 0, CreateFileOptions.defaults().setTtl(BUCKET2_START));
+  private static final long BUCKET2_END = BUCKET2_START + BUCKET_INTERVAL;
+  private static final Inode BUCKET1_FILE1 =
+      TtlTestUtils.createFileWithIdAndTtl(0, BUCKET1_START);
+  private static final Inode BUCKET1_FILE2 =
+      TtlTestUtils.createFileWithIdAndTtl(1, BUCKET1_END - 1);
+  private static final Inode BUCKET2_FILE =
+      TtlTestUtils.createFileWithIdAndTtl(2, BUCKET2_START);
 
   private TtlBucketList mBucketList;
 
@@ -49,7 +51,7 @@ public final class TtlBucketListTest {
    */
   @Before
   public void before() {
-    mBucketList = new TtlBucketList();
+    mBucketList = new TtlBucketList(mock(InodeStore.class));
   }
 
   private List<TtlBucket> getSortedExpiredBuckets(long expireTime) {
@@ -58,7 +60,8 @@ public final class TtlBucketListTest {
     return buckets;
   }
 
-  private void assertExpired(List<TtlBucket> expiredBuckets, int bucketIndex, InodeFile... inodes) {
+  private void assertExpired(List<TtlBucket> expiredBuckets, int bucketIndex,
+      Inode... inodes) {
     TtlBucket bucket = expiredBuckets.get(bucketIndex);
     Assert.assertEquals(inodes.length, bucket.getInodes().size());
     Assert.assertTrue(bucket.getInodes().containsAll(Lists.newArrayList(inodes)));
@@ -93,7 +96,7 @@ public final class TtlBucketListTest {
   }
 
   /**
-   * Tests the {@link TtlBucketList#remove(Inode)} method.
+   * Tests the {@link TtlBucketList#remove(InodeView)} method.
    */
   @Test
   public void remove() {

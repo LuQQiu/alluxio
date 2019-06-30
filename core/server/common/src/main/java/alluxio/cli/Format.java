@@ -11,16 +11,18 @@
 
 package alluxio.cli;
 
-import alluxio.Configuration;
-import alluxio.PropertyKey;
+import alluxio.conf.AlluxioConfiguration;
+import alluxio.conf.InstancedConfiguration;
+import alluxio.conf.ServerConfiguration;
+import alluxio.conf.PropertyKey;
 import alluxio.RuntimeConstants;
-import alluxio.ServiceUtils;
 import alluxio.master.NoopMaster;
+import alluxio.master.ServiceUtils;
 import alluxio.master.journal.JournalSystem;
 import alluxio.master.journal.JournalUtils;
 import alluxio.util.CommonUtils;
+import alluxio.util.ConfigurationUtils;
 import alluxio.util.io.FileUtils;
-import alluxio.util.io.PathUtils;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -60,13 +62,11 @@ public final class Format {
    */
   private static void formatWorkerDataFolder(String folder) throws IOException {
     Path path = Paths.get(folder);
-    if (Files.exists(path)) {
-      FileUtils.deletePathRecursively(folder);
-    }
+    FileUtils.deletePathRecursively(folder);
     Files.createDirectory(path);
     // For short-circuit read/write to work, others needs to be able to access this directory.
     // Therefore, default is 777 but if the user specifies the permissions, respect those instead.
-    String permissions = Configuration.get(PropertyKey.WORKER_DATA_FOLDER_PERMISSIONS);
+    String permissions = ServerConfiguration.get(PropertyKey.WORKER_DATA_FOLDER_PERMISSIONS);
     Set<PosixFilePermission> perms = PosixFilePermissions.fromString(permissions);
     Files.setPosixFilePermissions(path, perms);
     FileUtils.setLocalDirStickyBit(path.toAbsolutePath().toString());
@@ -82,6 +82,7 @@ public final class Format {
       LOG.info(USAGE);
       System.exit(-1);
     }
+    AlluxioConfiguration conf = new InstancedConfiguration(ConfigurationUtils.defaults());
     // Set the process type as "MASTER" since format needs to access the journal like the master.
     CommonUtils.PROCESS_TYPE.set(CommonUtils.ProcessType.MASTER);
     Mode mode = null;
@@ -93,7 +94,7 @@ public final class Format {
       System.exit(-1);
     }
     try {
-      format(mode);
+      format(mode, conf);
     } catch (Exception e) {
       LOG.error("Failed to format", e);
       System.exit(-1);
@@ -106,30 +107,31 @@ public final class Format {
    * Formats the Alluxio file system.
    *
    * @param mode either {@code MASTER} or {@code WORKER}
+   * @param alluxioConf Alluxio configuration
    */
-  public static void format(Mode mode) throws IOException {
+  public static void format(Mode mode, AlluxioConfiguration alluxioConf) throws IOException {
     switch (mode) {
       case MASTER:
         URI journalLocation = JournalUtils.getJournalLocation();
         LOG.info("Formatting master journal: {}", journalLocation);
-        JournalSystem journalSystem =
-            new JournalSystem.Builder().setLocation(journalLocation).build();
+        JournalSystem journalSystem = new JournalSystem.Builder()
+            .setLocation(journalLocation).build(CommonUtils.ProcessType.MASTER);
         for (String masterServiceName : ServiceUtils.getMasterServiceNames()) {
           journalSystem.createJournal(new NoopMaster(masterServiceName));
         }
         journalSystem.format();
         break;
       case WORKER:
-        String workerDataFolder = Configuration.get(PropertyKey.WORKER_DATA_FOLDER);
+        String workerDataFolder = ServerConfiguration.get(PropertyKey.WORKER_DATA_FOLDER);
         LOG.info("Formatting worker data folder: {}", workerDataFolder);
-        int storageLevels = Configuration.getInt(PropertyKey.WORKER_TIERED_STORE_LEVELS);
+        int storageLevels = ServerConfiguration.getInt(PropertyKey.WORKER_TIERED_STORE_LEVELS);
         for (int level = 0; level < storageLevels; level++) {
           PropertyKey tierLevelDirPath =
               PropertyKey.Template.WORKER_TIERED_STORE_LEVEL_DIRS_PATH.format(level);
-          String[] dirPaths = Configuration.get(tierLevelDirPath).split(",");
+          String[] dirPaths = ServerConfiguration.get(tierLevelDirPath).split(",");
           String name = "Data path for tier " + level;
           for (String dirPath : dirPaths) {
-            String dirWorkerDataFolder = PathUtils.getWorkerDataDirectory(dirPath);
+            String dirWorkerDataFolder = CommonUtils.getWorkerDataDirectory(dirPath, alluxioConf);
             LOG.info("Formatting {}:{}", name, dirWorkerDataFolder);
             formatWorkerDataFolder(dirWorkerDataFolder);
           }

@@ -11,10 +11,13 @@
 
 package alluxio.master.journal.ufs;
 
+import alluxio.Constants;
+import alluxio.master.Master;
 import alluxio.master.journal.AbstractJournalSystem;
-import alluxio.master.journal.JournalEntryStateMachine;
+import alluxio.master.journal.sink.JournalSink;
 import alluxio.retry.ExponentialTimeBoundedRetry;
 import alluxio.retry.RetryPolicy;
+import alluxio.util.CommonUtils;
 import alluxio.util.URIUtils;
 
 import com.google.common.io.Closer;
@@ -24,7 +27,15 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.net.URI;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeoutException;
+import java.util.function.Supplier;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
@@ -54,21 +65,29 @@ public class UfsJournalSystem extends AbstractJournalSystem {
   }
 
   @Override
-  public UfsJournal createJournal(JournalEntryStateMachine master) {
+  public UfsJournal createJournal(Master master) {
+    Supplier<Set<JournalSink>> supplier = () -> this.getJournalSinks(master);
     UfsJournal journal =
-        new UfsJournal(URIUtils.appendPathOrDie(mBase, master.getName()), master, mQuietTimeMs);
+        new UfsJournal(URIUtils.appendPathOrDie(mBase, master.getName()), master, mQuietTimeMs,
+            supplier);
     mJournals.put(master.getName(), journal);
     return journal;
   }
 
   @Override
   public void gainPrimacy() {
-    try {
-      for (UfsJournal journal : mJournals.values()) {
+    List<Callable<Void>> callables = new ArrayList<>();
+    for (Map.Entry<String, UfsJournal> entry : mJournals.entrySet()) {
+      callables.add(() -> {
+        UfsJournal journal = entry.getValue();
         journal.gainPrimacy();
-      }
-    } catch (IOException e) {
-      throw new RuntimeException("Failed to upgrade journal to primary", e);
+        return null;
+      });
+    }
+    try {
+      CommonUtils.invokeAll(callables, 365 * Constants.DAY_MS);
+    } catch (TimeoutException | ExecutionException e) {
+      throw new RuntimeException(e);
     }
   }
 
@@ -140,6 +159,13 @@ public class UfsJournalSystem extends AbstractJournalSystem {
   public void format() throws IOException {
     for (UfsJournal journal : mJournals.values()) {
       journal.format();
+    }
+  }
+
+  @Override
+  public void checkpoint() throws IOException {
+    for (UfsJournal journal : mJournals.values()) {
+      journal.checkpoint();
     }
   }
 }

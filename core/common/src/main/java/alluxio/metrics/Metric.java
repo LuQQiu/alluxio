@@ -11,6 +11,9 @@
 
 package alluxio.metrics;
 
+import alluxio.grpc.MetricType;
+
+import com.google.common.base.MoreObjects;
 import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
 import org.slf4j.Logger;
@@ -38,6 +41,7 @@ public final class Metric implements Serializable {
   private final String mHostname;
   private final String mName;
   private final Double mValue;
+  private final MetricType mMetricType;
   private String mInstanceId;
   // TODO(yupeng): consider a dedicated data structure for tag, when more functionality are added to
   // tags in the future
@@ -48,12 +52,13 @@ public final class Metric implements Serializable {
    *
    * @param instanceType the instance type
    * @param hostname the hostname
+   * @param metricType the type of the metric
    * @param name the metric name
    * @param value the value
    */
-  public Metric(MetricsSystem.InstanceType instanceType, String hostname, String name,
-      Double value) {
-    this(instanceType, hostname, null, name, value);
+  public Metric(MetricsSystem.InstanceType instanceType, String hostname,
+      MetricType metricType, String name, Double value) {
+    this(instanceType, hostname, null, metricType, name, value);
   }
 
   /**
@@ -62,15 +67,17 @@ public final class Metric implements Serializable {
    * @param instanceType the instance type
    * @param hostname the hostname
    * @param id the instance id
+   * @param metricType the type of the metric
    * @param name the metric name
    * @param value the value
    */
-  public Metric(MetricsSystem.InstanceType instanceType, String hostname, String id, String name,
-      Double value) {
-    Preconditions.checkNotNull(name);
+  public Metric(MetricsSystem.InstanceType instanceType, String hostname, String id,
+      MetricType metricType, String name, Double value) {
+    Preconditions.checkNotNull(name, "name");
     mInstanceType = instanceType;
     mHostname = hostname;
     mInstanceId = id;
+    mMetricType = metricType;
     mName = name;
     mValue = value;
     mTags = new LinkedHashMap<>();
@@ -98,6 +105,13 @@ public final class Metric implements Serializable {
    */
   public String getHostname() {
     return mHostname;
+  }
+
+  /**
+   * @return the hostname
+   */
+  public MetricType getMetricType() {
+    return mMetricType;
   }
 
   /**
@@ -179,17 +193,18 @@ public final class Metric implements Serializable {
   }
 
   /**
-   * @return the thrift object it converts to. Note the value must be either integer or long
+   * @return the proto object it converts to. Note the value must be either integer or long
    */
-  public alluxio.thrift.Metric toThrift() {
-    alluxio.thrift.Metric metric = new alluxio.thrift.Metric();
-    metric.setInstance(mInstanceType.toString());
-    metric.setHostname(mHostname);
-    metric.setName(mName);
-    metric.setInstanceId(mInstanceId);
-    metric.setValue(mValue);
-    metric.setTags(mTags);
-    return metric;
+  public alluxio.grpc.Metric toProto() {
+    alluxio.grpc.Metric.Builder metric = alluxio.grpc.Metric.newBuilder();
+    metric.setInstance(mInstanceType.toString()).setHostname(mHostname).setMetricType(mMetricType)
+        .setName(mName).setValue(mValue).putAllTags(mTags);
+
+    if (mInstanceId != null && !mInstanceId.isEmpty()) {
+      metric.setInstanceId(mInstanceId);
+    }
+
+    return metric.build();
   }
 
   /**
@@ -233,9 +248,10 @@ public final class Metric implements Serializable {
    *
    * @param fullName the full name
    * @param value the value
+   * @param metricType the type of metric that is being created
    * @return the created metric
    */
-  public static Metric from(String fullName, double value) {
+  public static Metric from(String fullName, double value, MetricType metricType) {
     String[] pieces = fullName.split("\\.");
     Preconditions.checkArgument(pieces.length > 1, "Incorrect metrics name: %s.", fullName);
 
@@ -245,7 +261,7 @@ public final class Metric implements Serializable {
     int tagStartIdx = 0;
     // Master or cluster metrics don't have hostname included.
     if (pieces[0].equals(MetricsSystem.InstanceType.MASTER.toString())
-        || pieces[0].equals(MetricsSystem.CLUSTER.toString())) {
+        || pieces[0].equals(MetricsSystem.CLUSTER)) {
       name = pieces[1];
       tagStartIdx = 2;
     } else {
@@ -260,7 +276,7 @@ public final class Metric implements Serializable {
       tagStartIdx = 3;
     }
     MetricsSystem.InstanceType instance = MetricsSystem.InstanceType.fromString(pieces[0]);
-    Metric metric = new Metric(instance, hostname, id, name, value);
+    Metric metric = new Metric(instance, hostname, id, metricType, name, value);
 
     // parse tags
     for (int i = tagStartIdx; i < pieces.length; i++) {
@@ -276,15 +292,20 @@ public final class Metric implements Serializable {
   }
 
   /**
-   * Constructs the metric object from the thrift format.
+   * Constructs the metric object from the proto format.
    *
-   * @param metric the metric in thrift format
+   * @param metric the metric in proto format
    * @return the constructed metric
    */
-  public static Metric from(alluxio.thrift.Metric metric) {
-    Metric created = new Metric(MetricsSystem.InstanceType.fromString(metric.getInstance()),
-        metric.getHostname(), metric.getInstanceId(), metric.getName(), metric.getValue());
-    for (Entry<String, String> entry : metric.getTags().entrySet()) {
+  public static Metric fromProto(alluxio.grpc.Metric metric) {
+    Metric created = new Metric(
+        MetricsSystem.InstanceType.fromString(metric.getInstance()),
+        metric.getHostname(),
+        metric.hasInstanceId() ? metric.getInstanceId() : null,
+        metric.getMetricType(),
+        metric.getName(),
+        metric.getValue());
+    for (Entry<String, String> entry : metric.getTagsMap().entrySet()) {
       created.addTag(entry.getKey(), entry.getValue());
     }
     return created;
@@ -292,9 +313,15 @@ public final class Metric implements Serializable {
 
   @Override
   public String toString() {
-    return Objects.toStringHelper(this).add("instanceType", mInstanceType)
-        .add("hostname", mHostname).add("instanceId", mInstanceId).add("name", mName)
-        .add("value", mValue).add("tags", mTags).toString();
+    return MoreObjects.toStringHelper(this)
+        .add("hostname", mHostname)
+        .add("instanceId", mInstanceId)
+        .add("instanceType", mInstanceType)
+        .add("metricType", mMetricType)
+        .add("name", mName)
+        .add("tags", mTags)
+        .add("value", mValue)
+        .toString();
   }
 
   /**

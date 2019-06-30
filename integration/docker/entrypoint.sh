@@ -18,9 +18,14 @@ function printUsage {
   echo "Usage: COMMAND [COMMAND_OPTIONS]"
   echo
   echo "COMMAND is one of:"
-  echo -e " master [--no-format]    \t Start Alluxio master. If --no-format is specified, do not format"
-  echo -e " worker [--no-format]    \t Start Alluxio worker. If --no-format is specified, do not format"
-  echo -e " proxy                   \t Start Alluxio proxy"
+  echo -e " master [--no-format]         \t Start Alluxio master. If --no-format is specified, do not format"
+  echo -e " master-only [--no-format]    \t Start Alluxio master w/o job master. If --no-format is specified, do not format"
+  echo -e " worker [--no-format]         \t Start Alluxio worker. If --no-format is specified, do not format"
+  echo -e " worker-only [--no-format]    \t Start Alluxio worker w/o job worker. If --no-format is specified, do not format"
+  echo -e " job-master                   \t Start Alluxio job master"
+  echo -e " job-worker                   \t Start Alluxio job worker"
+  echo -e " proxy                        \t Start Alluxio proxy"
+  echo -e " fuse                         \t Start Alluxio fuse"
 }
 
 if [[ $# -lt 1 ]]; then
@@ -53,49 +58,79 @@ alluxio_env_vars=(
   ALLUXIO_RAM_FOLDER
   ALLUXIO_USER_JAVA_OPTS
   ALLUXIO_WORKER_JAVA_OPTS
+  ALLUXIO_JOB_MASTER_JAVA_OPTS
+  ALLUXIO_JOB_WORKER_JAVA_OPTS
 )
 
-for keyvaluepair in $(env); do
-  # split around the "="
-  key=$(echo ${keyvaluepair} | cut -d= -f1)
-  value=$(echo ${keyvaluepair} | cut -d= -f2-)
-  if [[ "${alluxio_env_vars[*]}" =~ "${key}" ]]; then
-    echo "export ${key}=${value}" >> conf/alluxio-env.sh
-  else
-    # check if property name is valid
-    if confkey=$(bin/alluxio runClass alluxio.cli.GetConfKey ${key} 2> /dev/null); then
-      echo "${confkey}=${value}" >> conf/alluxio-site.properties
+function writeConf {
+  local IFS=$'\n' # split by line instead of space
+  for keyvaluepair in $(env); do
+    # split around the first "="
+    key=$(echo ${keyvaluepair} | cut -d= -f1)
+    value=$(echo ${keyvaluepair} | cut -d= -f2-)
+    if [[ "${alluxio_env_vars[*]}" =~ "${key}" ]]; then
+      echo "export ${key}=\"${value}\"" >> conf/alluxio-env.sh
     fi
-  fi
-done
+  done
+}
 
-if [ "$ENABLE_FUSE" = true ]; then
-  integration/fuse/bin/alluxio-fuse mount /alluxio-fuse /
-fi
+writeConf
+
+function formatMasterIfSpecified {
+  if [[ -n ${options} && ${options} != ${NO_FORMAT} ]]; then
+    printUsage
+    exit 1
+  fi
+  if [[ ${options} != ${NO_FORMAT} ]]; then
+    bin/alluxio formatMaster
+  fi
+}
+
+function formatWorkerIfSpecified {
+  if [[ -n ${options} && ${options} != ${NO_FORMAT} ]]; then
+    printUsage
+    exit 1
+  fi
+  if [[ ${options} != ${NO_FORMAT} ]]; then
+    bin/alluxio formatWorker
+  fi
+}
 
 case ${service,,} in
   master)
-    if [[ -n ${options} && ${options} != ${NO_FORMAT} ]]; then
-      printUsage
-      exit 1
-    fi
-    if [[ ${options} != ${NO_FORMAT} ]]; then
-      bin/alluxio formatMaster
-    fi
+    formatMasterIfSpecified
+    integration/docker/bin/alluxio-job-master.sh &
+    integration/docker/bin/alluxio-master.sh &
+    wait -n
+    ;;
+  master-only)
+    formatMasterIfSpecified
     integration/docker/bin/alluxio-master.sh
     ;;
+  job-master)
+    integration/docker/bin/alluxio-job-master.sh
+    ;;
   worker)
-    if [[ -n ${options} && ${options} != ${NO_FORMAT} ]]; then
-      printUsage
-      exit 1
-    fi
-    if [[ ${options} != ${NO_FORMAT} ]]; then
-      bin/alluxio formatWorker
-    fi
+    formatWorkerIfSpecified
+    integration/docker/bin/alluxio-job-worker.sh &
+    integration/docker/bin/alluxio-worker.sh &
+    wait -n
+    ;;
+  worker-only)
+    formatWorkerIfSpecified
     integration/docker/bin/alluxio-worker.sh
+    ;;
+  job-worker)
+    integration/docker/bin/alluxio-job-worker.sh
     ;;
   proxy)
     integration/docker/bin/alluxio-proxy.sh
+    ;;
+  fuse)
+    # Unmount first if cleanup failed and ignore error
+    ! integration/fuse/bin/alluxio-fuse unmount /alluxio-fuse
+    integration/fuse/bin/alluxio-fuse mount -o allow_other /alluxio-fuse /
+    tail -f /opt/alluxio/logs/fuse.log
     ;;
   *)
     printUsage

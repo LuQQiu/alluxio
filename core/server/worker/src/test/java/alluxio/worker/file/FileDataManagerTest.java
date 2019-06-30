@@ -23,9 +23,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import alluxio.AlluxioURI;
-import alluxio.Configuration;
-import alluxio.ConfigurationTestUtils;
-import alluxio.PropertyKey;
+import alluxio.conf.ServerConfiguration;
+import alluxio.conf.PropertyKey;
 import alluxio.Sessions;
 import alluxio.client.file.FileSystem;
 import alluxio.client.file.URIStatus;
@@ -41,7 +40,6 @@ import alluxio.worker.block.BlockWorker;
 import alluxio.worker.block.io.BlockReader;
 import alluxio.worker.block.meta.BlockMeta;
 
-import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.common.util.concurrent.MockRateLimiter;
@@ -76,19 +74,20 @@ public final class FileDataManagerTest {
     mUfsManager = mock(UfsManager.class);
     mBlockWorker = mock(BlockWorker.class);
     mMockRateLimiter =
-        new MockRateLimiter(Configuration.getBytes(PropertyKey.WORKER_FILE_PERSIST_RATE_LIMIT));
+        new MockRateLimiter(ServerConfiguration
+            .getBytes(PropertyKey.WORKER_FILE_PERSIST_RATE_LIMIT));
     mCopyCounter = new AtomicInteger(0);
     mManager = new FileDataManager(mBlockWorker, mMockRateLimiter.getGuavaRateLimiter(),
         mUfsManager, () -> mMockFileSystem, (r, w) -> mCopyCounter.incrementAndGet());
     mMockFileSystem = PowerMockito.mock(FileSystem.class);
-    UfsClient ufsClient = new UfsClient(Suppliers.ofInstance(mUfs), AlluxioURI.EMPTY_URI);
+    UfsClient ufsClient = new UfsClient(() -> mUfs, AlluxioURI.EMPTY_URI);
     when(mUfs.isDirectory(anyString())).thenReturn(true);
     when(mUfsManager.get(anyLong())).thenReturn(ufsClient);
   }
 
   @After
   public void after() throws IOException {
-    ConfigurationTestUtils.resetConfiguration();
+    ServerConfiguration.reset();
   }
 
   /**
@@ -128,10 +127,11 @@ public final class FileDataManagerTest {
    */
   @Test
   public void persistFileRateLimiting() throws Exception {
-    Configuration.set(PropertyKey.WORKER_FILE_PERSIST_RATE_LIMIT_ENABLED, "true");
-    Configuration.set(PropertyKey.WORKER_FILE_PERSIST_RATE_LIMIT, "100");
+    ServerConfiguration.set(PropertyKey.WORKER_FILE_PERSIST_RATE_LIMIT_ENABLED, "true");
+    ServerConfiguration.set(PropertyKey.WORKER_FILE_PERSIST_RATE_LIMIT, "100");
     mMockRateLimiter =
-        new MockRateLimiter(Configuration.getBytes(PropertyKey.WORKER_FILE_PERSIST_RATE_LIMIT));
+        new MockRateLimiter(ServerConfiguration
+            .getBytes(PropertyKey.WORKER_FILE_PERSIST_RATE_LIMIT));
     mManager = new FileDataManager(mBlockWorker, mMockRateLimiter.getGuavaRateLimiter(),
         mUfsManager, () -> mMockFileSystem, (r, w) -> mCopyCounter.incrementAndGet());
 
@@ -153,15 +153,15 @@ public final class FileDataManagerTest {
           .thenReturn(mockedBlockMeta);
     }
 
-    String ufsRoot = Configuration.get(PropertyKey.MASTER_MOUNT_TABLE_ROOT_UFS);
+    String ufsRoot = ServerConfiguration.get(PropertyKey.MASTER_MOUNT_TABLE_ROOT_UFS);
     when(mUfs.isDirectory(ufsRoot)).thenReturn(true);
 
     OutputStream outputStream = new ByteArrayOutputStream();
 
     String dstPath = PathUtils.concatPath(ufsRoot, fileInfo.getPath());
     fileInfo.setUfsPath(dstPath);
-    when(mUfs.create(dstPath)).thenReturn(outputStream);
-    when(mUfs.create(anyString(), any(CreateOptions.class)))
+    when(mUfs.createNonexistingFile(dstPath)).thenReturn(outputStream);
+    when(mUfs.createNonexistingFile(anyString(), any(CreateOptions.class)))
         .thenReturn(outputStream);
     when(mMockFileSystem.getStatus(any(AlluxioURI.class))).thenReturn(
         new URIStatus(fileInfo));
@@ -235,14 +235,14 @@ public final class FileDataManagerTest {
           .readBlockRemote(Sessions.CHECKPOINT_SESSION_ID, blockId, blockId);
     }
 
-    String ufsRoot = Configuration.get(PropertyKey.MASTER_MOUNT_TABLE_ROOT_UFS);
+    String ufsRoot = ServerConfiguration.get(PropertyKey.MASTER_MOUNT_TABLE_ROOT_UFS);
     when(mUfs.isDirectory(ufsRoot)).thenReturn(true);
     OutputStream outputStream = mock(OutputStream.class);
 
     String dstPath = PathUtils.concatPath(ufsRoot, fileInfo.getPath());
     fileInfo.setUfsPath(dstPath);
-    when(mUfs.create(dstPath)).thenReturn(outputStream);
-    when(mUfs.create(anyString(), any(CreateOptions.class)))
+    when(mUfs.createNonexistingFile(dstPath)).thenReturn(outputStream);
+    when(mUfs.createNonexistingFile(anyString(), any(CreateOptions.class)))
         .thenReturn(outputStream);
     when(mMockFileSystem.getStatus(any(AlluxioURI.class))).thenReturn(
         new URIStatus(fileInfo));
@@ -272,14 +272,14 @@ public final class FileDataManagerTest {
           .thenReturn(reader);
     }
 
-    String ufsRoot = Configuration.get(PropertyKey.MASTER_MOUNT_TABLE_ROOT_UFS);
+    String ufsRoot = ServerConfiguration.get(PropertyKey.MASTER_MOUNT_TABLE_ROOT_UFS);
     when(mUfs.isDirectory(ufsRoot)).thenReturn(true);
     OutputStream outputStream = mock(OutputStream.class);
 
     String dstPath = PathUtils.concatPath(ufsRoot, fileInfo.getPath());
     fileInfo.setUfsPath(dstPath);
-    when(mUfs.create(dstPath)).thenReturn(outputStream);
-    when(mUfs.create(anyString(), any(CreateOptions.class)))
+    when(mUfs.createNonexistingFile(dstPath)).thenReturn(outputStream);
+    when(mUfs.createNonexistingFile(anyString(), any(CreateOptions.class)))
         .thenReturn(outputStream);
     when(mMockFileSystem.getStatus(any(AlluxioURI.class))).thenReturn(
         new URIStatus(fileInfo));

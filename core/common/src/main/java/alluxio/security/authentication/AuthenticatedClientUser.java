@@ -11,9 +11,11 @@
 
 package alluxio.security.authentication;
 
+import alluxio.conf.AlluxioConfiguration;
 import alluxio.exception.AccessControlException;
 import alluxio.exception.ExceptionMessage;
 import alluxio.security.User;
+import alluxio.security.authentication.plain.PlainSaslServer;
 import alluxio.util.SecurityUtils;
 
 import java.io.IOException;
@@ -23,11 +25,11 @@ import javax.annotation.concurrent.ThreadSafe;
 /**
  * An instance of this class represents a client user connecting to {@link PlainSaslServer}.
  *
- * It is maintained in a {@link ThreadLocal} variable based on the Thrift RPC mechanism.
- * {@link org.apache.thrift.server.TThreadPoolServer} allocates a thread to serve a connection
- * from client side and take back it when connection is closed. During the thread alive cycle,
- * all the RPC happens in this thread. These RPC methods implemented in server side could
- * get the client user by this class.
+ * It is maintained in a {@link ThreadLocal} variable based on the gRPC mechanism.
+ * For plain authentication, every authenticated channel injects its channel-Id to outgoing
+ * RPC calls via {@link ChannelIdInjector}. Server-side interceptor,
+ * {@link AuthenticatedUserInjector}, will intercept that Id before calling the service call
+ * implementation and store it in this class in a thread local storage.
  */
 @ThreadSafe
 public final class AuthenticatedClientUser {
@@ -36,6 +38,17 @@ public final class AuthenticatedClientUser {
    * A {@link ThreadLocal} variable to maintain the client user along with a specific thread.
    */
   private static ThreadLocal<User> sUserThreadLocal = new ThreadLocal<>();
+
+  /**
+   * A {@link ThreadLocal} variable to maintain the connection user along with a specific thread.
+   */
+  private static ThreadLocal<User> sConnectionUserThreadLocal = new ThreadLocal<>();
+
+  /**
+   * A {@link ThreadLocal} variable to maintain the authentication method along with a specific
+   * thread.
+   */
+  private static ThreadLocal<String> sConnectionAuthMethod = new ThreadLocal<>();
 
   /**
    * Creates a {@link User} and sets it to the {@link ThreadLocal} variable.
@@ -56,13 +69,32 @@ public final class AuthenticatedClientUser {
   }
 
   /**
+   * Creates a connection {@link User} and sets it to the {@link ThreadLocal} variable.
+   *
+   * @param userName the name of the connection user
+   */
+  public static void setConnectionUser(String userName) {
+    sConnectionUserThreadLocal.set(new User(userName));
+  }
+
+  /**
+   * Sets the connection authentication method to the {@link ThreadLocal} variable.
+   *
+   * @param authMethod the name of the authentication method
+   */
+  public static void setAuthMethod(String authMethod) {
+    sConnectionAuthMethod.set(authMethod);
+  }
+
+  /**
    * Gets the {@link User} from the {@link ThreadLocal} variable.
    *
+   * @param conf Alluxio configuration
    * @return the client user, null if the user is not present
    */
   // TODO(peis): Fail early if the user is not able to be set to avoid returning null.
-  public static User get() throws IOException {
-    if (!SecurityUtils.isAuthenticationEnabled()) {
+  public static User get(AlluxioConfiguration conf) throws IOException {
+    if (!SecurityUtils.isAuthenticationEnabled(conf)) {
       throw new IOException(ExceptionMessage.AUTHENTICATION_IS_NOT_ENABLED.getMessage());
     }
     return sUserThreadLocal.get();
@@ -78,13 +110,14 @@ public final class AuthenticatedClientUser {
   /**
    * Gets the user name from the {@link ThreadLocal} variable.
    *
+   * @param conf Alluxio configuration
    * @return the client user in string
    * @throws AccessControlException there is no authenticated user for this thread or
    *         the authentication is not enabled
    */
-  public static String getClientUser() throws AccessControlException {
+  public static String getClientUser(AlluxioConfiguration conf) throws AccessControlException {
     try {
-      User user = get();
+      User user = get(conf);
       if (user == null) {
         throw new AccessControlException(
             ExceptionMessage.AUTHORIZED_CLIENT_USER_IS_NULL.getMessage());
@@ -96,9 +129,41 @@ public final class AuthenticatedClientUser {
   }
 
   /**
+   * Gets the connection user name from the {@link ThreadLocal} variable.
+   *
+   * @param conf Alluxio configuration
+   * @return the client user in string, null if the user is not present
+   * @throws AccessControlException if the authentication is not enabled
+   */
+  public static String getConnectionUser(AlluxioConfiguration conf) throws AccessControlException {
+    if (!SecurityUtils.isAuthenticationEnabled(conf)) {
+      throw new AccessControlException(ExceptionMessage.AUTHENTICATION_IS_NOT_ENABLED.getMessage());
+    }
+    User user = sConnectionUserThreadLocal.get();
+    if (user == null) {
+      return null;
+    }
+    return user.getName();
+  }
+
+  /**
+   * Gets the connection authentication method from the {@link ThreadLocal} variable.
+   *
+   * @param conf Alluxio configuration
+   * @return the client user in string, null if the user is not present
+   * @throws AccessControlException if the authentication is not enabled
+   */
+  public static String getAuthMethod(AlluxioConfiguration conf) throws AccessControlException {
+    if (!SecurityUtils.isAuthenticationEnabled(conf)) {
+      throw new AccessControlException(ExceptionMessage.AUTHENTICATION_IS_NOT_ENABLED.getMessage());
+    }
+    return sConnectionAuthMethod.get();
+  }
+
+  /**
    * Removes the {@link User} from the {@link ThreadLocal} variable.
    */
-  public static synchronized void remove() {
+  public static void remove() {
     sUserThreadLocal.remove();
   }
 

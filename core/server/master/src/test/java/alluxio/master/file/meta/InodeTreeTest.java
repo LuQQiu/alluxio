@@ -20,34 +20,37 @@ import static org.mockito.Mockito.mock;
 import alluxio.AlluxioURI;
 import alluxio.ConfigurationRule;
 import alluxio.Constants;
-import alluxio.PropertyKey;
+import alluxio.conf.PropertyKey;
+import alluxio.conf.ServerConfiguration;
 import alluxio.exception.BlockInfoException;
 import alluxio.exception.ExceptionMessage;
 import alluxio.exception.FileAlreadyExistsException;
 import alluxio.exception.FileDoesNotExistException;
 import alluxio.exception.InvalidPathException;
-import alluxio.master.MasterContext;
+import alluxio.grpc.CreateDirectoryPOptions;
+import alluxio.grpc.CreateFilePOptions;
+import alluxio.master.CoreMasterContext;
 import alluxio.master.MasterRegistry;
 import alluxio.master.MasterTestUtils;
 import alluxio.master.block.BlockMaster;
 import alluxio.master.block.BlockMasterFactory;
 import alluxio.master.file.RpcContext;
-import alluxio.master.file.options.CreateDirectoryOptions;
-import alluxio.master.file.options.CreateFileOptions;
-import alluxio.master.file.options.CreatePathOptions;
-import alluxio.master.file.options.DeleteOptions;
+import alluxio.master.file.contexts.CreateDirectoryContext;
+import alluxio.master.file.contexts.CreateFileContext;
+import alluxio.master.file.contexts.CreatePathContext;
+import alluxio.master.file.meta.InodeTree.LockPattern;
+import alluxio.master.file.meta.options.MountInfo;
 import alluxio.master.journal.NoopJournalContext;
+import alluxio.master.metastore.InodeStore;
 import alluxio.master.metrics.MetricsMaster;
 import alluxio.master.metrics.MetricsMasterFactory;
-import alluxio.security.authorization.AccessControlList;
-import alluxio.security.authorization.AclEntry;
-import alluxio.security.authorization.DefaultAccessControlList;
+import alluxio.proto.journal.Journal;
 import alluxio.security.authorization.Mode;
 import alluxio.underfs.UfsManager;
 import alluxio.util.CommonUtils;
+import alluxio.util.StreamUtils;
 
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import org.junit.After;
 import org.junit.Assert;
@@ -60,10 +63,11 @@ import org.junit.rules.TemporaryFolder;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * Unit tests for {@link InodeTree}.
@@ -73,6 +77,7 @@ public final class InodeTreeTest {
   private static final AlluxioURI TEST_URI = new AlluxioURI("/test");
   private static final AlluxioURI NESTED_URI = new AlluxioURI("/nested/test");
   private static final AlluxioURI NESTED_DIR_URI = new AlluxioURI("/nested/test/dir");
+  private static final AlluxioURI NESTED_DIR_FILE_URI = new AlluxioURI("/nested/test/dir/file1");
   private static final AlluxioURI NESTED_FILE_URI = new AlluxioURI("/nested/test/file");
   private static final AlluxioURI NESTED_MULTIDIR_FILE_URI
       = new AlluxioURI("/nested/test/dira/dirb/file");
@@ -80,10 +85,11 @@ public final class InodeTreeTest {
   public static final String TEST_GROUP = "group1";
   public static final Mode TEST_DIR_MODE = new Mode((short) 0755);
   public static final Mode TEST_FILE_MODE = new Mode((short) 0644);
-  private static CreateFileOptions sFileOptions;
-  private static CreateDirectoryOptions sDirectoryOptions;
-  private static CreateFileOptions sNestedFileOptions;
-  private static CreateDirectoryOptions sNestedDirectoryOptions;
+  private static CreateFileContext sFileContext;
+  private static CreateDirectoryContext sDirectoryContext;
+  private static CreateFileContext sNestedFileContext;
+  private static CreateDirectoryContext sNestedDirectoryContext;
+  private InodeStore mInodeStore;
   private InodeTree mTree;
   private MasterRegistry mRegistry;
   private MetricsMaster mMetricsMaster;
@@ -101,7 +107,7 @@ public final class InodeTreeTest {
       new ConfigurationRule(new ImmutableMap.Builder<PropertyKey, String>()
           .put(PropertyKey.SECURITY_AUTHORIZATION_PERMISSION_ENABLED, "true")
           .put(PropertyKey.SECURITY_AUTHORIZATION_PERMISSION_SUPERGROUP, "test-supergroup")
-          .build());
+          .build(), ServerConfiguration.global());
 
   /**
    * Sets up all dependencies before a test runs.
@@ -109,14 +115,17 @@ public final class InodeTreeTest {
   @Before
   public void before() throws Exception {
     mRegistry = new MasterRegistry();
-    MasterContext context = MasterTestUtils.testMasterContext();
+    CoreMasterContext context = MasterTestUtils.testMasterContext();
     mMetricsMaster = new MetricsMasterFactory().create(mRegistry, context);
     mRegistry.add(MetricsMaster.class, mMetricsMaster);
     BlockMaster blockMaster = new BlockMasterFactory().create(mRegistry, context);
-    InodeDirectoryIdGenerator directoryIdGenerator = new InodeDirectoryIdGenerator(blockMaster);
+    InodeDirectoryIdGenerator directoryIdGenerator =
+        new InodeDirectoryIdGenerator(blockMaster);
     UfsManager ufsManager = mock(UfsManager.class);
-    MountTable mountTable = new MountTable(ufsManager);
-    mTree = new InodeTree(blockMaster, directoryIdGenerator, mountTable);
+    MountTable mountTable = new MountTable(ufsManager, mock(MountInfo.class));
+    InodeLockManager lockManager = new InodeLockManager();
+    mInodeStore = context.getInodeStoreFactory().apply(lockManager);
+    mTree = new InodeTree(mInodeStore, blockMaster, directoryIdGenerator, mountTable, lockManager);
 
     mRegistry.start(true);
 
@@ -133,14 +142,21 @@ public final class InodeTreeTest {
    */
   @BeforeClass
   public static void beforeClass() throws Exception {
-    sFileOptions = CreateFileOptions.defaults().setBlockSizeBytes(Constants.KB).setOwner(TEST_OWNER)
-        .setGroup(TEST_GROUP).setMode(TEST_FILE_MODE);
-    sDirectoryOptions = CreateDirectoryOptions.defaults().setOwner(TEST_OWNER).setGroup(TEST_GROUP)
-        .setMode(TEST_DIR_MODE);
-    sNestedFileOptions = CreateFileOptions.defaults().setBlockSizeBytes(Constants.KB)
-        .setOwner(TEST_OWNER).setGroup(TEST_GROUP).setMode(TEST_FILE_MODE).setRecursive(true);
-    sNestedDirectoryOptions = CreateDirectoryOptions.defaults().setOwner(TEST_OWNER)
-        .setGroup(TEST_GROUP).setMode(TEST_DIR_MODE).setRecursive(true);
+    sFileContext =
+        CreateFileContext
+            .mergeFrom(CreateFilePOptions.newBuilder().setBlockSizeBytes(Constants.KB)
+                .setMode(TEST_FILE_MODE.toProto()))
+            .setOwner(TEST_OWNER).setGroup(TEST_GROUP);
+    sDirectoryContext = CreateDirectoryContext
+        .mergeFrom(CreateDirectoryPOptions.newBuilder().setMode(TEST_DIR_MODE.toProto()))
+        .setOwner(TEST_OWNER).setGroup(TEST_GROUP);
+    sNestedFileContext = CreateFileContext
+        .mergeFrom(CreateFilePOptions.newBuilder().setBlockSizeBytes(Constants.KB)
+            .setMode(TEST_FILE_MODE.toProto()).setRecursive(true))
+        .setOwner(TEST_OWNER).setGroup(TEST_GROUP);
+    sNestedDirectoryContext = CreateDirectoryContext.mergeFrom(
+        CreateDirectoryPOptions.newBuilder().setMode(TEST_DIR_MODE.toProto()).setRecursive(true))
+        .setOwner(TEST_OWNER).setGroup(TEST_GROUP);
   }
 
   /**
@@ -148,24 +164,24 @@ public final class InodeTreeTest {
    */
   @Test
   public void initializeRootTwice() throws Exception {
-    Inode<?> root = getInodeByPath(mTree, new AlluxioURI("/"));
+    MutableInode<?> root = getInodeByPath(new AlluxioURI("/"));
     // initializeRoot call does nothing
     mTree.initializeRoot(TEST_OWNER, TEST_GROUP, TEST_DIR_MODE, NoopJournalContext.INSTANCE);
     assertEquals(TEST_OWNER, root.getOwner());
-    Inode<?> newRoot = getInodeByPath(mTree, new AlluxioURI("/"));
+    MutableInode<?> newRoot = getInodeByPath(new AlluxioURI("/"));
     assertEquals(root, newRoot);
   }
 
   /**
-   * Tests the {@link InodeTree#createPath(RpcContext, LockedInodePath, CreatePathOptions)}
+   * Tests the {@link InodeTree#createPath(RpcContext, LockedInodePath, CreatePathContext)}
    * method for creating directories.
    */
   @Test
   public void createDirectory() throws Exception {
     // create directory
-    createPath(mTree, TEST_URI, sDirectoryOptions);
+    createPath(mTree, TEST_URI, sDirectoryContext);
     assertTrue(mTree.inodePathExists(TEST_URI));
-    Inode<?> test = getInodeByPath(mTree, TEST_URI);
+    MutableInode<?> test = getInodeByPath(TEST_URI);
     assertEquals(TEST_PATH, test.getName());
     assertTrue(test.isDirectory());
     assertEquals("user1", test.getOwner());
@@ -173,9 +189,9 @@ public final class InodeTreeTest {
     assertEquals(TEST_DIR_MODE.toShort(), test.getMode());
 
     // create nested directory
-    createPath(mTree, NESTED_URI, sNestedDirectoryOptions);
+    createPath(mTree, NESTED_URI, sNestedDirectoryContext);
     assertTrue(mTree.inodePathExists(NESTED_URI));
-    Inode<?> nested = getInodeByPath(mTree, NESTED_URI);
+    MutableInode<?> nested = getInodeByPath(NESTED_URI);
     assertEquals(TEST_PATH, nested.getName());
     assertEquals(2, nested.getParentId());
     assertTrue(test.isDirectory());
@@ -191,15 +207,17 @@ public final class InodeTreeTest {
   @Test
   public void createExistingDirectory() throws Exception {
     // create directory
-    createPath(mTree, TEST_URI, sDirectoryOptions);
+    createPath(mTree, TEST_URI, sDirectoryContext);
 
     // create again with allowExists true
-    createPath(mTree, TEST_URI, CreateDirectoryOptions.defaults().setAllowExists(true));
+    createPath(mTree, TEST_URI, CreateDirectoryContext
+        .mergeFrom(CreateDirectoryPOptions.newBuilder().setAllowExists(true)));
 
     // create again with allowExists false
     mThrown.expect(FileAlreadyExistsException.class);
     mThrown.expectMessage(ExceptionMessage.FILE_ALREADY_EXISTS.getMessage(TEST_URI));
-    createPath(mTree, TEST_URI, CreateDirectoryOptions.defaults().setAllowExists(false));
+    createPath(mTree, TEST_URI, CreateDirectoryContext
+        .mergeFrom(CreateDirectoryPOptions.newBuilder().setAllowExists(false)));
   }
 
   /**
@@ -208,30 +226,30 @@ public final class InodeTreeTest {
   @Test
   public void createFileUnderPinnedDirectory() throws Exception {
     // create nested directory
-    createPath(mTree, NESTED_URI, sNestedDirectoryOptions);
+    createPath(mTree, NESTED_URI, sNestedDirectoryContext);
 
     // pin nested folder
     try (
-        LockedInodePath inodePath = mTree.lockFullInodePath(NESTED_URI, InodeTree.LockMode.WRITE)) {
-      mTree.setPinned(inodePath, true);
+        LockedInodePath inodePath = mTree.lockFullInodePath(NESTED_URI, LockPattern.WRITE_INODE)) {
+      mTree.setPinned(RpcContext.NOOP, inodePath, true, Collections.emptyList(), 0);
     }
 
     // create nested file under pinned folder
-    createPath(mTree, NESTED_FILE_URI, sNestedFileOptions);
+    createPath(mTree, NESTED_FILE_URI, sNestedFileContext);
 
     // the nested file is pinned
     assertEquals(1, mTree.getPinIdSet().size());
   }
 
   /**
-   * Tests the {@link InodeTree#createPath(RpcContext, LockedInodePath, CreatePathOptions)}
+   * Tests the {@link InodeTree#createPath(RpcContext, LockedInodePath, CreatePathContext)}
    * method for creating a file.
    */
   @Test
   public void createFile() throws Exception {
     // created nested file
-    createPath(mTree, NESTED_FILE_URI, sNestedFileOptions);
-    Inode<?> nestedFile = getInodeByPath(mTree, NESTED_FILE_URI);
+    createPath(mTree, NESTED_FILE_URI, sNestedFileContext);
+    MutableInode<?> nestedFile = getInodeByPath(NESTED_FILE_URI);
     assertEquals("file", nestedFile.getName());
     assertEquals(2, nestedFile.getParentId());
     assertTrue(nestedFile.isFile());
@@ -241,67 +259,7 @@ public final class InodeTreeTest {
   }
 
   /**
-   * Tests the createPath method, specifically for ACLs and default ACLs.
-   */
-  @Test
-  public void createPathAclTest() throws Exception {
-    CreateDirectoryOptions dirOptions = CreateDirectoryOptions.defaults().setOwner(TEST_OWNER)
-        .setGroup(TEST_GROUP).setMode(TEST_DIR_MODE).setRecursive(true);
-    // create nested directory
-    InodeTree.CreatePathResult createResult = createPath(mTree, NESTED_URI, dirOptions);
-    List<Inode<?>> created = createResult.getCreated();
-    // 2 created directories
-    assertEquals(2, created.size());
-    assertEquals("nested", created.get(0).getName());
-    assertEquals("test", created.get(1).getName());
-    DefaultAccessControlList dAcl = new DefaultAccessControlList(created.get(1).mAcl);
-    dAcl.setEntry(AclEntry.fromCliString("default:user::r-x"));
-    created.get(1).setDefaultACL(dAcl);
-
-    // create nested directory
-    createResult = createPath(mTree, NESTED_DIR_URI, dirOptions);
-    created = createResult.getCreated();
-    // the new directory should have the same ACL as its parent
-    // 1 created directories
-    assertEquals(1, created.size());
-    assertEquals("dir", created.get(0).getName());
-    DefaultAccessControlList childDefaultAcl =  created.get(0).getDefaultACL();
-    AccessControlList childAcl = created.get(0).mAcl;
-    assertEquals(dAcl, childDefaultAcl);
-
-    assertEquals(childAcl.toStringEntries().stream().map(AclEntry::toDefault)
-        .collect(Collectors.toList()), dAcl.toStringEntries());
-    // create nested file
-    createResult = createPath(mTree, NESTED_FILE_URI, dirOptions);
-    created = createResult.getCreated();
-    // the new file should have the same ACL as its parent's default ACL
-    // 1 created file
-    assertEquals(1, created.size());
-    assertEquals("file", created.get(0).getName());
-    childAcl = created.get(0).mAcl;
-    assertEquals(childAcl.toStringEntries().stream().map(AclEntry::toDefault)
-        .collect(Collectors.toList()), dAcl.toStringEntries());
-
-    // create nested directory
-    createResult = createPath(mTree, NESTED_MULTIDIR_FILE_URI, dirOptions);
-    created = createResult.getCreated();
-    // 3 created directories
-    assertEquals(3, created.size());
-    assertEquals("dira", created.get(0).getName());
-    assertEquals("dirb", created.get(1).getName());
-    assertEquals("file", created.get(2).getName());
-
-    for (Inode<?> inode: created) {
-      childAcl = inode.mAcl;
-      // All the newly created directories and files should inherit the default ACL from parent
-      assertEquals(childAcl.toStringEntries().stream().map(AclEntry::toDefault)
-          .collect(Collectors.toList()), dAcl.toStringEntries());
-    }
-
-  }
-
-  /**
-   * Tests the {@link InodeTree#createPath(RpcContext, LockedInodePath, CreatePathOptions)}
+   * Tests the {@link InodeTree#createPath(RpcContext, LockedInodePath, CreatePathContext)}
    * method.
    */
   @Test
@@ -312,18 +270,15 @@ public final class InodeTreeTest {
     CommonUtils.sleepMs(10);
 
     // Need to use updated options to set the correct last mod time.
-    CreateDirectoryOptions dirOptions = CreateDirectoryOptions.defaults().setOwner(TEST_OWNER)
-        .setGroup(TEST_GROUP).setMode(TEST_DIR_MODE).setRecursive(true);
+    CreateDirectoryContext dirContext = CreateDirectoryContext.mergeFrom(
+        CreateDirectoryPOptions.newBuilder().setRecursive(true).setMode(TEST_DIR_MODE.toProto()))
+            .setOwner(TEST_OWNER).setGroup(TEST_GROUP);
 
     // create nested directory
-    InodeTree.CreatePathResult createResult = createPath(mTree, NESTED_URI, dirOptions);
-    List<Inode<?>> modified = createResult.getModified();
-    List<Inode<?>> created = createResult.getCreated();
-
+    List<Inode> created = createPath(mTree, NESTED_URI, dirContext);
     // 1 modified directory
-    assertEquals(1, modified.size());
-    assertEquals("", modified.get(0).getName());
-    assertNotEquals(lastModTime, modified.get(0).getLastModificationTimeMs());
+    assertNotEquals(lastModTime,
+        getInodeByPath(NESTED_URI.getParent()).getLastModificationTimeMs());
     // 2 created directories
     assertEquals(2, created.size());
     assertEquals("nested", created.get(0).getName());
@@ -335,7 +290,7 @@ public final class InodeTreeTest {
 
     // creating the directory path again results in no new inodes.
     try {
-      createPath(mTree, NESTED_URI, dirOptions);
+      createPath(mTree, NESTED_URI, dirContext);
       assertTrue("createPath should throw FileAlreadyExistsException", false);
     } catch (FileAlreadyExistsException e) {
       assertEquals(e.getMessage(),
@@ -343,19 +298,50 @@ public final class InodeTreeTest {
     }
 
     // create a file
-    CreateFileOptions options =
-        CreateFileOptions.defaults().setBlockSizeBytes(Constants.KB).setRecursive(true);
-    createResult = createPath(mTree, NESTED_FILE_URI, options);
-    modified = createResult.getModified();
-    created = createResult.getCreated();
+    CreateFileContext options = CreateFileContext.mergeFrom(
+        CreateFilePOptions.newBuilder().setBlockSizeBytes(Constants.KB).setRecursive(true));
+    created = createPath(mTree, NESTED_FILE_URI, options);
 
     // test directory was modified
-    assertEquals(1, modified.size());
-    assertEquals("test", modified.get(0).getName());
-    assertNotEquals(lastModTime, modified.get(0).getLastModificationTimeMs());
+    assertNotEquals(lastModTime, getInodeByPath(NESTED_URI).getLastModificationTimeMs());
     // file was created
     assertEquals(1, created.size());
     assertEquals("file", created.get(0).getName());
+  }
+
+  /**
+   * Tests the {@link InodeTree#createPath(RpcContext, LockedInodePath, CreatePathContext)} method
+   * for inheriting owner and group when empty.
+   */
+  @Test
+  public void createPathInheritanceTest() throws Exception {
+    // create nested directory
+    CreateDirectoryContext dirContext = CreateDirectoryContext.mergeFrom(
+        CreateDirectoryPOptions.newBuilder().setRecursive(true).setMode(TEST_DIR_MODE.toProto()))
+            .setOwner(TEST_OWNER).setGroup(TEST_GROUP);
+    List<Inode> created = createPath(mTree, NESTED_URI, dirContext);
+    assertEquals(2, created.size());
+
+    // 1. create a nested directory with empty owner and group
+    CreateDirectoryContext nestedDirContext = CreateDirectoryContext.mergeFrom(
+        CreateDirectoryPOptions.newBuilder().setRecursive(true).setMode(TEST_DIR_MODE.toProto()))
+        .setOwner("").setGroup("");
+    created = createPath(mTree, NESTED_DIR_URI, nestedDirContext);
+    assertEquals(1, created.size());
+    assertEquals("dir", created.get(0).getName());
+    assertEquals(TEST_OWNER, created.get(0).getOwner());
+    assertEquals(TEST_GROUP, created.get(0).getGroup());
+
+    // 2. create a file with empty owner and group
+    CreateFileContext nestedDirFileContext = CreateFileContext
+        .mergeFrom(
+            CreateFilePOptions.newBuilder().setBlockSizeBytes(Constants.KB).setRecursive(true))
+        .setOwner("").setGroup("");
+    created = createPath(mTree, NESTED_DIR_FILE_URI, nestedDirFileContext);
+    assertEquals(1, created.size());
+    assertEquals("file1", created.get(0).getName());
+    assertEquals(TEST_OWNER, created.get(0).getOwner());
+    assertEquals(TEST_GROUP, created.get(0).getGroup());
   }
 
   /**
@@ -366,7 +352,7 @@ public final class InodeTreeTest {
     mThrown.expect(FileAlreadyExistsException.class);
     mThrown.expectMessage("/");
 
-    createPath(mTree, new AlluxioURI("/"), sFileOptions);
+    createPath(mTree, new AlluxioURI("/"), sFileContext);
   }
 
   /**
@@ -377,8 +363,9 @@ public final class InodeTreeTest {
     mThrown.expect(BlockInfoException.class);
     mThrown.expectMessage("Invalid block size 0");
 
-    CreateFileOptions options = CreateFileOptions.defaults().setBlockSizeBytes(0);
-    createPath(mTree, TEST_URI, options);
+    CreateFileContext context =
+        CreateFileContext.mergeFrom(CreateFilePOptions.newBuilder().setBlockSizeBytes(0));
+    createPath(mTree, TEST_URI, context);
   }
 
   /**
@@ -389,8 +376,9 @@ public final class InodeTreeTest {
     mThrown.expect(BlockInfoException.class);
     mThrown.expectMessage("Invalid block size -1");
 
-    CreateFileOptions options = CreateFileOptions.defaults().setBlockSizeBytes(-1);
-    createPath(mTree, TEST_URI, options);
+    CreateFileContext context =
+        CreateFileContext.mergeFrom(CreateFilePOptions.newBuilder().setBlockSizeBytes(-1));
+    createPath(mTree, TEST_URI, context);
   }
 
   /**
@@ -401,7 +389,7 @@ public final class InodeTreeTest {
     mThrown.expect(FileDoesNotExistException.class);
     mThrown.expectMessage("File /nested/test creation failed. Component 1(nested) does not exist");
 
-    createPath(mTree, NESTED_URI, sFileOptions);
+    createPath(mTree, NESTED_URI, sFileContext);
   }
 
   /**
@@ -412,8 +400,8 @@ public final class InodeTreeTest {
     mThrown.expect(FileAlreadyExistsException.class);
     mThrown.expectMessage("/nested/test");
 
-    createPath(mTree, NESTED_URI, sNestedFileOptions);
-    createPath(mTree, NESTED_URI, sNestedFileOptions);
+    createPath(mTree, NESTED_URI, sNestedFileContext);
+    createPath(mTree, NESTED_URI, sNestedFileContext);
   }
 
   /**
@@ -421,11 +409,12 @@ public final class InodeTreeTest {
    */
   @Test
   public void createFileUnderFile() throws Exception {
-    mThrown.expect(InvalidPathException.class);
-    mThrown.expectMessage("Traversal failed. Component 2(test) is a file");
+    createPath(mTree, NESTED_URI, sNestedFileContext);
 
-    createPath(mTree, NESTED_URI, sNestedFileOptions);
-    createPath(mTree, new AlluxioURI("/nested/test/test"), sNestedFileOptions);
+    mThrown.expect(InvalidPathException.class);
+    mThrown.expectMessage("Traversal failed for path /nested/test/test. "
+        + "Component 2(test) is a file, not a directory");
+    createPath(mTree, new AlluxioURI("/nested/test/test"), sNestedFileContext);
   }
 
   /**
@@ -436,8 +425,8 @@ public final class InodeTreeTest {
     assertTrue(mTree.inodeIdExists(0));
     assertFalse(mTree.inodeIdExists(1));
 
-    createPath(mTree, TEST_URI, sFileOptions);
-    Inode<?> inode = getInodeByPath(mTree, TEST_URI);
+    createPath(mTree, TEST_URI, sFileContext);
+    MutableInode<?> inode = getInodeByPath(TEST_URI);
     assertTrue(mTree.inodeIdExists(inode.getId()));
 
     deleteInodeByPath(mTree, TEST_URI);
@@ -451,7 +440,7 @@ public final class InodeTreeTest {
   public void inodePathExists() throws Exception {
     assertFalse(mTree.inodePathExists(TEST_URI));
 
-    createPath(mTree, TEST_URI, sFileOptions);
+    createPath(mTree, TEST_URI, sFileContext);
     assertTrue(mTree.inodePathExists(TEST_URI));
 
     deleteInodeByPath(mTree, TEST_URI);
@@ -464,23 +453,24 @@ public final class InodeTreeTest {
   @Test
   public void getInodeByNonexistingPath() throws Exception {
     mThrown.expect(FileDoesNotExistException.class);
-    mThrown.expectMessage("Path /test does not exist");
+    mThrown.expectMessage("Path \"/test\" does not exist");
 
     assertFalse(mTree.inodePathExists(TEST_URI));
-    getInodeByPath(mTree, TEST_URI);
+    getInodeByPath(TEST_URI);
   }
 
   /**
-   * Tests that an exception is thrown when trying to get an Inode by a non-existing, nested path.
+   * Tests that an exception is thrown when trying to get an Inode by a non-existing, nested
+   * path.
    */
   @Test
   public void getInodeByNonexistingNestedPath() throws Exception {
     mThrown.expect(FileDoesNotExistException.class);
-    mThrown.expectMessage("Path /nested/test/file does not exist");
+    mThrown.expectMessage("Path \"/nested/test/file\" does not exist");
 
-    createPath(mTree, NESTED_URI, sNestedDirectoryOptions);
+    createPath(mTree, NESTED_URI, sNestedDirectoryContext);
     assertFalse(mTree.inodePathExists(NESTED_FILE_URI));
-    getInodeByPath(mTree, NESTED_FILE_URI);
+    getInodeByPath(NESTED_FILE_URI);
   }
 
   /**
@@ -492,7 +482,7 @@ public final class InodeTreeTest {
     mThrown.expectMessage(ExceptionMessage.INODE_DOES_NOT_EXIST.getMessage(1));
 
     assertFalse(mTree.inodeIdExists(1));
-    try (LockedInodePath inodePath = mTree.lockFullInodePath(1, InodeTree.LockMode.READ)) {
+    try (LockedInodePath inodePath = mTree.lockFullInodePath(1, LockPattern.READ)) {
       // inode exists
     }
   }
@@ -507,45 +497,40 @@ public final class InodeTreeTest {
   }
 
   /**
-   * Tests the {@link InodeTree#getPath(Inode)} method.
+   * Tests the {@link InodeTree#getPath(InodeView)} method.
    */
   @Test
   public void getPath() throws Exception {
-    try (LockedInodePath inodePath = mTree.lockFullInodePath(0, InodeTree.LockMode.READ)) {
-      Inode<?> root = inodePath.getInode();
+    try (LockedInodePath inodePath = mTree.lockFullInodePath(0, LockPattern.READ)) {
+      Inode root = inodePath.getInode();
       // test root path
       assertEquals(new AlluxioURI("/"), mTree.getPath(root));
     }
 
     // test one level
-    createPath(mTree, TEST_URI, sDirectoryOptions);
-    try (LockedInodePath inodePath = mTree.lockFullInodePath(TEST_URI, InodeTree.LockMode.READ)) {
+    createPath(mTree, TEST_URI, sDirectoryContext);
+    try (LockedInodePath inodePath = mTree.lockFullInodePath(TEST_URI, LockPattern.READ)) {
       assertEquals(new AlluxioURI("/test"), mTree.getPath(inodePath.getInode()));
     }
 
     // test nesting
-    createPath(mTree, NESTED_URI, sNestedDirectoryOptions);
-    try (LockedInodePath inodePath = mTree.lockFullInodePath(NESTED_URI, InodeTree.LockMode.READ)) {
+    createPath(mTree, NESTED_URI, sNestedDirectoryContext);
+    try (LockedInodePath inodePath = mTree.lockFullInodePath(NESTED_URI, LockPattern.READ)) {
       assertEquals(new AlluxioURI("/nested/test"), mTree.getPath(inodePath.getInode()));
     }
   }
 
-  /**
-   * Tests the {@link InodeTree#lockDescendants(LockedInodePath, InodeTree.LockMode)} method.
-   */
   @Test
   public void getInodeChildrenRecursive() throws Exception {
-    createPath(mTree, TEST_URI, sDirectoryOptions);
-    createPath(mTree, NESTED_URI, sNestedDirectoryOptions);
+    createPath(mTree, TEST_URI, sDirectoryContext);
+    createPath(mTree, NESTED_URI, sNestedDirectoryContext);
     // add nested file
-    createPath(mTree, NESTED_FILE_URI, sNestedFileOptions);
+    createPath(mTree, NESTED_FILE_URI, sNestedFileContext);
 
     // all inodes under root
-    try (LockedInodePath inodePath = mTree.lockFullInodePath(0, InodeTree.LockMode.READ);
-      LockedInodePathList lockedInodePathList = mTree.lockDescendants(inodePath,
-          InodeTree.LockMode.READ)) {
+    try (LockedInodePath inodePath = mTree.lockFullInodePath(0, LockPattern.WRITE_INODE)) {
       // /test, /nested, /nested/test, /nested/test/file
-      assertEquals(4, lockedInodePathList.getInodePathList().size());
+      assertEquals(4, mTree.getDescendants(inodePath).getInodePathList().size());
     }
   }
 
@@ -554,49 +539,41 @@ public final class InodeTreeTest {
    */
   @Test
   public void deleteInode() throws Exception {
-    createPath(mTree, NESTED_URI, sNestedDirectoryOptions);
+    createPath(mTree, NESTED_URI, sNestedDirectoryContext);
 
     // all inodes under root
-    try (LockedInodePath inodePath = mTree.lockFullInodePath(0, InodeTree.LockMode.WRITE);
-      LockedInodePathList lockedInodePathList = mTree.lockDescendants(inodePath,
-          InodeTree.LockMode.READ)) {
+    try (LockedInodePath inodePath = mTree.lockFullInodePath(0, LockPattern.WRITE_INODE)) {
       // /nested, /nested/test
-      assertEquals(2, lockedInodePathList.getInodePathList().size());
+      assertEquals(2, mTree.getDescendants(inodePath).getInodePathList().size());
 
       // delete the nested inode
       deleteInodeByPath(mTree, NESTED_URI);
 
-      try (LockedInodePathList lockedInodePathList2 = mTree.lockDescendants(inodePath,
-          InodeTree.LockMode.WRITE)) {
-        // only /nested left
-        assertEquals(1, lockedInodePathList2.getInodePathList().size());
-      }
+      // only /nested left
+      assertEquals(1, mTree.getDescendants(inodePath).getInodePathList().size());
     }
   }
 
-  /**
-   * Tests the {@link InodeTree#setPinned(LockedInodePath, boolean)} method.
-   */
   @Test
   public void setPinned() throws Exception {
-    createPath(mTree, NESTED_URI, sNestedDirectoryOptions);
-    createPath(mTree, NESTED_FILE_URI, sNestedFileOptions);
+    createPath(mTree, NESTED_URI, sNestedDirectoryContext);
+    createPath(mTree, NESTED_FILE_URI, sNestedFileContext);
 
     // no inodes pinned
     assertEquals(0, mTree.getPinIdSet().size());
 
     // pin nested folder
     try (
-        LockedInodePath inodePath = mTree.lockFullInodePath(NESTED_URI, InodeTree.LockMode.WRITE)) {
-      mTree.setPinned(inodePath, true);
+        LockedInodePath inodePath = mTree.lockFullInodePath(NESTED_URI, LockPattern.WRITE_INODE)) {
+      mTree.setPinned(RpcContext.NOOP, inodePath, true, Collections.emptyList(), 0);
     }
     // nested file pinned
     assertEquals(1, mTree.getPinIdSet().size());
 
     // unpin nested folder
     try (
-        LockedInodePath inodePath = mTree.lockFullInodePath(NESTED_URI, InodeTree.LockMode.WRITE)) {
-      mTree.setPinned(inodePath, false);
+        LockedInodePath inodePath = mTree.lockFullInodePath(NESTED_URI, LockPattern.WRITE_INODE)) {
+      mTree.setPinned(RpcContext.NOOP, inodePath, false, Collections.emptyList(), 0);
     }
     assertEquals(0, mTree.getPinIdSet().size());
   }
@@ -606,130 +583,97 @@ public final class InodeTreeTest {
    */
   @Test
   public void streamToJournalCheckpoint() throws Exception {
-    InodeDirectory root = mTree.getRoot();
-
-    // test root
-    verifyJournal(mTree, Lists.<Inode<?>>newArrayList(root));
+    verifyJournal(mTree, Arrays.asList(getInodeByPath("/")));
 
     // test nested URI
-    createPath(mTree, NESTED_FILE_URI, sNestedFileOptions);
-    InodeDirectory nested = (InodeDirectory) root.getChild("nested");
-    InodeDirectory test = (InodeDirectory) nested.getChild("test");
-    Inode<?> file = test.getChild("file");
-    verifyJournal(mTree, Arrays.asList(root, nested, test, file));
+    createPath(mTree, NESTED_FILE_URI, sNestedFileContext);
+
+    verifyJournal(mTree, StreamUtils.map(path -> getInodeByPath(path),
+        Arrays.asList("/", "/nested", "/nested/test", "/nested/test/file")));
 
     // add a sibling of test and verify journaling is in correct order (breadth first)
-    createPath(mTree, new AlluxioURI("/nested/test1/file1"), sNestedFileOptions);
-    InodeDirectory test1 = (InodeDirectory) nested.getChild("test1");
-    Inode<?> file1 = test1.getChild("file1");
-    verifyJournal(mTree, Arrays.asList(root, nested, test, test1, file, file1));
+    createPath(mTree, new AlluxioURI("/nested/test1/file1"), sNestedFileContext);
+    verifyJournal(mTree, StreamUtils.map(path -> getInodeByPath(path), Arrays.asList("/",
+        "/nested", "/nested/test", "/nested/test1", "/nested/test/file", "/nested/test1/file1")));
   }
 
-  /**
-   * Tests the {@link InodeTree#addInodeFileFromJournal} and
-   * {@link InodeTree#addInodeDirectoryFromJournal} methods.
-   */
   @Test
   public void addInodeFromJournal() throws Exception {
-    createPath(mTree, NESTED_FILE_URI, sNestedFileOptions);
-    createPath(mTree, new AlluxioURI("/nested/test1/file1"), sNestedFileOptions);
-    InodeDirectory root = mTree.getRoot();
-    InodeDirectory nested = (InodeDirectory) root.getChild("nested");
-    InodeDirectory test = (InodeDirectory) nested.getChild("test");
-    Inode<?> file = test.getChild("file");
-    InodeDirectory test1 = (InodeDirectory) nested.getChild("test1");
-    Inode<?> file1 = test1.getChild("file1");
-
+    createPath(mTree, NESTED_FILE_URI, sNestedFileContext);
+    createPath(mTree, new AlluxioURI("/nested/test1/file1"), sNestedFileContext);
+    MutableInode<?> root = getInodeByPath("/");
+    MutableInode<?> nested = getInodeByPath("/nested");
+    MutableInode<?> test = getInodeByPath("/nested/test");
+    MutableInode<?> file = getInodeByPath("/nested/test/file");
+    MutableInode<?> test1 = getInodeByPath("/nested/test1");
+    MutableInode<?> file1 = getInodeByPath("/nested/test1/file1");
     // reset the tree
-    mTree.addInodeDirectoryFromJournal(root.toJournalEntry().getInodeDirectory());
-
+    mTree.processJournalEntry(root.toJournalEntry());
     // re-init the root since the tree was reset above
     mTree.getRoot();
-
     try (LockedInodePath inodePath =
-        mTree.lockFullInodePath(new AlluxioURI("/"), InodeTree.LockMode.READ);
-      LockedInodePathList lockedInodePathList = mTree.lockDescendants(inodePath,
-          InodeTree.LockMode.READ)) {
-      assertEquals(0, lockedInodePathList.getInodePathList().size());
-
-      mTree.addInodeDirectoryFromJournal(nested.toJournalEntry().getInodeDirectory());
+             mTree.lockFullInodePath(new AlluxioURI("/"), LockPattern.WRITE_INODE)) {
+      assertEquals(0, mTree.getDescendants(inodePath).getInodePathList().size());
+      mTree.processJournalEntry(nested.toJournalEntry());
       verifyChildrenNames(mTree, inodePath, Sets.newHashSet("nested"));
-
-      mTree.addInodeDirectoryFromJournal(test.toJournalEntry().getInodeDirectory());
+      mTree.processJournalEntry(test.toJournalEntry());
       verifyChildrenNames(mTree, inodePath, Sets.newHashSet("nested", "test"));
-
-      mTree.addInodeDirectoryFromJournal(test1.toJournalEntry().getInodeDirectory());
+      mTree.processJournalEntry(test1.toJournalEntry());
       verifyChildrenNames(mTree, inodePath, Sets.newHashSet("nested", "test", "test1"));
-
-      mTree.addInodeFileFromJournal(file.toJournalEntry().getInodeFile());
+      mTree.processJournalEntry(file.toJournalEntry());
       verifyChildrenNames(mTree, inodePath, Sets.newHashSet("nested", "test", "test1", "file"));
-
-      mTree.addInodeFileFromJournal(file1.toJournalEntry().getInodeFile());
+      mTree.processJournalEntry(file1.toJournalEntry());
       verifyChildrenNames(mTree, inodePath,
           Sets.newHashSet("nested", "test", "test1", "file", "file1"));
     }
   }
 
-  /**
-   * Tests if mode is set correctly in the {@link InodeTree#addInodeFileFromJournal} and
-   * {@link InodeTree#addInodeDirectoryFromJournal} methods for empty owner/group.
-   */
   @Test
   public void addInodeModeFromJournalWithEmptyOwnership() throws Exception {
-    createPath(mTree, NESTED_FILE_URI, sNestedFileOptions);
-    InodeDirectory root = mTree.getRoot();
-    InodeDirectory nested = (InodeDirectory) root.getChild("nested");
-    InodeDirectory test = (InodeDirectory) nested.getChild("test");
-    Inode<?> file = test.getChild("file");
-    Inode[] inodeChildren = {nested, test, file};
-    for (Inode child : inodeChildren) {
+    createPath(mTree, NESTED_FILE_URI, sNestedFileContext);
+    MutableInode<?> root = getInodeByPath("/");
+    MutableInode<?> nested = getInodeByPath("/nested");
+    MutableInode<?> test = getInodeByPath("/nested/test");
+    MutableInode<?> file = getInodeByPath("/nested/test/file");
+    MutableInode<?>[] inodeChildren = {nested, test, file};
+    for (MutableInode<?> child : inodeChildren) {
       child.setOwner("");
       child.setGroup("");
       child.setMode((short) 0600);
     }
-
     // reset the tree
-    mTree.addInodeDirectoryFromJournal(root.toJournalEntry().getInodeDirectory());
-
+    mTree.processJournalEntry(root.toJournalEntry());
     // re-init the root since the tree was reset above
     mTree.getRoot();
-
     try (LockedInodePath inodePath =
-             mTree.lockFullInodePath(new AlluxioURI("/"), InodeTree.LockMode.READ);
-      LockedInodePathList lockedInodePathList = mTree.lockDescendants(inodePath,
-          InodeTree.LockMode.READ)) {
-      assertEquals(0, lockedInodePathList.getInodePathList().size());
-
-      mTree.addInodeDirectoryFromJournal(nested.toJournalEntry().getInodeDirectory());
-      mTree.addInodeDirectoryFromJournal(test.toJournalEntry().getInodeDirectory());
-      mTree.addInodeFileFromJournal(file.toJournalEntry().getInodeFile());
-
-      try (LockedInodePathList descendants = mTree.lockDescendants(inodePath,
-          InodeTree.LockMode.READ)) {
-        assertEquals(inodeChildren.length, descendants.getInodePathList().size());
-        for (LockedInodePath childPath : descendants.getInodePathList()) {
-          Inode<?> child = childPath.getInodeOrNull();
-          Assert.assertNotNull(child);
-          Assert.assertEquals("", child.getOwner());
-          Assert.assertEquals("", child.getGroup());
-          Assert.assertEquals((short) 0600, child.getMode());
-        }
+             mTree.lockFullInodePath(new AlluxioURI("/"), LockPattern.WRITE_INODE)) {
+      assertEquals(0, mTree.getDescendants(inodePath).getInodePathList().size());
+      mTree.processJournalEntry(nested.toJournalEntry());
+      mTree.processJournalEntry(test.toJournalEntry());
+      mTree.processJournalEntry(file.toJournalEntry());
+      List<LockedInodePath> descendants = mTree.getDescendants(inodePath).getInodePathList();
+      assertEquals(inodeChildren.length, descendants.size());
+      for (LockedInodePath childPath : descendants) {
+        Inode child = childPath.getInodeOrNull();
+        Assert.assertNotNull(child);
+        Assert.assertEquals("", child.getOwner());
+        Assert.assertEquals("", child.getGroup());
+        Assert.assertEquals((short) 0600, child.getMode());
       }
     }
   }
 
   @Test
   public void getInodePathById() throws Exception {
-    try (LockedInodePath rootPath = mTree.lockFullInodePath(0, InodeTree.LockMode.READ)) {
+    try (LockedInodePath rootPath = mTree.lockFullInodePath(0, LockPattern.READ)) {
       assertEquals(0, rootPath.getInode().getId());
     }
 
-    InodeTree.CreatePathResult createResult =
-        createPath(mTree, NESTED_FILE_URI, sNestedFileOptions);
+    List<Inode> created = createPath(mTree, NESTED_FILE_URI, sNestedFileContext);
 
-    for (Inode<?> inode : createResult.getCreated()) {
+    for (Inode inode : created) {
       long id = inode.getId();
-      try (LockedInodePath inodePath = mTree.lockFullInodePath(id, InodeTree.LockMode.READ)) {
+      try (LockedInodePath inodePath = mTree.lockFullInodePath(id, LockPattern.READ)) {
         assertEquals(id, inodePath.getInode().getId());
       }
     }
@@ -738,110 +682,83 @@ public final class InodeTreeTest {
   @Test
   public void getInodePathByPath() throws Exception {
     try (LockedInodePath rootPath =
-        mTree.lockFullInodePath(new AlluxioURI("/"), InodeTree.LockMode.READ)) {
+        mTree.lockFullInodePath(new AlluxioURI("/"), LockPattern.READ)) {
       assertTrue(mTree.isRootId(rootPath.getInode().getId()));
     }
 
     // Create a nested file.
-    createPath(mTree, NESTED_FILE_URI, sNestedFileOptions);
+    createPath(mTree, NESTED_FILE_URI, sNestedFileContext);
 
     AlluxioURI uri = new AlluxioURI("/nested");
-    try (LockedInodePath inodePath = mTree.lockFullInodePath(uri, InodeTree.LockMode.READ)) {
+    try (LockedInodePath inodePath = mTree.lockFullInodePath(uri, LockPattern.READ)) {
       assertEquals(uri.getName(), inodePath.getInode().getName());
     }
 
     uri = NESTED_URI;
-    try (LockedInodePath inodePath = mTree.lockFullInodePath(uri, InodeTree.LockMode.READ)) {
+    try (LockedInodePath inodePath = mTree.lockFullInodePath(uri, LockPattern.READ)) {
       assertEquals(uri.getName(), inodePath.getInode().getName());
     }
 
     uri = NESTED_FILE_URI;
-    try (LockedInodePath inodePath = mTree.lockFullInodePath(uri, InodeTree.LockMode.READ)) {
+    try (LockedInodePath inodePath = mTree.lockFullInodePath(uri, LockPattern.READ)) {
       assertEquals(uri.getName(), inodePath.getInode().getName());
     }
   }
 
-  @Test
-  public void lockingDescendent() throws Exception {
-    InodeTree.CreatePathResult createResult =
-        createPath(mTree, NESTED_FILE_URI, sNestedFileOptions);
-    Inode<?> dirInode = createResult.getCreated().get(0);
-    assertTrue(dirInode.isDirectory());
-    try (LockedInodePath lockedDirPath = mTree.lockFullInodePath(dirInode.getId(),
-         InodeTree.LockMode.READ);
-         LockedInodePath path = mTree.lockDescendantPath(lockedDirPath,
-             InodeTree.LockMode.READ, NESTED_FILE_URI);
-        ) {
-      assertEquals(4, path.getInodeList().size());
-    }
-    // Testing descendant is the same as the LockedInodePath.
-    try (LockedInodePath lockedDirPath = mTree.lockFullInodePath(dirInode.getId(),
-        InodeTree.LockMode.READ);
-         LockedInodePath path = mTree.lockDescendantPath(lockedDirPath,
-             InodeTree.LockMode.READ, lockedDirPath.getUri())
-    ) {
-      Assert.fail();
-    } catch (InvalidPathException e) {
-      // expected
-    }
-
-    // Testing descendantURI is actually the URI of a parent.
-    Inode<?> subDirInode = createResult.getCreated().get(1);
-    assertTrue(dirInode.isDirectory());
-    try (LockedInodePath lockedDirPath = mTree.lockFullInodePath(subDirInode.getId(),
-        InodeTree.LockMode.READ);
-         LockedInodePath path = mTree.lockDescendantPath(lockedDirPath,
-             InodeTree.LockMode.READ, new AlluxioURI(""));
-    ) {
-      Assert.fail();
-    } catch (InvalidPathException e) {
-      // expected
-    }
-  }
-
   // Helper to create a path.
-  private InodeTree.CreatePathResult createPath(InodeTree root, AlluxioURI path,
-      CreatePathOptions<?> options) throws FileAlreadyExistsException, BlockInfoException,
-      InvalidPathException, IOException, FileDoesNotExistException {
-    try (LockedInodePath inodePath = root.lockInodePath(path, InodeTree.LockMode.WRITE)) {
-      return root.createPath(RpcContext.NOOP, inodePath, options);
+  private List<Inode> createPath(InodeTree root, AlluxioURI path, CreatePathContext<?, ?> context)
+      throws FileAlreadyExistsException, BlockInfoException, InvalidPathException, IOException,
+      FileDoesNotExistException {
+    try (LockedInodePath inodePath = root.lockInodePath(path, LockPattern.WRITE_EDGE)) {
+      return root.createPath(RpcContext.NOOP, inodePath, context);
     }
   }
 
   // Helper to get an inode by path. The inode is unlocked before returning.
-  private static Inode<?> getInodeByPath(InodeTree root, AlluxioURI path) throws Exception {
-    try (LockedInodePath inodePath = root.lockFullInodePath(path, InodeTree.LockMode.READ)) {
-      return inodePath.getInode();
+  private MutableInode<?> getInodeByPath(String path) {
+    try {
+      return getInodeByPath(new AlluxioURI(path));
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  // Helper to get an inode by path. The inode is unlocked before returning.
+  private MutableInode<?> getInodeByPath(AlluxioURI path) throws Exception {
+    try (LockedInodePath inodePath = mTree.lockFullInodePath(path, LockPattern.READ)) {
+      return mInodeStore.getMutable(inodePath.getInode().getId()).get();
     }
   }
 
   // Helper to delete an inode by path.
   private static void deleteInodeByPath(InodeTree root, AlluxioURI path) throws Exception {
-    try (LockedInodePath inodePath = root.lockFullInodePath(path, InodeTree.LockMode.WRITE)) {
-      root.deleteInode(RpcContext.NOOP, inodePath, System.currentTimeMillis(),
-          DeleteOptions.defaults());
+    try (LockedInodePath inodePath = root.lockFullInodePath(path, LockPattern.WRITE_EDGE)) {
+      root.deleteInode(RpcContext.NOOP, inodePath, System.currentTimeMillis());
     }
   }
 
   // helper for verifying that correct objects were journaled to the output stream
-  private static void verifyJournal(InodeTree root, List<Inode<?>> journaled) throws Exception {
+  private static void verifyJournal(InodeTree root, List<MutableInode<?>> journaled) {
     Iterator<alluxio.proto.journal.Journal.JournalEntry> it = root.getJournalEntryIterator();
-    for (Inode<?> node : journaled) {
-      assertTrue(it.hasNext());
-      assertEquals(node.toJournalEntry(), it.next());
+    // Read entries from InodeTree.
+    List<Journal.JournalEntry> treeEntries = new LinkedList<>();
+    while (it.hasNext()) {
+      treeEntries.add(it.next());
     }
-    assertTrue(!it.hasNext());
+
+    // Validate InodeTree entries match given entries.
+    for (MutableInode<?> node : journaled) {
+      assertTrue(treeEntries.contains(node.toJournalEntry()));
+    }
   }
 
   // verify that the tree has the given children
   private static void verifyChildrenNames(InodeTree tree, LockedInodePath inodePath,
       Set<String> childNames) throws Exception {
-    try (LockedInodePathList childrenPath = tree.lockDescendants(inodePath,
-        InodeTree.LockMode.READ)) {
-      assertEquals(childNames.size(), childrenPath.getInodePathList().size());
-      for (LockedInodePath childPath : childrenPath.getInodePathList()) {
-        assertTrue(childNames.contains(childPath.getInode().getName()));
-      }
+    List<LockedInodePath> descendants = tree.getDescendants(inodePath).getInodePathList();
+    assertEquals(childNames.size(), descendants.size());
+    for (LockedInodePath childPath : descendants) {
+      assertTrue(childNames.contains(childPath.getInode().getName()));
     }
   }
 }

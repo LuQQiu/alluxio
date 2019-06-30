@@ -11,9 +11,8 @@
 
 package alluxio.master.journal.ufs;
 
-import alluxio.Configuration;
-import alluxio.ConfigurationTestUtils;
-import alluxio.PropertyKey;
+import alluxio.conf.ServerConfiguration;
+import alluxio.conf.PropertyKey;
 import alluxio.master.MockMaster;
 import alluxio.master.NoopMaster;
 import alluxio.proto.journal.Journal;
@@ -33,6 +32,7 @@ import org.mockito.Mockito;
 
 import java.io.IOException;
 import java.net.URI;
+import java.util.Collections;
 import java.util.Iterator;
 
 /**
@@ -49,13 +49,14 @@ public final class UfsJournalCheckpointThreadTest {
   public void before() throws Exception {
     URI location = URIUtils
         .appendPathOrDie(new URI(mFolder.newFolder().getAbsolutePath()), "FileSystemMaster");
-    mUfs = Mockito.spy(UnderFileSystem.Factory.create(location));
-    mJournal = new UfsJournal(location, new NoopMaster(), mUfs, 0);
+    mUfs = Mockito
+        .spy(UnderFileSystem.Factory.create(location.toString(), ServerConfiguration.global()));
+    mJournal = new UfsJournal(location, new NoopMaster(), mUfs, 0, Collections::emptySet);
   }
 
   @After
   public void after() throws Exception {
-    ConfigurationTestUtils.resetConfiguration();
+    ServerConfiguration.reset();
   }
 
   /**
@@ -63,12 +64,12 @@ public final class UfsJournalCheckpointThreadTest {
    */
   @Test
   public void checkpointBeforeShutdown() throws Exception {
-    Configuration.set(PropertyKey.MASTER_JOURNAL_CHECKPOINT_PERIOD_ENTRIES, "2");
+    ServerConfiguration.set(PropertyKey.MASTER_JOURNAL_CHECKPOINT_PERIOD_ENTRIES, "2");
     buildCompletedLog(0, 10);
     buildIncompleteLog(10, 15);
     MockMaster mockMaster = new MockMaster();
     UfsJournalCheckpointThread checkpointThread =
-        new UfsJournalCheckpointThread(mockMaster, mJournal);
+        new UfsJournalCheckpointThread(mockMaster, mJournal, Collections::emptySet);
     checkpointThread.start();
     CommonUtils.waitFor("checkpoint", () -> {
       try {
@@ -94,12 +95,12 @@ public final class UfsJournalCheckpointThreadTest {
    */
   @Test
   public void checkpointAfterShutdown() throws Exception {
-    Configuration.set(PropertyKey.MASTER_JOURNAL_CHECKPOINT_PERIOD_ENTRIES, "2");
+    ServerConfiguration.set(PropertyKey.MASTER_JOURNAL_CHECKPOINT_PERIOD_ENTRIES, "2");
     buildCompletedLog(0, 10);
     buildIncompleteLog(10, 15);
     MockMaster mockMaster = new MockMaster();
     UfsJournalCheckpointThread checkpointThread =
-        new UfsJournalCheckpointThread(mockMaster, mJournal);
+        new UfsJournalCheckpointThread(mockMaster, mJournal, Collections::emptySet);
     checkpointThread.start();
     checkpointThread.awaitTermination(true);
 

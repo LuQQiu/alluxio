@@ -11,13 +11,13 @@
 
 package alluxio.cli.fsadmin.report;
 
-import alluxio.client.MetaMasterClient;
+import alluxio.client.meta.MetaMasterClient;
+import alluxio.grpc.MetricValue;
 import alluxio.metrics.ClientMetrics;
 import alluxio.metrics.MasterMetrics;
 import alluxio.metrics.MetricsSystem;
 import alluxio.metrics.WorkerMetrics;
 import alluxio.util.FormatUtils;
-import alluxio.wire.MetricValue;
 
 import java.io.IOException;
 import java.io.PrintStream;
@@ -37,7 +37,7 @@ public class MetricsCommand {
 
   private final MetaMasterClient mMetaMasterClient;
   private final PrintStream mPrintStream;
-  private String mInfoFormat = "%-30s %20s";
+  private String mInfoFormat = "%-40s %20s";
   private Map<String, MetricValue> mMetricsMap;
 
   /**
@@ -59,34 +59,47 @@ public class MetricsCommand {
    */
   public int run() throws IOException {
     mMetricsMap = new TreeMap<>(mMetaMasterClient.getMetrics());
-    Long bytesReadLocal = mMetricsMap.getOrDefault(MetricsSystem.getClusterMetricName(
-        ClientMetrics.BYTES_READ_LOCAL), MetricValue.forLong(0L)).getLongValue();
-    Long bytesReadRemote = mMetricsMap.getOrDefault(MetricsSystem.getClusterMetricName(
-        WorkerMetrics.BYTES_READ_ALLUXIO), MetricValue.forLong(0L)).getLongValue();
-    Long bytesReadUfs =  mMetricsMap.getOrDefault(MetricsSystem.getClusterMetricName(
-        WorkerMetrics.BYTES_READ_UFS_ALL), MetricValue.forLong(0L)).getLongValue();
+    Long bytesReadLocal =
+        mMetricsMap.getOrDefault(MetricsSystem.getClusterMetricName(ClientMetrics.BYTES_READ_LOCAL),
+            MetricValue.newBuilder().setLongValue(0L).build()).getLongValue();
+    Long bytesReadRemote = mMetricsMap
+        .getOrDefault(MetricsSystem.getClusterMetricName(WorkerMetrics.BYTES_READ_ALLUXIO),
+            MetricValue.newBuilder().setLongValue(0L).build())
+        .getLongValue();
+    Long bytesReadUfs = mMetricsMap
+        .getOrDefault(MetricsSystem.getClusterMetricName(WorkerMetrics.BYTES_READ_UFS_ALL),
+            MetricValue.newBuilder().setLongValue(0L).build())
+        .getLongValue();
 
     mPrintStream.println("Total IO: ");
     printMetric(MetricsSystem.getClusterMetricName(ClientMetrics.BYTES_READ_LOCAL),
         "Short-circuit Read", true);
+    printMetric(MetricsSystem.getClusterMetricName(WorkerMetrics.BYTES_READ_DOMAIN),
+        "Short-circuit Read (Domain Socket)", true);
     printMetric(MetricsSystem.getClusterMetricName(WorkerMetrics.BYTES_READ_ALLUXIO),
         "From Remote Instances", true);
     printMetric(MetricsSystem.getClusterMetricName(WorkerMetrics.BYTES_READ_UFS_ALL),
         "Under Filesystem Read", true);
     printMetric(MetricsSystem.getClusterMetricName(WorkerMetrics.BYTES_WRITTEN_ALLUXIO),
         "Alluxio Write", true);
+    printMetric(MetricsSystem.getClusterMetricName(WorkerMetrics.BYTES_WRITTEN_DOMAIN),
+        "Alluxio Write (Domain Socket)", true);
     printMetric(MetricsSystem.getClusterMetricName(WorkerMetrics.BYTES_WRITTEN_UFS_ALL),
         "Under Filesystem Write", true);
 
     mPrintStream.println("\nTotal IO Throughput (Last Minute): ");
     printMetric(MetricsSystem.getClusterMetricName(ClientMetrics.BYTES_READ_LOCAL_THROUGHPUT),
         "Short-circuit Read", true);
+    printMetric(MetricsSystem.getClusterMetricName(WorkerMetrics.BYTES_READ_DOMAIN_THROUGHPUT),
+        "Short-circuit Read (Domain Socket)", true);
     printMetric(MetricsSystem.getClusterMetricName(WorkerMetrics.BYTES_READ_ALLUXIO_THROUGHPUT),
         "From Remote Instances", true);
     printMetric(MetricsSystem.getClusterMetricName(WorkerMetrics.BYTES_READ_UFS_THROUGHPUT),
         "Under Filesystem Read", true);
     printMetric(MetricsSystem.getClusterMetricName(WorkerMetrics.BYTES_WRITTEN_ALLUXIO_THROUGHPUT),
         "Alluxio Write", true);
+    printMetric(MetricsSystem.getClusterMetricName(WorkerMetrics.BYTES_WRITTEN_DOMAIN_THROUGHPUT),
+        "Alluxio Write (Domain Socket)", true);
     printMetric(MetricsSystem.getClusterMetricName(WorkerMetrics.BYTES_WRITTEN_UFS_THROUGHPUT),
         "Under Filesystem Write", true);
 
@@ -148,7 +161,7 @@ public class MetricsCommand {
   /**
    * Prints the metrics information.
    *
-   * @param metricName the metric name to get metric value
+   * @param metricName the metric name to get a metric value
    * @param nickName the metric name to print
    * @param valueIsBytes whether the metric value is bytes
    */
@@ -171,9 +184,10 @@ public class MetricsCommand {
    * @return the formatted metric value
    */
   private String getFormattedValue(MetricValue metricValue) {
-    Double doubleValue = metricValue.getDoubleValue();
-    Long longValue = metricValue.getLongValue();
-    return doubleValue == null ? DECIMAL_FORMAT.format(longValue) :
-        DECIMAL_FORMAT.format(doubleValue);
+    if (metricValue.hasDoubleValue()) {
+      return DECIMAL_FORMAT.format(metricValue.getDoubleValue());
+    } else {
+      return DECIMAL_FORMAT.format(metricValue.getLongValue());
+    }
   }
 }

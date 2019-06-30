@@ -11,10 +11,13 @@
 
 package alluxio.master;
 
+import static org.mockito.Mockito.mock;
+
 import alluxio.master.journal.JournalSystem;
 import alluxio.master.journal.noop.NoopJournalSystem;
-
-import org.mockito.Mockito;
+import alluxio.master.metastore.heap.HeapBlockStore;
+import alluxio.master.metastore.heap.HeapInodeStore;
+import alluxio.security.user.UserState;
 
 /**
  * Util methods to help with master testing.
@@ -24,7 +27,7 @@ public final class MasterTestUtils {
   /**
    * @return a basic master context for the purpose of testing
    */
-  public static MasterContext testMasterContext() {
+  public static CoreMasterContext testMasterContext() {
     return testMasterContext(new NoopJournalSystem());
   }
 
@@ -32,9 +35,27 @@ public final class MasterTestUtils {
    * @return a basic master context for the purpose of testing
    * @param journalSystem a journal system to use in the context
    */
-  public static MasterContext testMasterContext(JournalSystem journalSystem) {
-    return new MasterContext(journalSystem, new TestSafeModeManager(),
-        Mockito.mock(BackupManager.class), -1, -1);
+  public static CoreMasterContext testMasterContext(JournalSystem journalSystem) {
+    return testMasterContext(journalSystem, null);
+  }
+
+  /**
+   * @return a basic master context for the purpose of testing
+   * @param journalSystem a journal system to use in the context
+   * @param userState the user state to use in the context
+   */
+  public static CoreMasterContext testMasterContext(JournalSystem journalSystem,
+      UserState userState) {
+    return CoreMasterContext.newBuilder()
+        .setJournalSystem(journalSystem)
+        .setUserState(userState)
+        .setSafeModeManager(new TestSafeModeManager())
+        .setBackupManager(mock(BackupManager.class))
+        .setBlockStoreFactory(() -> new HeapBlockStore())
+        .setInodeStoreFactory(x -> new HeapInodeStore())
+        .setStartTimeMs(-1)
+        .setPort(-1)
+        .build();
   }
 
   private MasterTestUtils() {} // Not intended for instatiation.

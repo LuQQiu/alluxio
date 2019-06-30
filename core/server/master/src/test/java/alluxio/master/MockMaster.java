@@ -12,13 +12,13 @@
 package alluxio.master;
 
 import alluxio.Server;
+import alluxio.grpc.GrpcService;
+import alluxio.grpc.ServiceType;
+import alluxio.master.journal.checkpoint.CheckpointName;
 import alluxio.master.journal.JournalContext;
 import alluxio.proto.journal.Journal;
 import alluxio.proto.journal.Journal.JournalEntry;
 
-import org.apache.thrift.TProcessor;
-
-import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.Iterator;
 import java.util.Map;
@@ -39,7 +39,7 @@ public final class MockMaster implements Master {
 
   @Override
   @Nullable
-  public Map<String, TProcessor> getServices() {
+  public Map<ServiceType, GrpcService> getServices() {
     return null;
   }
 
@@ -55,18 +55,22 @@ public final class MockMaster implements Master {
   }
 
   @Override
-  public void processJournalEntry(Journal.JournalEntry entry) throws IOException {
+  public void start(Boolean isPrimary) {}
+
+  @Override
+  public void stop() {}
+
+  @Override
+  public void close() {}
+
+  @Override
+  public boolean processJournalEntry(Journal.JournalEntry entry) {
     mEntries.add(entry);
+    return true;
   }
 
   @Override
   public void resetState() {}
-
-  @Override
-  public void start(Boolean isPrimary) throws IOException {}
-
-  @Override
-  public void stop() throws IOException {}
 
   @Override
   public Iterator<Journal.JournalEntry> getJournalEntryIterator() {
@@ -76,6 +80,11 @@ public final class MockMaster implements Master {
   @Override
   public JournalContext createJournalContext() {
     throw new IllegalStateException("Cannot create journal contexts for MockMaster");
+  }
+
+  @Override
+  public CheckpointName getCheckpointName() {
+    return CheckpointName.NOOP;
   }
 }
 

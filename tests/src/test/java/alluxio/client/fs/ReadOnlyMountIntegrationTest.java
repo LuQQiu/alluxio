@@ -11,18 +11,22 @@
 
 package alluxio.client.fs;
 
+import static org.hamcrest.CoreMatchers.containsString;
+
 import alluxio.AlluxioURI;
-import alluxio.Configuration;
-import alluxio.client.WriteType;
-import alluxio.PropertyKey;
 import alluxio.client.file.FileInStream;
 import alluxio.client.file.FileSystem;
-import alluxio.client.file.options.CreateFileOptions;
-import alluxio.client.file.options.LoadMetadataOptions;
-import alluxio.client.file.options.MountOptions;
+import alluxio.conf.PropertyKey;
+import alluxio.conf.ServerConfiguration;
 import alluxio.exception.AccessControlException;
 import alluxio.exception.AlluxioException;
 import alluxio.exception.ExceptionMessage;
+import alluxio.exception.FileDoesNotExistException;
+import alluxio.grpc.CreateFilePOptions;
+import alluxio.grpc.GetStatusPOptions;
+import alluxio.grpc.LoadMetadataPType;
+import alluxio.grpc.MountPOptions;
+import alluxio.grpc.WritePType;
 import alluxio.master.LocalAlluxioCluster;
 import alluxio.testutils.BaseIntegrationTest;
 import alluxio.testutils.LocalAlluxioClusterResource;
@@ -60,8 +64,9 @@ public class ReadOnlyMountIntegrationTest extends BaseIntegrationTest {
     // Create another directory on the local filesystem, alongside the existing Ufs, to be used as
     // a second Ufs.
     AlluxioURI parentURI =
-        new AlluxioURI(Configuration.get(PropertyKey.MASTER_MOUNT_TABLE_ROOT_UFS)).getParent();
-    mUfs = UnderFileSystem.Factory.createForRoot();
+        new AlluxioURI(ServerConfiguration.get(PropertyKey.MASTER_MOUNT_TABLE_ROOT_UFS))
+            .getParent();
+    mUfs = UnderFileSystem.Factory.createForRoot(ServerConfiguration.global());
     mAlternateUfsRoot = parentURI.join("alternateUnderFSStorage").toString();
     String ufsMountDir = PathUtils.concatPath(mAlternateUfsRoot, MOUNT_PATH);
     UnderFileSystemUtils.mkdirIfNotExists(mUfs, mAlternateUfsRoot);
@@ -74,7 +79,7 @@ public class ReadOnlyMountIntegrationTest extends BaseIntegrationTest {
     // Add a readonly mount point.
     mFileSystem.createDirectory(new AlluxioURI("/mnt"));
     mFileSystem.mount(new AlluxioURI(MOUNT_PATH), new AlluxioURI(ufsMountDir),
-        MountOptions.defaults().setReadOnly(true));
+        MountPOptions.newBuilder().setReadOnly(true).build());
   }
 
   @After
@@ -85,16 +90,16 @@ public class ReadOnlyMountIntegrationTest extends BaseIntegrationTest {
 
   @Test
   public void createFile() throws IOException, AlluxioException {
-    CreateFileOptions writeBoth =
-        CreateFileOptions.defaults().setWriteType(WriteType.CACHE_THROUGH);
+    CreateFilePOptions writeBoth =
+        CreateFilePOptions.newBuilder().setWriteType(WritePType.CACHE_THROUGH).build();
 
     AlluxioURI uri = new AlluxioURI(FILE_PATH + "_create");
     try {
       mFileSystem.createFile(uri, writeBoth).close();
       Assert.fail("createFile should not succeed under a readonly mount.");
     } catch (AccessControlException e) {
-      Assert.assertEquals(e.getMessage(),
-          ExceptionMessage.MOUNT_READONLY.getMessage(uri, MOUNT_PATH));
+      Assert.assertThat(e.getMessage(),
+          containsString(ExceptionMessage.MOUNT_READONLY.getMessage(uri, MOUNT_PATH)));
     }
 
     uri = new AlluxioURI(SUB_FILE_PATH + "_create");
@@ -102,8 +107,8 @@ public class ReadOnlyMountIntegrationTest extends BaseIntegrationTest {
       mFileSystem.createFile(uri, writeBoth).close();
       Assert.fail("createFile should not succeed under a readonly mount.");
     } catch (AccessControlException e) {
-      Assert.assertEquals(e.getMessage(),
-          ExceptionMessage.MOUNT_READONLY.getMessage(uri, MOUNT_PATH));
+      Assert.assertThat(e.getMessage(),
+          containsString(ExceptionMessage.MOUNT_READONLY.getMessage(uri, MOUNT_PATH)));
     }
   }
 
@@ -114,8 +119,8 @@ public class ReadOnlyMountIntegrationTest extends BaseIntegrationTest {
       mFileSystem.createDirectory(uri);
       Assert.fail("createDirectory should not succeed under a readonly mount.");
     } catch (AccessControlException e) {
-      Assert.assertEquals(e.getMessage(),
-          ExceptionMessage.MOUNT_READONLY.getMessage(uri, MOUNT_PATH));
+      Assert.assertThat(e.getMessage(),
+          containsString(ExceptionMessage.MOUNT_READONLY.getMessage(uri, MOUNT_PATH)));
     }
 
     uri = new AlluxioURI(PathUtils.concatPath(SUB_DIR_PATH, "create"));
@@ -123,33 +128,31 @@ public class ReadOnlyMountIntegrationTest extends BaseIntegrationTest {
       mFileSystem.createDirectory(uri);
       Assert.fail("createDirectory should not succeed under a readonly mount.");
     } catch (AccessControlException e) {
-      Assert.assertEquals(e.getMessage(),
-          ExceptionMessage.MOUNT_READONLY.getMessage(uri, MOUNT_PATH));
+      Assert.assertThat(e.getMessage(),
+          containsString(ExceptionMessage.MOUNT_READONLY.getMessage(uri, MOUNT_PATH)));
     }
   }
 
   @Test
   public void deleteFile() throws IOException, AlluxioException {
     AlluxioURI fileUri = new AlluxioURI(FILE_PATH);
-    mFileSystem.loadMetadata(fileUri);
     try {
       mFileSystem.delete(fileUri);
       Assert.fail("deleteFile should not succeed under a readonly mount.");
     } catch (AccessControlException e) {
-      Assert.assertEquals(e.getMessage(),
-          ExceptionMessage.MOUNT_READONLY.getMessage(fileUri, MOUNT_PATH));
+      Assert.assertThat(e.getMessage(),
+          containsString(ExceptionMessage.MOUNT_READONLY.getMessage(fileUri, MOUNT_PATH)));
     }
     Assert.assertTrue(mFileSystem.exists(fileUri));
     Assert.assertNotNull(mFileSystem.getStatus(fileUri));
 
     fileUri = new AlluxioURI(SUB_FILE_PATH);
-    mFileSystem.loadMetadata(fileUri, LoadMetadataOptions.defaults().setRecursive(true));
     try {
       mFileSystem.delete(fileUri);
       Assert.fail("deleteFile should not succeed under a readonly mount.");
     } catch (AccessControlException e) {
-      Assert.assertEquals(e.getMessage(),
-          ExceptionMessage.MOUNT_READONLY.getMessage(fileUri, MOUNT_PATH));
+      Assert.assertThat(e.getMessage(),
+          containsString(ExceptionMessage.MOUNT_READONLY.getMessage(fileUri, MOUNT_PATH)));
     }
     Assert.assertTrue(mFileSystem.exists(fileUri));
     Assert.assertNotNull(mFileSystem.getStatus(fileUri));
@@ -158,11 +161,9 @@ public class ReadOnlyMountIntegrationTest extends BaseIntegrationTest {
   @Test
   public void getFileStatus() throws IOException, AlluxioException {
     AlluxioURI fileUri = new AlluxioURI(FILE_PATH);
-    mFileSystem.loadMetadata(fileUri);
     Assert.assertNotNull(mFileSystem.getStatus(fileUri));
 
     fileUri = new AlluxioURI(SUB_FILE_PATH);
-    mFileSystem.loadMetadata(fileUri, LoadMetadataOptions.defaults().setRecursive(true));
     Assert.assertNotNull(mFileSystem.getStatus(fileUri));
   }
 
@@ -174,8 +175,8 @@ public class ReadOnlyMountIntegrationTest extends BaseIntegrationTest {
       mFileSystem.rename(srcUri, dstUri);
       Assert.fail("rename should not succeed under a readonly mount.");
     } catch (AccessControlException e) {
-      Assert.assertEquals(e.getMessage(),
-          ExceptionMessage.MOUNT_READONLY.getMessage(srcUri, MOUNT_PATH));
+      Assert.assertThat(e.getMessage(),
+          containsString(ExceptionMessage.MOUNT_READONLY.getMessage(srcUri, MOUNT_PATH)));
     }
 
     srcUri = new AlluxioURI(SUB_FILE_PATH);
@@ -184,8 +185,8 @@ public class ReadOnlyMountIntegrationTest extends BaseIntegrationTest {
       mFileSystem.rename(srcUri, dstUri);
       Assert.fail("rename should not succeed under a readonly mount.");
     } catch (AccessControlException e) {
-      Assert.assertEquals(e.getMessage(),
-          ExceptionMessage.MOUNT_READONLY.getMessage(srcUri, MOUNT_PATH));
+      Assert.assertThat(e.getMessage(),
+          containsString(ExceptionMessage.MOUNT_READONLY.getMessage(srcUri, MOUNT_PATH)));
     }
   }
 
@@ -197,8 +198,8 @@ public class ReadOnlyMountIntegrationTest extends BaseIntegrationTest {
       mFileSystem.rename(srcUri, dstUri);
       Assert.fail("rename should not succeed under a readonly mount.");
     } catch (AccessControlException e) {
-      Assert.assertEquals(e.getMessage(),
-          ExceptionMessage.MOUNT_READONLY.getMessage(dstUri, MOUNT_PATH));
+      Assert.assertThat(e.getMessage(),
+          containsString(ExceptionMessage.MOUNT_READONLY.getMessage(dstUri, MOUNT_PATH)));
     }
 
     dstUri = new AlluxioURI(SUB_FILE_PATH + "_renamed");
@@ -206,8 +207,8 @@ public class ReadOnlyMountIntegrationTest extends BaseIntegrationTest {
       mFileSystem.rename(srcUri, dstUri);
       Assert.fail("rename should not succeed under a readonly mount.");
     } catch (AccessControlException e) {
-      Assert.assertEquals(e.getMessage(),
-          ExceptionMessage.MOUNT_READONLY.getMessage(dstUri, MOUNT_PATH));
+      Assert.assertThat(e.getMessage(),
+          containsString(ExceptionMessage.MOUNT_READONLY.getMessage(dstUri, MOUNT_PATH)));
     }
   }
 
@@ -219,8 +220,8 @@ public class ReadOnlyMountIntegrationTest extends BaseIntegrationTest {
       mFileSystem.rename(srcUri, dstUri);
       Assert.fail("rename should not succeed under a readonly mount.");
     } catch (AccessControlException e) {
-      Assert.assertEquals(e.getMessage(),
-          ExceptionMessage.MOUNT_READONLY.getMessage(srcUri, MOUNT_PATH));
+      Assert.assertThat(e.getMessage(),
+          containsString(ExceptionMessage.MOUNT_READONLY.getMessage(srcUri, MOUNT_PATH)));
     }
 
     srcUri = new AlluxioURI(SUB_FILE_PATH);
@@ -228,8 +229,8 @@ public class ReadOnlyMountIntegrationTest extends BaseIntegrationTest {
       mFileSystem.rename(srcUri, dstUri);
       Assert.fail("rename should not succeed under a readonly mount.");
     } catch (AccessControlException e) {
-      Assert.assertEquals(e.getMessage(),
-          ExceptionMessage.MOUNT_READONLY.getMessage(srcUri, MOUNT_PATH));
+      Assert.assertThat(e.getMessage(),
+          containsString(ExceptionMessage.MOUNT_READONLY.getMessage(srcUri, MOUNT_PATH)));
     }
   }
 
@@ -241,48 +242,44 @@ public class ReadOnlyMountIntegrationTest extends BaseIntegrationTest {
       mFileSystem.rename(srcUri, dstUri);
       Assert.fail("renameDirectory should not succeed under a readonly mount.");
     } catch (AccessControlException e) {
-      Assert.assertEquals(e.getMessage(),
-          ExceptionMessage.MOUNT_READONLY.getMessage(srcUri, MOUNT_PATH));
+      Assert.assertThat(e.getMessage(),
+          containsString(ExceptionMessage.MOUNT_READONLY.getMessage(srcUri, MOUNT_PATH)));
     }
   }
 
   @Test
   public void loadMetadata() throws IOException, AlluxioException {
     AlluxioURI fileUri = new AlluxioURI(FILE_PATH);
-    // TODO(jiri) Re-enable this once we support the "check UFS" option for getStatus.
-//    try {
-//      mFileSystem.getStatus(fileUri);
-//      Assert.fail("File should not exist before loading metadata.");
-//    } catch (FileDoesNotExistException e) {
-//      Assert
-//        .assertEquals(e.getMessage(), ExceptionMessage.PATH_DOES_NOT_EXIST.getMessage(FILE_PATH));
-//    }
-    mFileSystem.loadMetadata(fileUri);
+    try {
+      mFileSystem.getStatus(fileUri, GetStatusPOptions.newBuilder()
+          .setLoadMetadataType(LoadMetadataPType.NEVER).build());
+      Assert.fail("File should not exist before loading metadata.");
+    } catch (FileDoesNotExistException e) {
+      Assert
+          .assertEquals(e.getMessage(), ExceptionMessage.PATH_DOES_NOT_EXIST.getMessage(FILE_PATH));
+    }
     Assert.assertNotNull(mFileSystem.getStatus(fileUri));
 
     fileUri = new AlluxioURI(SUB_FILE_PATH);
-    // TODO(jiri) Re-enable this once we support the "check UFS" option for getStatus.
-//    try {
-//      mFileSystem.getStatus(fileUri);
-//      Assert.fail("File should not exist before loading metadata.");
-//    } catch (FileDoesNotExistException e) {
-//      Assert.assertEquals(e.getMessage(),
-//          ExceptionMessage.PATH_DOES_NOT_EXIST.getMessage(SUB_FILE_PATH));
-//    }
-    mFileSystem.loadMetadata(fileUri, LoadMetadataOptions.defaults().setRecursive(true));
+    try {
+      mFileSystem.getStatus(fileUri, GetStatusPOptions.newBuilder()
+          .setLoadMetadataType(LoadMetadataPType.NEVER).build());
+      Assert.fail("File should not exist before loading metadata.");
+    } catch (FileDoesNotExistException e) {
+      Assert.assertEquals(e.getMessage(),
+          ExceptionMessage.PATH_DOES_NOT_EXIST.getMessage(SUB_FILE_PATH));
+    }
     Assert.assertNotNull(mFileSystem.getStatus(fileUri));
   }
 
   @Test
   public void openFile() throws IOException, AlluxioException {
     AlluxioURI fileUri = new AlluxioURI(FILE_PATH);
-    mFileSystem.loadMetadata(fileUri);
     FileInStream inStream = mFileSystem.openFile(fileUri);
     Assert.assertNotNull(inStream);
     inStream.close();
 
     fileUri = new AlluxioURI(SUB_FILE_PATH);
-    mFileSystem.loadMetadata(fileUri, LoadMetadataOptions.defaults().setRecursive(true));
     inStream = mFileSystem.openFile(fileUri);
     Assert.assertNotNull(inStream);
     inStream.close();

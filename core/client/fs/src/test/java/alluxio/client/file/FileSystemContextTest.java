@@ -11,20 +11,31 @@
 
 package alluxio.client.file;
 
-import alluxio.Configuration;
+import static org.junit.Assert.fail;
+
+import alluxio.ClientContext;
+import alluxio.ConfigurationTestUtils;
 import alluxio.Constants;
-import alluxio.PropertyKey;
+import alluxio.conf.InstancedConfiguration;
+import alluxio.conf.PropertyKey;
+import alluxio.resource.CloseableResource;
 
-import org.junit.Assert;
+import com.google.common.io.Closer;
+import org.junit.Before;
 import org.junit.Test;
-
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * Tests {@link FileSystemContext}.
  */
 public final class FileSystemContextTest {
+
+  private InstancedConfiguration mConf = ConfigurationTestUtils.defaults();
+
+  @Before
+  public void before() {
+    mConf = ConfigurationTestUtils.defaults();
+  }
+
   /**
    * This test ensures acquiring all the available FileSystem master clients blocks further
    * requests for clients. It also ensures clients are available for reuse after they are released
@@ -33,13 +44,15 @@ public final class FileSystemContextTest {
    */
   @Test(timeout = 10000)
   public void acquireAtMaxLimit() throws Exception {
-    final List<FileSystemMasterClient> clients = new ArrayList<>();
+    Closer closer = Closer.create();
 
     // Acquire all the clients
-    for (int i = 0; i < Configuration.getInt(PropertyKey.USER_FILE_MASTER_CLIENT_THREADS); i++) {
-      clients.add(FileSystemContext.get().acquireMasterClient());
+    FileSystemContext fsContext = FileSystemContext.create(
+        ClientContext.create(mConf));
+    for (int i = 0; i < mConf.getInt(PropertyKey.USER_FILE_MASTER_CLIENT_THREADS); i++) {
+      closer.register(fsContext.acquireMasterClientResource());
     }
-    Thread acquireThread = new Thread(new AcquireClient());
+    Thread acquireThread = new Thread(new AcquireClient(fsContext));
     acquireThread.start();
 
     // Wait for the spawned thread to complete. If it is able to acquire a master client before
@@ -48,13 +61,11 @@ public final class FileSystemContextTest {
     long start = System.currentTimeMillis();
     acquireThread.join(timeoutMs);
     if (System.currentTimeMillis() - start < timeoutMs) {
-      Assert.fail("Acquired a master client when the client pool was full.");
+      fail("Acquired a master client when the client pool was full.");
     }
 
     // Release all the clients
-    for (FileSystemMasterClient client : clients) {
-      FileSystemContext.get().releaseMasterClient(client);
-    }
+    closer.close();
 
     // Wait for the spawned thread to complete. If it is unable to acquire a master client before
     // the defined timeout, fail.
@@ -62,15 +73,22 @@ public final class FileSystemContextTest {
     start = System.currentTimeMillis();
     acquireThread.join(timeoutMs);
     if (System.currentTimeMillis() - start >= timeoutMs) {
-      Assert.fail("Failed to acquire a master client within " + timeoutMs + "ms. Deadlock?");
+      fail("Failed to acquire a master client within " + timeoutMs + "ms. Deadlock?");
     }
   }
 
   class AcquireClient implements Runnable {
+
+    private final FileSystemContext mFsCtx;
+
+    public AcquireClient(FileSystemContext fsContext) {
+      mFsCtx = fsContext;
+    }
+
     @Override
     public void run() {
-      FileSystemMasterClient client = FileSystemContext.get().acquireMasterClient();
-      FileSystemContext.get().releaseMasterClient(client);
+      CloseableResource<FileSystemMasterClient> client = mFsCtx.acquireMasterClientResource();
+      client.close();
     }
   }
 }

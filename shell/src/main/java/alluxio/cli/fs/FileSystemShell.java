@@ -11,21 +11,22 @@
 
 package alluxio.cli.fs;
 
-import alluxio.Configuration;
-import alluxio.Constants;
-import alluxio.PropertyKey;
+import alluxio.client.file.FileSystemContext;
+import alluxio.conf.InstancedConfiguration;
+import alluxio.conf.PropertyKey;
 import alluxio.cli.AbstractShell;
 import alluxio.cli.Command;
-import alluxio.client.file.FileSystem;
 import alluxio.conf.Source;
 import alluxio.util.ConfigurationUtils;
 
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Map;
+import java.util.Set;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
@@ -37,8 +38,12 @@ public final class FileSystemShell extends AbstractShell {
   private static final Logger LOG = LoggerFactory.getLogger(FileSystemShell.class);
 
   private static final Map<String, String[]> CMD_ALIAS = ImmutableMap.<String, String[]>builder()
-      .put("lsr", new String[] {"ls", "-R"})
-      .put("rmr", new String[] {"rm", "-R"})
+      .put("umount", new String[]{"unmount"})
+      .build();
+
+   // In order for a warning to be displayed for an unstable alias, it must also exist within the
+   // CMD_ALIAS map.
+  private static final Set<String> UNSTABLE_ALIAS = ImmutableSet.<String>builder()
       .build();
 
   /**
@@ -48,20 +53,16 @@ public final class FileSystemShell extends AbstractShell {
    */
   public static void main(String[] argv) throws IOException {
     int ret;
-
-    if (!ConfigurationUtils.masterHostConfigured()) {
-      System.out.println(String.format(
-          "Cannot run alluxio shell; master hostname is not "
-              + "configured. Please modify %s to either set %s or configure zookeeper with "
-              + "%s=true and %s=[comma-separated zookeeper master addresses]",
-          Constants.SITE_PROPERTIES, PropertyKey.MASTER_HOSTNAME.toString(),
-          PropertyKey.ZOOKEEPER_ENABLED.toString(), PropertyKey.ZOOKEEPER_ADDRESS.toString()));
+    InstancedConfiguration conf = new InstancedConfiguration(ConfigurationUtils.defaults());
+    if (!ConfigurationUtils.masterHostConfigured(conf)
+        && argv.length > 0 && !argv[0].equals("help")) {
+      System.out.println(ConfigurationUtils.getMasterHostNotConfiguredMessage("Alluxio fs shell"));
       System.exit(1);
     }
 
     // Reduce the RPC retry max duration to fall earlier for CLIs
-    Configuration.set(PropertyKey.USER_RPC_RETRY_MAX_DURATION, "5s", Source.DEFAULT);
-    try (FileSystemShell shell = new FileSystemShell()) {
+    conf.set(PropertyKey.USER_RPC_RETRY_MAX_DURATION, "5s", Source.DEFAULT);
+    try (FileSystemShell shell = new FileSystemShell(conf)) {
       ret = shell.run(argv);
     }
     System.exit(ret);
@@ -69,9 +70,11 @@ public final class FileSystemShell extends AbstractShell {
 
   /**
    * Creates a new instance of {@link FileSystemShell}.
+   *
+   * @param alluxioConf Alluxio configuration
    */
-  public FileSystemShell() {
-    super(CMD_ALIAS);
+  public FileSystemShell(InstancedConfiguration alluxioConf) {
+    super(CMD_ALIAS, UNSTABLE_ALIAS, alluxioConf);
   }
 
   @Override
@@ -81,6 +84,6 @@ public final class FileSystemShell extends AbstractShell {
 
   @Override
   protected Map<String, Command> loadCommands() {
-    return FileSystemShellUtils.loadCommands(FileSystem.Factory.get());
+    return FileSystemShellUtils.loadCommands(FileSystemContext.create(mConfiguration));
   }
 }

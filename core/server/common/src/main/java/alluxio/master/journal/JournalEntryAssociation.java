@@ -26,6 +26,8 @@ public final class JournalEntryAssociation {
   public static String getMasterForEntry(JournalEntry entry) {
     if (entry.hasAddMountPoint()
         || entry.hasAsyncPersistRequest()
+        || entry.hasAddSyncPoint()
+        || entry.hasActiveSyncTxId()
         || entry.hasCompleteFile()
         || entry.hasDeleteFile()
         || entry.hasDeleteMountPoint()
@@ -33,12 +35,16 @@ public final class JournalEntryAssociation {
         || entry.hasInodeDirectoryIdGenerator()
         || entry.hasInodeFile()
         || entry.hasInodeLastModificationTime()
+        || entry.hasNewBlock()
         || entry.hasPersistDirectory()
+        || entry.hasRemoveSyncPoint()
         || entry.hasRename()
-        || entry.hasReinitializeFile()
         || entry.hasSetAcl()
         || entry.hasSetAttribute()
-        || entry.hasUpdateUfsMode()) {
+        || entry.hasUpdateUfsMode()
+        || entry.hasUpdateInode()
+        || entry.hasUpdateInodeDirectory()
+        || entry.hasUpdateInodeFile()) {
       return Constants.FILE_SYSTEM_MASTER_NAME;
     }
     if (entry.hasBlockContainerIdGenerator()
@@ -46,18 +52,9 @@ public final class JournalEntryAssociation {
         || entry.hasBlockInfo()) {
       return Constants.BLOCK_MASTER_NAME;
     }
-    if (entry.hasCompletePartition()
-        || entry.hasCompleteStore()
-        || entry.hasCreateStore()
-        || entry.hasDeleteStore()
-        || entry.hasRenameStore()
-        || entry.hasMergeStore()) {
-      return Constants.KEY_VALUE_MASTER_NAME;
-    }
-    if (entry.hasDeleteLineage()
-        || entry.hasLineageIdGenerator()
-        || entry.hasLineage()) {
-      return Constants.LINEAGE_MASTER_NAME;
+    if (entry.hasPathProperties()
+        || entry.hasRemovePathProperties()) {
+      return Constants.META_MASTER_NAME;
     }
     throw new IllegalStateException("Unrecognized journal entry: " + entry);
   }

@@ -11,9 +11,9 @@
 
 package alluxio.mesos;
 
-import alluxio.Configuration;
+import alluxio.conf.ServerConfiguration;
 import alluxio.Constants;
-import alluxio.PropertyKey;
+import alluxio.conf.PropertyKey;
 import alluxio.conf.Source.Type;
 import alluxio.util.FormatUtils;
 import alluxio.util.io.PathUtils;
@@ -35,7 +35,10 @@ import java.util.Set;
 
 /**
  * Class for responding to Mesos offers to launch Alluxio on Mesos.
+ *
+ * @deprecated since version 2.0
  */
+@Deprecated
 public class AlluxioScheduler implements Scheduler {
   private static final Logger LOG = LoggerFactory.getLogger(AlluxioScheduler.class);
 
@@ -108,13 +111,13 @@ public class AlluxioScheduler implements Scheduler {
 
   @Override
   public void resourceOffers(SchedulerDriver driver, List<Protos.Offer> offers) {
-    long masterCpu = Configuration.getInt(PropertyKey.INTEGRATION_MASTER_RESOURCE_CPU);
+    long masterCpu = ServerConfiguration.getInt(PropertyKey.INTEGRATION_MASTER_RESOURCE_CPU);
     long masterMem =
-        Configuration.getBytes(PropertyKey.INTEGRATION_MASTER_RESOURCE_MEM) / Constants.MB;
-    long workerCpu = Configuration.getInt(PropertyKey.INTEGRATION_WORKER_RESOURCE_CPU);
+        ServerConfiguration.getBytes(PropertyKey.INTEGRATION_MASTER_RESOURCE_MEM) / Constants.MB;
+    long workerCpu = ServerConfiguration.getInt(PropertyKey.INTEGRATION_WORKER_RESOURCE_CPU);
     long workerOverheadMem =
-        Configuration.getBytes(PropertyKey.INTEGRATION_WORKER_RESOURCE_MEM) / Constants.MB;
-    long ramdiskMem = Configuration.getBytes(PropertyKey.WORKER_MEMORY_SIZE) / Constants.MB;
+        ServerConfiguration.getBytes(PropertyKey.INTEGRATION_WORKER_RESOURCE_MEM) / Constants.MB;
+    long ramdiskMem = ServerConfiguration.getBytes(PropertyKey.WORKER_MEMORY_SIZE) / Constants.MB;
 
     LOG.info("Master launched {}, master count {}, "
         + "requested master cpu {} mem {} MB and required master hostname {}",
@@ -143,7 +146,7 @@ public class AlluxioScheduler implements Scheduler {
       if (!mMasterLaunched
           && offerCpu >= masterCpu
           && offerMem >= masterMem
-          && mMasterCount < Configuration
+          && mMasterCount < ServerConfiguration
               .getInt(PropertyKey.INTEGRATION_MESOS_ALLUXIO_MASTER_NODE_COUNT)
           && OfferUtils.hasAvailableMasterPorts(offer)
           && (mRequiredMasterHostname == null
@@ -164,8 +167,9 @@ public class AlluxioScheduler implements Scheduler {
                             .newBuilder()
                             .addVariables(
                                 Protos.Environment.Variable.newBuilder()
-                                    .setName("ALLUXIO_UNDERFS_ADDRESS")
-                                    .setValue(Configuration.get(PropertyKey.UNDERFS_ADDRESS))
+                                    .setName("ALLUXIO_MASTER_MOUNT_TABLE_ROOT_UFS")
+                                    .setValue(ServerConfiguration
+                                        .get(PropertyKey.MASTER_MOUNT_TABLE_ROOT_UFS))
                                     .build())
                             .addVariables(
                                 Protos.Environment.Variable.newBuilder()
@@ -176,7 +180,7 @@ public class AlluxioScheduler implements Scheduler {
         // pre-build resource list here, then use it to build Protos.Task later.
         resources = getMasterRequiredResources(masterCpu, masterMem);
         mMasterHostname = offer.getHostname();
-        mTaskName = Configuration.get(PropertyKey.INTEGRATION_MESOS_ALLUXIO_MASTER_NAME);
+        mTaskName = ServerConfiguration.get(PropertyKey.INTEGRATION_MESOS_ALLUXIO_MASTER_NAME);
         mMasterCount++;
         mMasterTaskId = mLaunchedTasks;
       } else if (mMasterLaunched
@@ -209,8 +213,9 @@ public class AlluxioScheduler implements Scheduler {
                                     .build())
                             .addVariables(
                                 Protos.Environment.Variable.newBuilder()
-                                    .setName("ALLUXIO_UNDERFS_ADDRESS")
-                                    .setValue(Configuration.get(PropertyKey.UNDERFS_ADDRESS))
+                                    .setName("ALLUXIO_MASTER_MOUNT_TABLE_ROOT_UFS")
+                                    .setValue(ServerConfiguration
+                                        .get(PropertyKey.MASTER_MOUNT_TABLE_ROOT_UFS))
                                     .build())
                             .addVariables(
                                 Protos.Environment.Variable.newBuilder()
@@ -221,7 +226,7 @@ public class AlluxioScheduler implements Scheduler {
         // pre-build resource list here, then use it to build Protos.Task later.
         resources = getWorkerRequiredResources(workerCpu, ramdiskMem + workerOverheadMem);
         mWorkers.add(offer.getHostname());
-        mTaskName = Configuration.get(PropertyKey.INTEGRATION_MESOS_ALLUXIO_WORKER_NAME);
+        mTaskName = ServerConfiguration.get(PropertyKey.INTEGRATION_MESOS_ALLUXIO_WORKER_NAME);
       } else {
         // The resource offer cannot be used to start either master or a worker.
         LOG.info("Declining offer {}", offer.getId().getValue());
@@ -262,10 +267,11 @@ public class AlluxioScheduler implements Scheduler {
 
   private String createAlluxioSiteProperties() {
     StringBuilder siteProperties = new StringBuilder();
-    for (PropertyKey key : Configuration.keySet()) {
-      if (Configuration.isSet(key)
-          && Configuration.getSource(key).getType() != Type.DEFAULT) {
-        siteProperties.append(String.format("%s=%s%n", key.getName(), Configuration.get(key)));
+    for (PropertyKey key : ServerConfiguration.keySet()) {
+      if (ServerConfiguration.isSet(key)
+          && ServerConfiguration.getSource(key).getType() != Type.DEFAULT) {
+        siteProperties.append(String.format("%s=%s%n", key.getName(),
+            ServerConfiguration.get(key)));
       }
     }
     return siteProperties.toString();
@@ -276,7 +282,8 @@ public class AlluxioScheduler implements Scheduler {
     commands.add(String.format("echo 'Starting Alluxio with %s'", command));
     if (installJavaFromUrl()) {
       commands
-          .add("export JAVA_HOME=" + Configuration.get(PropertyKey.INTEGRATION_MESOS_JDK_PATH));
+          .add("export JAVA_HOME="
+              + ServerConfiguration.get(PropertyKey.INTEGRATION_MESOS_JDK_PATH));
       commands.add("export PATH=$PATH:$JAVA_HOME/bin");
     }
 
@@ -292,7 +299,7 @@ public class AlluxioScheduler implements Scheduler {
       commands.add("mv alluxio* alluxio_tmp");
       commands.add("mv alluxio_tmp alluxio");
     }
-    String home = installAlluxioFromUrl() ? "alluxio" : Configuration.get(PropertyKey.HOME);
+    String home = installAlluxioFromUrl() ? "alluxio" : ServerConfiguration.get(PropertyKey.HOME);
     commands
         .add(String.format("cp %s conf", PathUtils.concatPath(home, "conf", "log4j.properties")));
     commands.add(PathUtils.concatPath(home, "integration", "mesos", "bin", command));
@@ -342,11 +349,11 @@ public class AlluxioScheduler implements Scheduler {
         .setType(Protos.Value.Type.RANGES)
         .setRanges(Protos.Value.Ranges.newBuilder()
             .addRange(Protos.Value.Range.newBuilder()
-                .setBegin(Configuration.getLong(PropertyKey.MASTER_WEB_PORT))
-                .setEnd(Configuration.getLong(PropertyKey.MASTER_WEB_PORT)))
+                .setBegin(ServerConfiguration.getLong(PropertyKey.MASTER_WEB_PORT))
+                .setEnd(ServerConfiguration.getLong(PropertyKey.MASTER_WEB_PORT)))
             .addRange((Protos.Value.Range.newBuilder()
-                .setBegin(Configuration.getLong(PropertyKey.MASTER_RPC_PORT))
-                .setEnd(Configuration.getLong(PropertyKey.MASTER_RPC_PORT))))).build());
+                .setBegin(ServerConfiguration.getLong(PropertyKey.MASTER_RPC_PORT))
+                .setEnd(ServerConfiguration.getLong(PropertyKey.MASTER_RPC_PORT))))).build());
     return resources;
   }
 
@@ -359,14 +366,11 @@ public class AlluxioScheduler implements Scheduler {
         .setType(Protos.Value.Type.RANGES)
         .setRanges(Protos.Value.Ranges.newBuilder()
             .addRange(Protos.Value.Range.newBuilder()
-                .setBegin(Configuration.getLong(PropertyKey.WORKER_RPC_PORT))
-                .setEnd(Configuration.getLong(PropertyKey.WORKER_RPC_PORT)))
-            .addRange(Protos.Value.Range.newBuilder()
-                .setBegin(Configuration.getLong(PropertyKey.WORKER_DATA_PORT))
-                .setEnd(Configuration.getLong(PropertyKey.WORKER_DATA_PORT)))
+                .setBegin(ServerConfiguration.getLong(PropertyKey.WORKER_RPC_PORT))
+                .setEnd(ServerConfiguration.getLong(PropertyKey.WORKER_RPC_PORT)))
             .addRange((Protos.Value.Range.newBuilder()
-                .setBegin(Configuration.getLong(PropertyKey.WORKER_WEB_PORT))
-                .setEnd(Configuration.getLong(PropertyKey.WORKER_WEB_PORT))))).build());
+                .setBegin(ServerConfiguration.getLong(PropertyKey.WORKER_WEB_PORT))
+                .setEnd(ServerConfiguration.getLong(PropertyKey.WORKER_WEB_PORT))))).build());
     return resources;
   }
 
@@ -407,25 +411,25 @@ public class AlluxioScheduler implements Scheduler {
     List<URI> dependencies = new ArrayList<>();
     if (installJavaFromUrl()) {
       dependencies.add(CommandInfo.URI.newBuilder()
-          .setValue(Configuration.get(PropertyKey.INTEGRATION_MESOS_JDK_URL)).setExtract(true)
+          .setValue(ServerConfiguration.get(PropertyKey.INTEGRATION_MESOS_JDK_URL)).setExtract(true)
           .build());
     }
     if (installAlluxioFromUrl()) {
       dependencies.add(CommandInfo.URI.newBuilder()
-          .setValue(Configuration.get(PropertyKey.INTEGRATION_MESOS_ALLUXIO_JAR_URL))
+          .setValue(ServerConfiguration.get(PropertyKey.INTEGRATION_MESOS_ALLUXIO_JAR_URL))
           .setExtract(true).build());
     }
     return dependencies;
   }
 
   private static boolean installJavaFromUrl() {
-    return Configuration.isSet(PropertyKey.INTEGRATION_MESOS_JDK_URL) && !Configuration
+    return ServerConfiguration.isSet(PropertyKey.INTEGRATION_MESOS_JDK_URL) && !ServerConfiguration
         .get(PropertyKey.INTEGRATION_MESOS_JDK_URL).equalsIgnoreCase(Constants.MESOS_LOCAL_INSTALL);
   }
 
   private static boolean installAlluxioFromUrl() {
-    return Configuration.isSet(PropertyKey.INTEGRATION_MESOS_ALLUXIO_JAR_URL)
-        && !Configuration.get(PropertyKey.INTEGRATION_MESOS_ALLUXIO_JAR_URL)
+    return ServerConfiguration.isSet(PropertyKey.INTEGRATION_MESOS_ALLUXIO_JAR_URL)
+        && !ServerConfiguration.get(PropertyKey.INTEGRATION_MESOS_ALLUXIO_JAR_URL)
             .equalsIgnoreCase(Constants.MESOS_LOCAL_INSTALL);
   }
 }

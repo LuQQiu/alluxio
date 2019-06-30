@@ -12,12 +12,12 @@
 package alluxio.client.fs;
 
 import alluxio.AlluxioURI;
-import alluxio.Configuration;
-import alluxio.PropertyKey;
-import alluxio.client.WriteType;
+import alluxio.conf.ServerConfiguration;
+import alluxio.conf.PropertyKey;
 import alluxio.client.file.FileOutStream;
 import alluxio.client.file.URIStatus;
-import alluxio.client.file.options.CreateFileOptions;
+import alluxio.grpc.CreateFilePOptions;
+import alluxio.grpc.WritePType;
 import alluxio.master.file.meta.PersistenceState;
 import alluxio.underfs.UnderFileSystem;
 import alluxio.util.UnderFileSystemUtils;
@@ -50,12 +50,13 @@ public final class PersistMultipleMountsIntegrationTest
   public void before() throws Exception {
     super.before();
 
-    mUfsRoot = PathUtils.concatPath(Configuration.get(PropertyKey.MASTER_MOUNT_TABLE_ROOT_UFS));
-    mUfs = UnderFileSystem.Factory.create(mUfsRoot);
+    mUfsRoot = PathUtils.concatPath(ServerConfiguration
+        .get(PropertyKey.MASTER_MOUNT_TABLE_ROOT_UFS));
+    mUfs = UnderFileSystem.Factory.create(mUfsRoot, ServerConfiguration.global());
 
     mMountedUfsRoot = mTempFolder.getRoot().getAbsolutePath();
     mFileSystem.mount(new AlluxioURI(MOUNT_PATH), new AlluxioURI(mMountedUfsRoot));
-    mMountedUfs = UnderFileSystem.Factory.create(mMountedUfsRoot);
+    mMountedUfs = UnderFileSystem.Factory.create(mMountedUfsRoot, ServerConfiguration.global());
   }
 
   @Test
@@ -65,8 +66,8 @@ public final class PersistMultipleMountsIntegrationTest
 
     String path = PathUtils.uniqPath();
     AlluxioURI filePath = new AlluxioURI(path);
-    FileOutStream os = mFileSystem.createFile(filePath,
-        CreateFileOptions.defaults().setWriteType(WriteType.CACHE_THROUGH));
+    FileOutStream os = mFileSystem.createFile(filePath, CreateFilePOptions.newBuilder()
+        .setWriteType(WritePType.CACHE_THROUGH).setRecursive(true).build());
     os.write((byte) 0);
     os.write((byte) 1);
     os.close();
@@ -86,8 +87,8 @@ public final class PersistMultipleMountsIntegrationTest
 
     String path = PathUtils.uniqPath();
     AlluxioURI filePath = new AlluxioURI(MOUNT_PATH + path);
-    FileOutStream os = mFileSystem.createFile(filePath,
-        CreateFileOptions.defaults().setWriteType(WriteType.CACHE_THROUGH));
+    FileOutStream os = mFileSystem.createFile(filePath, CreateFilePOptions.newBuilder()
+        .setWriteType(WritePType.CACHE_THROUGH).setRecursive(true).build());
     os.write((byte) 0);
     os.write((byte) 1);
     os.close();

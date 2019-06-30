@@ -11,8 +11,9 @@
 
 package alluxio.cli;
 
-import alluxio.Configuration;
-import alluxio.PropertyKey;
+import alluxio.conf.InstancedConfiguration;
+import alluxio.conf.PropertyKey;
+import alluxio.util.ConfigurationUtils;
 import alluxio.util.io.PathUtils;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -60,8 +61,7 @@ public final class ConfigurationDocGenerator {
     Closer closer = Closer.create();
     String[] fileNames = {"user-configuration.csv", "master-configuration.csv",
         "worker-configuration.csv", "security-configuration.csv",
-        "key-value-configuration.csv", "common-configuration.csv",
-        "cluster-management-configuration.csv"};
+        "common-configuration.csv", "cluster-management-configuration.csv"};
 
     try {
       // HashMap for FileWriter per each category
@@ -141,8 +141,7 @@ public final class ConfigurationDocGenerator {
     Closer closer = Closer.create();
     String[] fileNames = {"user-configuration.yml", "master-configuration.yml",
         "worker-configuration.yml", "security-configuration.yml",
-        "key-value-configuration.yml", "common-configuration.yml",
-        "cluster-management-configuration.yml"
+        "common-configuration.yml", "cluster-management-configuration.yml"
     };
 
     try {
@@ -170,8 +169,9 @@ public final class ConfigurationDocGenerator {
 
         // Write property key and default value to yml files
         if (iteratorPK.isIgnoredSiteProperty()) {
-          description += " Note: This property must be specified as a JVM property; "
-              + "it is not accepted in alluxio-site.properties.";
+          description += " Note: overwriting this property will only work when it is passed as a "
+              + "JVM system property (e.g., appending \"-D" + iteratorPK + "\"=<NEW_VALUE>\" to "
+              + "$ALLUXIO_JAVA_OPTS). Setting it in alluxio-site.properties will not work.";
         }
         String keyValueStr = pKey + ":\n  '" + description + "'\n";
         if (pKey.startsWith("alluxio.user.")) {
@@ -182,8 +182,6 @@ public final class ConfigurationDocGenerator {
           fileWriter = fileWriterMap.get("worker");
         } else if (pKey.startsWith("alluxio.security.")) {
           fileWriter = fileWriterMap.get("security");
-        } else if (pKey.startsWith("alluxio.keyvalue.")) {
-          fileWriter = fileWriterMap.get("key-value");
         } else if (pKey.startsWith("alluxio.integration.")) {
           fileWriter = fileWriterMap.get("cluster-management");
         } else {
@@ -213,7 +211,8 @@ public final class ConfigurationDocGenerator {
   public static void main(String[] args) throws IOException {
     Collection<? extends PropertyKey> defaultKeys = PropertyKey.defaultKeys();
     defaultKeys.removeIf(key -> key.isHidden());
-    String homeDir = Configuration.get(PropertyKey.HOME);
+    String homeDir = new InstancedConfiguration(ConfigurationUtils.defaults())
+        .get(PropertyKey.HOME);
     // generate CSV files
     String filePath = PathUtils.concatPath(homeDir, CSV_FILE_DIR);
     writeCSVFile(defaultKeys, filePath);

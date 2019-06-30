@@ -11,9 +11,8 @@
 
 package alluxio.master.journal.ufs;
 
-import alluxio.Configuration;
-import alluxio.ConfigurationTestUtils;
-import alluxio.PropertyKey;
+import alluxio.conf.ServerConfiguration;
+import alluxio.conf.PropertyKey;
 import alluxio.underfs.UnderFileSystemConfiguration;
 
 import org.junit.After;
@@ -26,13 +25,13 @@ import org.junit.Test;
 public class UfsJournalConfTest {
   @After
   public void after() {
-    ConfigurationTestUtils.resetConfiguration();
+    ServerConfiguration.reset();
   }
 
   @Test
   public void emptyConfiguration() throws Exception {
     UnderFileSystemConfiguration conf = UfsJournal.getJournalUfsConf();
-    Assert.assertTrue(conf.getUserSpecifiedConf().isEmpty());
+    Assert.assertTrue(conf.getMountSpecificConf().isEmpty());
   }
 
   @Test
@@ -41,9 +40,9 @@ public class UfsJournalConfTest {
         PropertyKey.Template.MASTER_JOURNAL_UFS_OPTION_PROPERTY
             .format(PropertyKey.UNDERFS_LISTING_LENGTH.toString());
     String value = "10000";
-    Configuration.set(key, value);
+    ServerConfiguration.set(key, value);
     UnderFileSystemConfiguration conf = UfsJournal.getJournalUfsConf();
-    Assert.assertEquals(value, conf.getValue(PropertyKey.UNDERFS_LISTING_LENGTH));
-    Assert.assertEquals(1, conf.getUserSpecifiedConf().size());
+    Assert.assertEquals(value, conf.get(PropertyKey.UNDERFS_LISTING_LENGTH));
+    Assert.assertEquals(1, conf.getMountSpecificConf().size());
   }
 }

@@ -18,9 +18,9 @@ import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-import alluxio.Configuration;
+import alluxio.ConfigurationTestUtils;
 import alluxio.Constants;
-import alluxio.PropertyKey;
+import alluxio.conf.InstancedConfiguration;
 import alluxio.security.group.CachedGroupMapping;
 import alluxio.security.group.GroupMappingService;
 
@@ -32,7 +32,6 @@ import org.mockito.Mockito;
 import org.powermock.api.mockito.PowerMockito;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
-import org.powermock.reflect.Whitebox;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -43,6 +42,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -95,20 +95,18 @@ public class CommonUtilsTest {
 
   @Test
   public void getTmpDir() {
+
     // Test single tmp dir
     String singleDir = "/tmp";
-    Whitebox.setInternalState(CommonUtils.class, "TMP_DIRS", Collections.singletonList(singleDir));
-    assertEquals(singleDir, CommonUtils.getTmpDir());
+    List<String> singleDirList = Arrays.asList("/tmp");
+    assertEquals(singleDir, CommonUtils.getTmpDir(singleDirList));
     // Test multiple tmp dir
     List<String> multiDirs = Arrays.asList("/tmp1", "/tmp2", "/tmp3");
-    Whitebox.setInternalState(CommonUtils.class, "TMP_DIRS", multiDirs);
     Set<String> results = new HashSet<>();
     for (int i = 0; i < 100 || results.size() != multiDirs.size(); i++) {
-      results.add(CommonUtils.getTmpDir());
+      results.add(CommonUtils.getTmpDir(multiDirs));
     }
     assertEquals(new HashSet<>(multiDirs), results);
-    Whitebox.setInternalState(CommonUtils.class, "TMP_DIRS",
-        Configuration.getList(PropertyKey.TMP_DIRS, ","));
   }
 
   /**
@@ -269,6 +267,8 @@ public class CommonUtilsTest {
    */
   @Test
   public void getGroups() throws Throwable {
+    InstancedConfiguration conf = ConfigurationTestUtils.defaults();
+
     String userName = "alluxio-user1";
     String userGroup1 = "alluxio-user1-group1";
     String userGroup2 = "alluxio-user1-group2";
@@ -279,12 +279,12 @@ public class CommonUtilsTest {
     PowerMockito.when(cachedGroupService.getGroups(Mockito.anyString())).thenReturn(
         Lists.newArrayList(userGroup1, userGroup2));
     PowerMockito.mockStatic(GroupMappingService.Factory.class);
-    Mockito.when(GroupMappingService.Factory.get()).thenReturn(cachedGroupService);
+    Mockito.when(GroupMappingService.Factory.get(conf)).thenReturn(cachedGroupService);
 
-    List<String> groups = CommonUtils.getGroups(userName);
+    List<String> groups = CommonUtils.getGroups(userName, conf);
     assertEquals(Arrays.asList(userGroup1, userGroup2), groups);
 
-    String primaryGroup = CommonUtils.getPrimaryGroupName(userName);
+    String primaryGroup = CommonUtils.getPrimaryGroupName(userName, conf);
     assertNotNull(primaryGroup);
     assertEquals(userGroup1, primaryGroup);
   }
@@ -411,7 +411,7 @@ public class CommonUtilsTest {
         }
       });
     }
-    CommonUtils.invokeAll(tasks, 10, TimeUnit.SECONDS);
+    CommonUtils.invokeAll(tasks, 10 * Constants.SECOND_MS);
     assertEquals(numTasks, completed.get());
   }
 
@@ -429,11 +429,33 @@ public class CommonUtilsTest {
       });
     }
     try {
-      CommonUtils.invokeAll(tasks, 50, TimeUnit.MILLISECONDS);
+      CommonUtils.invokeAll(tasks, 50);
       fail("Expected a timeout exception");
     } catch (TimeoutException e) {
       // Expected
     }
+  }
+
+  @Test
+  public void invokeAllExceptionAndHang() throws Exception {
+    long start = System.currentTimeMillis();
+    RuntimeException testException = new RuntimeException("failed");
+    try {
+      CommonUtils.invokeAll(Arrays.asList(
+          () -> {
+            Thread.sleep(10 * Constants.SECOND_MS);
+            return null;
+          },
+          () -> {
+            throw testException;
+          }
+      ), 5 * Constants.SECOND_MS);
+      fail("Expected an exception to be thrown");
+    } catch (ExecutionException e) {
+      assertSame(testException, e.getCause());
+    }
+    assertThat("invokeAll should exit early if one of the tasks throws an exception",
+        System.currentTimeMillis() - start, Matchers.lessThan(2L * Constants.SECOND_MS));
   }
 
   @Test
@@ -456,10 +478,10 @@ public class CommonUtilsTest {
       });
     }
     try {
-      CommonUtils.invokeAll(tasks, 2, TimeUnit.SECONDS);
+      CommonUtils.invokeAll(tasks, 2 * Constants.SECOND_MS);
       fail("Expected an exception to be thrown");
-    } catch (Exception e) {
-      assertSame(testException, e);
+    } catch (ExecutionException e) {
+      assertSame(testException, e.getCause());
     }
   }
 
@@ -474,25 +496,22 @@ public class CommonUtilsTest {
     List<Callable<Void>> tasks = new ArrayList<>();
     final Exception testException = new Exception("test message");
     for (int i = 0; i < numTasks; i++) {
-      tasks.add(new Callable<Void>() {
-        @Override
-        public Void call() throws Exception {
-          int myId = id.incrementAndGet();
-          // The 3rd task throws an exception, other tasks sleep.
-          if (myId == 3) {
-            throw testException;
-          } else {
-            Thread.sleep(10 * Constants.SECOND_MS);
-          }
-          return null;
+      tasks.add(() -> {
+        int myId = id.incrementAndGet();
+        // The 3rd task throws an exception, other tasks sleep.
+        if (myId == 3) {
+          throw testException;
+        } else {
+          Thread.sleep(10 * Constants.SECOND_MS);
         }
+        return null;
       });
     }
     try {
-      CommonUtils.invokeAll(tasks, 50, TimeUnit.MILLISECONDS);
+      CommonUtils.invokeAll(tasks, 500);
       fail("Expected an exception to be thrown");
-    } catch (Exception e) {
-      assertSame(testException, e);
+    } catch (ExecutionException e) {
+      assertSame(testException, e.getCause());
     }
   }
 

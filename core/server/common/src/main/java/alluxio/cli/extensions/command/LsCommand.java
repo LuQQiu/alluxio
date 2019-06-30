@@ -13,6 +13,8 @@ package alluxio.cli.extensions.command;
 
 import alluxio.cli.Command;
 import alluxio.cli.CommandUtils;
+import alluxio.conf.PropertyKey;
+import alluxio.conf.ServerConfiguration;
 import alluxio.exception.status.InvalidArgumentException;
 import alluxio.util.ExtensionUtils;
 
@@ -34,7 +36,8 @@ public final class LsCommand implements Command {
   /**
    * Constructs a new instance of {@link LsCommand}.
    */
-  public LsCommand() {}
+  public LsCommand() {
+  }
 
   @Override
   public String getCommandName() {
@@ -58,7 +61,8 @@ public final class LsCommand implements Command {
 
   @Override
   public int run(CommandLine cl) {
-    for (File extension : ExtensionUtils.listExtensions()) {
+    for (File extension : ExtensionUtils
+        .listExtensions(ServerConfiguration.get(PropertyKey.EXTENSIONS_DIR))) {
       System.out.println(extension.getName());
     }
     return 0;

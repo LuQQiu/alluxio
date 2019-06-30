@@ -11,22 +11,31 @@
 
 package alluxio.master.journal;
 
-import alluxio.Configuration;
-import alluxio.PropertyKey;
+import alluxio.conf.PropertyKey;
+import alluxio.conf.ServerConfiguration;
+import alluxio.master.Master;
 import alluxio.master.journal.noop.NoopJournalSystem;
+import alluxio.master.journal.raft.RaftJournalConfiguration;
+import alluxio.master.journal.raft.RaftJournalSystem;
+import alluxio.master.journal.sink.JournalSink;
 import alluxio.master.journal.ufs.UfsJournalSystem;
 import alluxio.proto.journal.Journal.JournalEntry;
+import alluxio.util.CommonUtils;
+import alluxio.util.network.NetworkAddressUtils.ServiceType;
 
+import java.io.File;
 import java.io.IOException;
 import java.net.URI;
+import java.util.Set;
 
+import javax.annotation.Nullable;
 import javax.annotation.concurrent.ThreadSafe;
 
 /**
  * A journal system for storing and applying journal entries.
  *
  * To use the journal system, first create per-state-machine journals with the
- * {@link #createJournal(JournalEntryStateMachine)} method. Once all state machines are added,
+ * {@link #createJournal(Master)} method. Once all state machines are added,
  * {@link #start()} the journal system. The journal system starts in secondary mode, meaning it will
  * not accept writes, but will apply journal entries to keep state machine states up to date with
  * previously written journal entries.
@@ -97,14 +106,14 @@ public interface JournalSystem {
    * written when the journal system is in PRIMARY mode.
    *
    * When the journal is started in secondary mode, it will call
-   * {@link JournalEntryStateMachine#processJournalEntry(JournalEntry)} and
-   * {@link JournalEntryStateMachine#resetState()} to keep the state machine's state in sync with
+   * {@link Journaled#processJournalEntry(JournalEntry)} and
+   * {@link Journaled#resetState()} to keep the state machine's state in sync with
    * the entries written to the journal.
    *
-   * @param stateMachine the state machine to create the journal for
+   * @param master the master to create the journal for
    * @return a new instance of {@link Journal}
    */
-  Journal createJournal(JournalEntryStateMachine stateMachine);
+  Journal createJournal(Master master);
 
   /**
    * Starts the journal system.
@@ -140,6 +149,24 @@ public interface JournalSystem {
   boolean isFormatted() throws IOException;
 
   /**
+   * @param master the master for which to add the journal sink
+   * @param journalSink the journal sink to add
+   */
+  void addJournalSink(Master master, JournalSink journalSink);
+
+  /**
+   * @param master the master from which to remove the journal sink
+   * @param journalSink the journal sink to remove
+   */
+  void removeJournalSink(Master master, JournalSink journalSink);
+
+  /**
+   * @param master the master to get the journal sinks for, or null to get all sinks
+   * @return a set of {@link JournalSink} for the given master, or all sinks if master is null
+   */
+  Set<JournalSink> getJournalSinks(@Nullable Master master);
+
+  /**
    * Returns whether the journal is formatted and has not had any entries written to it yet. This
    * can only be determined when the journal system is in primary mode because entries are written
    * to the primary first.
@@ -149,12 +176,17 @@ public interface JournalSystem {
   boolean isEmpty();
 
   /**
+   * Creates a checkpoint in the primary master journal system.
+   */
+  void checkpoint() throws IOException;
+
+  /**
    * Builder for constructing a journal system.
    */
   class Builder {
     private URI mLocation;
     private long mQuietTimeMs =
-        Configuration.getMs(PropertyKey.MASTER_JOURNAL_TAILER_SHUTDOWN_QUIET_WAIT_TIME_MS);
+        ServerConfiguration.getMs(PropertyKey.MASTER_JOURNAL_TAILER_SHUTDOWN_QUIET_WAIT_TIME_MS);
 
     /**
      * Creates a new journal system builder.
@@ -183,14 +215,25 @@ public interface JournalSystem {
     /**
      * @return a journal system
      */
-    public JournalSystem build() {
+    public JournalSystem build(CommonUtils.ProcessType processType) {
       JournalType journalType =
-          Configuration.getEnum(PropertyKey.MASTER_JOURNAL_TYPE, JournalType.class);
+          ServerConfiguration.getEnum(PropertyKey.MASTER_JOURNAL_TYPE, JournalType.class);
       switch (journalType) {
         case NOOP:
           return new NoopJournalSystem();
         case UFS:
           return new UfsJournalSystem(mLocation, mQuietTimeMs);
+        case EMBEDDED:
+          ServiceType serviceType;
+          if (processType.equals(CommonUtils.ProcessType.MASTER)) {
+            serviceType = ServiceType.MASTER_RAFT;
+          } else {
+            // We might reach here during journal formatting. In that case the journal system is
+            // never started, so any value of serviceType is fine.
+            serviceType = ServiceType.JOB_MASTER_RAFT;
+          }
+          return RaftJournalSystem.create(RaftJournalConfiguration.defaults(serviceType)
+                  .setPath(new File(mLocation.getPath())));
         default:
           throw new IllegalStateException("Unrecognized journal type: " + journalType);
       }

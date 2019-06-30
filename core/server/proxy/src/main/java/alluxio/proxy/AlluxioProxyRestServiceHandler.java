@@ -11,14 +11,15 @@
 
 package alluxio.proxy;
 
-import alluxio.Configuration;
-import alluxio.ConfigurationValueOptions;
+import alluxio.conf.ServerConfiguration;
+import alluxio.conf.ConfigurationValueOptions;
 import alluxio.RestUtils;
 import alluxio.RuntimeConstants;
 import alluxio.web.ProxyWebServer;
 import alluxio.wire.AlluxioProxyInfo;
 
-import com.qmino.miredot.annotations.ReturnType;
+import io.swagger.annotations.Api;
+import io.swagger.annotations.ApiOperation;
 
 import java.util.Map;
 import java.util.TreeMap;
@@ -37,6 +38,7 @@ import javax.ws.rs.core.Response;
  * This class is a REST handler for requesting general proxy information.
  */
 @NotThreadSafe
+@Api(value = "/proxy", description = "Alluxio Proxy Rest Service")
 @Path(AlluxioProxyRestServiceHandler.SERVICE_PREFIX)
 @Produces(MediaType.APPLICATION_JSON)
 public final class AlluxioProxyRestServiceHandler {
@@ -70,29 +72,27 @@ public final class AlluxioProxyRestServiceHandler {
    */
   @GET
   @Path(GET_INFO)
-  @ReturnType("alluxio.wire.AlluxioProxyInfo")
+  @ApiOperation(value = "Get general Alluxio Proxy service information",
+      response = alluxio.wire.AlluxioProxyInfo.class)
   public Response getInfo(@QueryParam(QUERY_RAW_CONFIGURATION) final Boolean rawConfiguration) {
     // TODO(jiri): Add a mechanism for retrieving only a subset of the fields.
-    return RestUtils.call(new RestUtils.RestCallable<AlluxioProxyInfo>() {
-      @Override
-      public AlluxioProxyInfo call() throws Exception {
-        boolean rawConfig = false;
-        if (rawConfiguration != null) {
-          rawConfig = rawConfiguration;
-        }
-        AlluxioProxyInfo result =
-            new AlluxioProxyInfo()
-                .setConfiguration(getConfigurationInternal(rawConfig))
-                .setStartTimeMs(mProxyProcess.getStartTimeMs())
-                .setUptimeMs(mProxyProcess.getUptimeMs())
-                .setVersion(RuntimeConstants.VERSION);
-        return result;
+    return RestUtils.call(() -> {
+      boolean rawConfig = false;
+      if (rawConfiguration != null) {
+        rawConfig = rawConfiguration;
       }
-    });
+      AlluxioProxyInfo result =
+          new AlluxioProxyInfo()
+              .setConfiguration(getConfigurationInternal(rawConfig))
+              .setStartTimeMs(mProxyProcess.getStartTimeMs())
+              .setUptimeMs(mProxyProcess.getUptimeMs())
+              .setVersion(RuntimeConstants.VERSION);
+      return result;
+    }, ServerConfiguration.global());
   }
 
   private Map<String, String> getConfigurationInternal(boolean raw) {
-    return new TreeMap<>(Configuration
+    return new TreeMap<>(ServerConfiguration
         .toMap(ConfigurationValueOptions.defaults().useDisplayValue(true).useRawValue(raw)));
   }
 }

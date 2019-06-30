@@ -11,8 +11,10 @@
 
 package alluxio.client.hadoop;
 
-import alluxio.PropertyKey;
+import alluxio.conf.PropertyKey;
+import alluxio.conf.ServerConfiguration;
 import alluxio.hadoop.FileSystem;
+import alluxio.hadoop.HadoopConfigurationUtils;
 import alluxio.testutils.BaseIntegrationTest;
 import alluxio.testutils.LocalAlluxioClusterResource;
 import alluxio.underfs.UnderFileSystem;
@@ -38,7 +40,8 @@ import java.net.URI;
 public final class FileSystemRenameIntegrationTest extends BaseIntegrationTest {
   @ClassRule
   public static LocalAlluxioClusterResource sLocalAlluxioClusterResource =
-      new LocalAlluxioClusterResource.Builder().build();
+      new LocalAlluxioClusterResource.Builder()
+          .setProperty(PropertyKey.USER_FILE_WRITE_TYPE_DEFAULT, "CACHE_THROUGH").build();
   private static String sUfsRoot;
   private static UnderFileSystem sUfs;
   private static org.apache.hadoop.fs.FileSystem sTFS;
@@ -68,9 +71,10 @@ public final class FileSystemRenameIntegrationTest extends BaseIntegrationTest {
 
     URI uri = URI.create(sLocalAlluxioClusterResource.get().getMasterURI());
 
-    sTFS = org.apache.hadoop.fs.FileSystem.get(uri, conf);
-    sUfsRoot = alluxio.Configuration.get(PropertyKey.MASTER_MOUNT_TABLE_ROOT_UFS);
-    sUfs = UnderFileSystem.Factory.createForRoot();
+    sTFS = org.apache.hadoop.fs.FileSystem.get(uri, HadoopConfigurationUtils
+        .mergeAlluxioConfiguration(conf, ServerConfiguration.global()));
+    sUfsRoot = ServerConfiguration.get(PropertyKey.MASTER_MOUNT_TABLE_ROOT_UFS);
+    sUfs = UnderFileSystem.Factory.createForRoot(ServerConfiguration.global());
   }
 
   @Test

@@ -12,16 +12,13 @@
 package alluxio.master.file.async;
 
 import alluxio.AlluxioURI;
-import alluxio.Configuration;
-import alluxio.PropertyKey;
 import alluxio.exception.AccessControlException;
 import alluxio.exception.AlluxioException;
 import alluxio.exception.FileDoesNotExistException;
 import alluxio.exception.InvalidPathException;
 import alluxio.exception.status.UnavailableException;
 import alluxio.master.file.meta.FileSystemMasterView;
-import alluxio.thrift.PersistFile;
-import alluxio.util.CommonUtils;
+import alluxio.wire.PersistFile;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,10 +50,7 @@ public interface AsyncPersistHandler {
      * @return the generated {@link AsyncPersistHandler}
      */
     public static AsyncPersistHandler create(FileSystemMasterView view) {
-      return CommonUtils.createNewClassInstance(
-          Configuration
-              .<AsyncPersistHandler>getClass(PropertyKey.MASTER_FILE_ASYNC_PERSIST_HANDLER),
-          new Class[] {FileSystemMasterView.class}, new Object[] {view});
+      return new DefaultAsyncPersistHandler(view);
     }
   }
 

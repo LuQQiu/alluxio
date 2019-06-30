@@ -11,13 +11,14 @@
 
 package alluxio.worker.block.meta;
 
-import alluxio.Configuration;
-import alluxio.PropertyKey;
+import alluxio.conf.ServerConfiguration;
+import alluxio.conf.PropertyKey;
 import alluxio.WorkerStorageTierAssoc;
 import alluxio.exception.BlockAlreadyExistsException;
 import alluxio.exception.InvalidPathException;
 import alluxio.exception.PreconditionMessage;
 import alluxio.exception.WorkerOutOfSpaceException;
+import alluxio.util.CommonUtils;
 import alluxio.util.FormatUtils;
 import alluxio.util.OSUtils;
 import alluxio.util.ShellUtils;
@@ -53,6 +54,8 @@ public final class StorageTier {
   /** Total capacity of all StorageDirs in bytes. */
   private long mCapacityBytes;
   private List<StorageDir> mDirs;
+  /** The lost storage paths that are failed to initialize or lost. */
+  private List<String> mLostStorage;
 
   private StorageTier(String tierAlias) {
     mTierAlias = tierAlias;
@@ -61,29 +64,46 @@ public final class StorageTier {
 
   private void initStorageTier()
       throws BlockAlreadyExistsException, IOException, WorkerOutOfSpaceException {
-    String tmpDir = Configuration.get(PropertyKey.WORKER_DATA_TMP_FOLDER);
+    String tmpDir = ServerConfiguration.get(PropertyKey.WORKER_DATA_TMP_FOLDER);
     PropertyKey tierDirPathConf =
         PropertyKey.Template.WORKER_TIERED_STORE_LEVEL_DIRS_PATH.format(mTierOrdinal);
-    String[] dirPaths = Configuration.get(tierDirPathConf).split(",");
+    String[] dirPaths = ServerConfiguration.get(tierDirPathConf).split(",");
 
     for (int i = 0; i < dirPaths.length; i++) {
-      dirPaths[i] = PathUtils.getWorkerDataDirectory(dirPaths[i]);
+      dirPaths[i] = CommonUtils.getWorkerDataDirectory(dirPaths[i], ServerConfiguration.global());
     }
 
     PropertyKey tierDirCapacityConf =
         PropertyKey.Template.WORKER_TIERED_STORE_LEVEL_DIRS_QUOTA.format(mTierOrdinal);
-    String rawDirQuota = Configuration.get(tierDirCapacityConf);
+    String rawDirQuota = ServerConfiguration.get(tierDirCapacityConf);
     Preconditions.checkState(rawDirQuota.length() > 0, PreconditionMessage.ERR_TIER_QUOTA_BLANK);
     String[] dirQuotas = rawDirQuota.split(",");
 
+    PropertyKey tierDirMediumConf =
+        PropertyKey.Template.WORKER_TIERED_STORE_LEVEL_DIRS_MEDIUMTYPE.format(mTierOrdinal);
+    String rawDirMedium = ServerConfiguration.get(tierDirMediumConf);
+    Preconditions.checkState(rawDirMedium.length() > 0,
+        "Tier medium type configuration should not be blank");
+    String[] dirMedium = rawDirMedium.split(",");
+
     mDirs = new ArrayList<>(dirPaths.length);
+    mLostStorage = new ArrayList<>();
 
     long totalCapacity = 0;
     for (int i = 0; i < dirPaths.length; i++) {
       int index = i >= dirQuotas.length ? dirQuotas.length - 1 : i;
+      int mediumTypeindex = i >= dirMedium.length ? dirMedium.length - 1 : i;
       long capacity = FormatUtils.parseSpaceSize(dirQuotas[index]);
-      totalCapacity += capacity;
-      mDirs.add(StorageDir.newStorageDir(this, i, capacity, dirPaths[i]));
+      try {
+        StorageDir dir = StorageDir.newStorageDir(this, i, capacity, dirPaths[i],
+            dirMedium[mediumTypeindex]);
+        totalCapacity += capacity;
+        mDirs.add(dir);
+      } catch (IOException e) {
+        LOG.error("Unable to initialize storage directory at {}: {}", dirPaths[i], e.getMessage());
+        mLostStorage.add(dirPaths[i]);
+        continue;
+      }
 
       // Delete tmp directory.
       String tmpDirPath = PathUtils.concatPath(dirPaths[i], tmpDir);
@@ -117,7 +137,8 @@ public final class StorageTier {
     try {
       info = ShellUtils.getUnixMountInfo();
     } catch (IOException e) {
-      LOG.warn("Failed to get mount information for verifying memory capacity: {}", e.getMessage());
+      LOG.warn("Failed to get mount information for verifying memory capacity: {}",
+          e.getMessage());
       return;
     }
     boolean foundMountInfo = false;
@@ -217,5 +238,23 @@ public final class StorageTier {
    */
   public List<StorageDir> getStorageDirs() {
     return Collections.unmodifiableList(mDirs);
+  }
+
+  /**
+   * @return a list of lost storage paths
+   */
+  public List<String> getLostStorage() {
+    return new ArrayList<>(mLostStorage);
+  }
+
+  /**
+   * Removes a directory.
+   * @param dir directory to be removed
+   */
+  public void removeStorageDir(StorageDir dir) {
+    if (mDirs.remove(dir)) {
+      mCapacityBytes -=  dir.getCapacityBytes();
+    }
+    mLostStorage.add(dir.getDirPath());
   }
 }

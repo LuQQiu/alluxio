@@ -20,16 +20,15 @@ automatically includes the version of the documentation that is relevant regardl
 or release you have checked out or downloaded.
 
 In directories like `docs/en` or `docs/cn` you will find text files with a `.md` suffix, formatted
-using [Github flavor Markdown syntax]
-(https://help.github.com/articles/basic-writing-and-formatting-syntax/). You can read those text
-files directly if you want. Start with `index.md`.
+using [Github flavor Markdown syntax](https://help.github.com/articles/basic-writing-and-formatting-syntax/).
+You can read those text files directly if you want. Start with `index.md`.
 
 ## Generating the Documentation HTML
 
 To make the documentation more visually appealing and easier to navigate, you can generate the HTML
 version of the documentation. To do this, you will need to have `Jekyll` installed; the easiest
-way to do this is via a Ruby Gem (see the [jekyll installation instructions]
-(http://jekyllrb.com/docs/installation/)).
+way to do this is via a Ruby Gem
+(see the [jekyll installation instructions](http://jekyllrb.com/docs/installation/)).
 
 Before running `jekyll`, please run mvn to generate Java doc under alluxio root directory.
 
@@ -56,3 +55,14 @@ at [http://localhost:4000](http://localhost:4000).
 
 The markdown files for Alluxio documentation in different languages are stored in separate
 directories, e.g., `docs/en` for English documentation and `docs/cn` for Chinese documentation.
+
+## Contributing to the Documentation
+
+We would welcome anyone to contribute to Alluxio Documentation! For more details, please visit [this
+page](https://docs.alluxio.io/os/user/stable/en/contributor/Contributor-Getting-Started.html).
+
+## Questions
+
+If you have any question, welcome to ask in our [community](https://www.alluxio.io/community/) or
+[Alluxio Community Slack Channel](https://slackin.alluxio.io/)!
+

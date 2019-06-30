@@ -11,8 +11,11 @@
 
 package alluxio.master;
 
+import alluxio.ConfigurationTestUtils;
 import alluxio.client.file.FileSystem;
 import alluxio.client.file.FileSystemContext;
+import alluxio.conf.PropertyKey;
+import alluxio.conf.ServerConfiguration;
 import alluxio.wire.WorkerNetAddress;
 import alluxio.worker.WorkerProcess;
 
@@ -20,6 +23,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.Map;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
@@ -31,7 +35,7 @@ import javax.annotation.concurrent.NotThreadSafe;
  * // Create a cluster instance
  * localAlluxioCluster = new LocalAlluxioCluster(WORKER_CAPACITY_BYTES, BLOCK_SIZE_BYTES);
  * // If you have special conf parameter to set for integration tests:
- * Configuration testConf = localAlluxioCluster.newTestConf();
+ * AlluxioConfiguration testConf = localAlluxioCluster.newTestConf();
  * testConf.set(Constants.USER_FILE_BUFFER_BYTES, String.valueOf(BUFFER_BYTES));
  * // After setting up the test conf, start this local cluster:
  * localAlluxioCluster.start(testConf);
@@ -47,7 +51,7 @@ public final class LocalAlluxioCluster extends AbstractLocalAlluxioCluster {
    * Runs a test Alluxio cluster with a single Alluxio worker.
    */
   public LocalAlluxioCluster() {
-    super(1);
+    this(1);
   }
 
   /**
@@ -115,14 +119,30 @@ public final class LocalAlluxioCluster extends AbstractLocalAlluxioCluster {
   }
 
   @Override
+  public void initConfiguration() throws IOException {
+    setAlluxioWorkDirectory();
+    setHostname();
+    for (Map.Entry<PropertyKey, String> entry : ConfigurationTestUtils
+        .testConfigurationDefaults(ServerConfiguration.global(),
+            mHostname, mWorkDirectory).entrySet()) {
+      ServerConfiguration.set(entry.getKey(), entry.getValue());
+    }
+    ServerConfiguration.set(PropertyKey.TEST_MODE, true);
+    ServerConfiguration.set(PropertyKey.PROXY_WEB_PORT, 0);
+    ServerConfiguration.set(PropertyKey.WORKER_RPC_PORT, 0);
+    ServerConfiguration.set(PropertyKey.WORKER_WEB_PORT, 0);
+  }
+
+  @Override
   public void startMasters() throws Exception {
-    mMaster = LocalAlluxioMaster.create(mWorkDirectory);
+    mMaster = LocalAlluxioMaster.create(mWorkDirectory, true);
     mMaster.start();
   }
 
   @Override
   public void stop() throws Exception {
     super.stop();
+    TestUtils.assertAllLocksReleased(this);
     // clear HDFS client caching
     System.clearProperty("fs.hdfs.impl.disable.cache");
   }
