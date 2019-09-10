@@ -288,7 +288,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
         // Assuming I will never wrap around (2^64 open files are quite a lot anyway)
         mNextOpenFileId += 1;
       }
-      LOG.debug("{} created and opened", path);
+      LOG.info("{} created and opened", path);
     } catch (FileAlreadyExistsException e) {
       LOG.debug("Failed to create {}, file already exists", path);
       return -ErrorCodes.EEXIST();
@@ -463,7 +463,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
     // (see {@code man 2 open} for the structure of the flags bitfield)
     // File creation flags are the last two bits of flags
     final int flags = fi.flags.get();
-    LOG.trace("open({}, 0x{}) [Alluxio: {}]", path, Integer.toHexString(flags), uri);
+    LOG.info("open({}, 0x{}) [Alluxio: {}]", path, Integer.toHexString(flags), uri);
 
     try {
       final URIStatus status = mFileSystem.getStatus(uri);
@@ -522,7 +522,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
       LOG.error("Cannot read more than Integer.MAX_VALUE");
       return -ErrorCodes.EINVAL();
     }
-    LOG.trace("read({}, {}, {})", path, size, offset);
+    LOG.info("read({}, {}, {})", path, size, offset);
     final int sz = (int) size;
     final long fd = fi.fh.get();
     OpenFileEntry oe = mOpenFiles.getFirstByField(ID_INDEX, fd);
@@ -574,7 +574,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
   public int readdir(String path, Pointer buff, FuseFillDir filter,
       @off_t long offset, FuseFileInfo fi) {
     final AlluxioURI turi = mPathResolverCache.getUnchecked(path);
-    LOG.trace("readdir({}) [Alluxio: {}]", path, turi);
+    LOG.info("readdir({}) [Alluxio: {}]", path, turi);
 
     try {
       final List<URIStatus> ls = mFileSystem.listStatus(turi);
@@ -608,7 +608,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
    */
   @Override
   public int release(String path, FuseFileInfo fi) {
-    LOG.trace("release({})", path);
+    LOG.info("release({})", path);
     OpenFileEntry oe;
     final long fd = fi.fh.get();
     synchronized (mOpenFiles) {
@@ -639,7 +639,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
     final AlluxioURI oldUri = mPathResolverCache.getUnchecked(oldPath);
     final AlluxioURI newUri = mPathResolverCache.getUnchecked(newPath);
     final String name = newUri.getName();
-    LOG.trace("rename({}, {}) [Alluxio: {}, {}]", oldPath, newPath, oldUri, newUri);
+    LOG.info("rename({}, {}) [Alluxio: {}, {}]", oldPath, newPath, oldUri, newUri);
 
     if (name.length() > MAX_NAME_LENGTH) {
       LOG.error("Failed to rename {} to {}, name {} is longer than {} characters",
@@ -747,7 +747,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
    */
   @Override
   public int unlink(String path) {
-    LOG.trace("unlink({})", path);
+    LOG.info("unlink({})", path);
     return rmInternal(path);
   }
 
@@ -780,7 +780,7 @@ public final class AlluxioFuseFileSystem extends FuseStubFS {
       LOG.error("Cannot write more than Integer.MAX_VALUE");
       return ErrorCodes.EIO();
     }
-    LOG.trace("write({}, {}, {})", path, size, offset);
+    LOG.info("write({}, {}, {})", path, size, offset);
     final int sz = (int) size;
     final long fd = fi.fh.get();
     OpenFileEntry oe = mOpenFiles.getFirstByField(ID_INDEX, fd);
