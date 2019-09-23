@@ -376,7 +376,7 @@ public class TieredBlockStore implements BlockStore {
   @Override
   public void freeSpace(long sessionId, long availableBytes, BlockStoreLocation location)
       throws BlockDoesNotExistException, WorkerOutOfSpaceException, IOException {
-    LOG.debug("freeSpace: sessionId={}, availableBytes={}, location={}",
+    LOG.info("For debug: freeSpace: sessionId={}, availableBytes={}, location={}",
         sessionId, availableBytes, location);
     freeSpaceInternal(sessionId, availableBytes, location, Mode.BEST_EFFORT);
   }

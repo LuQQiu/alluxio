@@ -24,6 +24,8 @@ import alluxio.worker.block.meta.StorageTierView;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Iterators;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -50,6 +52,7 @@ import javax.annotation.concurrent.NotThreadSafe;
  */
 @NotThreadSafe
 public final class LRFUEvictor extends AbstractEvictor {
+  private static final Logger LOG = LoggerFactory.getLogger(LRFUEvictor.class);
   /** Map from block id to the last updated logic time count. */
   private final Map<Long, Long> mBlockIdToLastUpdateTime = new ConcurrentHashMap<>();
   // Map from block id to the CRF value of the block
@@ -104,6 +107,7 @@ public final class LRFUEvictor extends AbstractEvictor {
   @Override
   public EvictionPlan freeSpaceWithView(long bytesToBeAvailable, BlockStoreLocation location,
       BlockMetadataEvictorView view, Mode mode) {
+    LOG.info("For debug, inside LRFUEvictory.freeSpaceWithView");
     synchronized (mBlockIdToLastUpdateTime) {
       updateCRFValue();
       mMetadataView = view;
@@ -116,6 +120,7 @@ public final class LRFUEvictor extends AbstractEvictor {
 
       mMetadataView.clearBlockMarks();
       if (candidateDir == null) {
+        LOG.info("For debug, cannot find any candidate directory, returning null");
         return null;
       }
 

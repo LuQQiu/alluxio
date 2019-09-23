@@ -83,6 +83,7 @@ public abstract class AbstractEvictor extends AbstractBlockStoreEventListener im
     if (candidateDirView != null) {
       return candidateDirView;
     }
+    LOG.info("For debug, candidate dir view is null, start traversing blocks");
 
     // 2. Iterate over blocks in order until we find a StorageDirEvictorView that is
     // in the range of location and can satisfy bytesToBeAvailable
@@ -99,6 +100,7 @@ public abstract class AbstractEvictor extends AbstractBlockStoreEventListener im
             int dirIndex = block.getParentDir().getDirIndex();
             dirCandidates.add((StorageDirEvictorView) mMetadataView.getTierView(tierAlias)
                 .getDirView(dirIndex), blockId, block.getBlockSize());
+            LOG.info("For debug, get one block {} with size {}", blockId, block.getBlockSize());
           }
         }
       } catch (BlockDoesNotExistException e) {
@@ -110,6 +112,7 @@ public abstract class AbstractEvictor extends AbstractBlockStoreEventListener im
 
     // 3. If there is no eligible StorageDirEvictorView, return null
     if (mode == Mode.GUARANTEED && dirCandidates.candidateSize() < bytesToBeAvailable) {
+      LOG.info("For debug, mode is guaranteed!!!!");
       return null;
     }
 
@@ -118,6 +121,7 @@ public abstract class AbstractEvictor extends AbstractBlockStoreEventListener im
     // Blocks are only evicted from the last tier or it can not be moved to the next tier.
     candidateDirView = dirCandidates.candidateDir();
     if (candidateDirView == null) {
+      LOG.info("For debug, CandidateDirView is null");
       return null;
     }
     List<Long> candidateBlocks = dirCandidates.candidateBlocks();
@@ -167,7 +171,7 @@ public abstract class AbstractEvictor extends AbstractBlockStoreEventListener im
         }
       }
     }
-
+    LOG.info("For debug, evicted successfully");
     return candidateDirView;
   }
 
