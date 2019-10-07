@@ -16,7 +16,10 @@ import alluxio.conf.ServerConfiguration;
 import alluxio.master.journal.JournalContext;
 import alluxio.master.journal.JournalEntryAssociation;
 import alluxio.master.journal.JournalEntryStreamReader;
+import alluxio.proto.journal.File;
+import alluxio.proto.journal.Journal;
 import alluxio.proto.journal.Journal.JournalEntry;
+import alluxio.proto.shared.Acl;
 import alluxio.util.ThreadFactoryUtils;
 
 import com.google.common.collect.Maps;
@@ -143,6 +146,15 @@ public class BackupManager {
             if (journalEntry.getSequenceNumber() == TERMINATION_SEQ) {
               // Reading finished.
               return true;
+            }
+            if (journalEntry.hasInodeDirectory() && journalEntry.getInodeDirectory().getParentId() == -1) {
+              File.InodeDirectoryEntry entry = journalEntry.getInodeDirectory();
+              Acl.AccessControlList aclList = entry.getAcl();
+              Acl.AccessControlList newAclList = Acl.AccessControlList.newBuilder(aclList).setOwningUser("ec2-user").setOwningGroup("ec2-user").build();
+              Acl.AccessControlList defaultAcl = entry.getDefaultAcl();
+              Acl.AccessControlList newDefaultAclList = Acl.AccessControlList.newBuilder(defaultAcl).setOwningUser("ec2-user").setOwningGroup("ec2-user").build();
+              File.InodeDirectoryEntry dirEntry = File.InodeDirectoryEntry.newBuilder(entry).setAcl(newAclList).setDefaultAcl(newDefaultAclList).build();
+              journalEntry = JournalEntry.newBuilder().setInodeDirectory(dirEntry).build();
             }
             journalEntry.writeDelimitedTo(zipStream);
             entryCount.incrementAndGet();
