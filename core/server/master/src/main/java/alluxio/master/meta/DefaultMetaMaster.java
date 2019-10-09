@@ -382,10 +382,8 @@ public final class DefaultMetaMaster extends CoreMaster implements MetaMaster {
             DateTimeFormatter.ISO_LOCAL_DATE.withZone(ZoneId.of("UTC")).format(now),
             now.toEpochMilli());
         backupFilePath = PathUtils.concatPath(dir, backupFileName);
-        try {
-          try (OutputStream ufsStream = ufs.create(backupFilePath)) {
+        try (OutputStream ufsStream = ufs.create(backupFilePath)) {
             mBackupManager.backup(ufsStream, entryCount);
-          }
         } catch (Throwable t) {
           LOG.info("failed to backup because of error: {},", t);
           try {
