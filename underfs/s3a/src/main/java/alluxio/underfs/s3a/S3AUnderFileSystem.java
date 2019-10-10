@@ -371,6 +371,7 @@ public class S3AUnderFileSystem extends ObjectUnderFileSystem {
     key = key.equals(PATH_SEPARATOR) ? "" : key;
     if (mUfsConf.isSet(PropertyKey.UNDERFS_S3_LIST_OBJECTS_V1) && mUfsConf
         .get(PropertyKey.UNDERFS_S3_LIST_OBJECTS_V1).equals(Boolean.toString(true))) {
+      LOG.info("For debug, list objects V1");
       ListObjectsRequest request =
           new ListObjectsRequest().withBucketName(mBucketName).withPrefix(key)
               .withDelimiter(delimiter).withMaxKeys(getListingChunkLength(mUfsConf));
@@ -379,6 +380,7 @@ public class S3AUnderFileSystem extends ObjectUnderFileSystem {
         return new S3AObjectListingChunkV1(request, result);
       }
     } else {
+      LOG.info("For debug, list objects V2");
       ListObjectsV2Request request =
           new ListObjectsV2Request().withBucketName(mBucketName).withPrefix(key)
               .withDelimiter(delimiter).withMaxKeys(getListingChunkLength(mUfsConf));
@@ -396,11 +398,19 @@ public class S3AUnderFileSystem extends ObjectUnderFileSystem {
     ListObjectsV2Result result;
     try {
       // Query S3 for the next batch of objects.
+      LOG.info("For debug, list objects V2 now");
       result = mClient.listObjectsV2(request);
       // Advance the request continuation token to the next set of objects.
       request.setContinuationToken(result.getNextContinuationToken());
     } catch (AmazonClientException e) {
+      LOG.info("For debug, list objects V2 has exception {}", e);
       throw new IOException(e);
+    }
+    LOG.info("For debug, list objects V2 has no exception");
+    if (result == null) {
+      LOG.info("For debug, result is null");
+    } else {
+      LOG.info("For debug, result is not null");
     }
     return result;
   }
