@@ -571,9 +571,12 @@ public abstract class ObjectUnderFileSystem extends BaseUnderFileSystem {
   @Override
   public boolean isDirectory(String path) throws IOException {
     // Root is always a folder
+    LOG.info("For debug, checking if {} is directory?", path);
     if (isRoot(path)) {
+      LOG.info("For debug, Path {} is root, getting cache result", path);
       return mIsRootListable.get();
     }
+    LOG.info("For debug, {} is not root", path);
     String keyAsFolder = convertToFolderName(stripPrefixIfPresent(path));
     if (getObjectStatus(keyAsFolder) != null) {
       return true;
@@ -904,7 +907,7 @@ public abstract class ObjectUnderFileSystem extends BaseUnderFileSystem {
    * @param path ufs path including scheme and bucket
    * @return true if the path is the root, false otherwise
    */
-  protected boolean isRoot(String path) {
+  protected boolean isRoot(String path) { // !!!! Ceph parent should be root, why not???
     return PathUtils.normalizePath(path, PATH_SEPARATOR).equals(
         PathUtils.normalizePath(mRootKeySupplier.get(), PATH_SEPARATOR));
   }
@@ -1116,10 +1119,13 @@ public abstract class ObjectUnderFileSystem extends BaseUnderFileSystem {
    */
   protected boolean parentExists(String path) throws IOException {
     // Assume root always has a parent
-    if (isRoot(path)) {
+    if (isRoot(path)) { // LU it should be root!!!
+      LOG.info("For debug: path {} is root", path);
       return true;
     }
+    LOG.info("For debug: path {} is not root", path);
     String parentKey = getParentPath(path);
+    LOG.info("For debug: get parent path {}", parentKey);
     return parentKey != null && isDirectory(parentKey);
   }
 
