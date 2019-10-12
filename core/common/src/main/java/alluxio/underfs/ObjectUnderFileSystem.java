@@ -606,7 +606,6 @@ public abstract class ObjectUnderFileSystem extends BaseUnderFileSystem {
    */
   public boolean isRootListable() {
     try {
-      LOG.info("For debug: getting object listing chunk");
       return getObjectListingChunkForPath("", true) != null;
     } catch (Exception e) {
       LOG.debug("Unable to list root of bucket {}:", super.mUri.toString(), e);
@@ -954,26 +953,23 @@ public abstract class ObjectUnderFileSystem extends BaseUnderFileSystem {
       throws IOException {
     // Check if anything begins with <folder_path>/
     String dir = stripPrefixIfPresent(path);
-    LOG.info("For debug, getObjectListingChunk of {}, recursive? {}", dir, recursive);
     ObjectListingChunk objs = getObjectListingChunk(dir, recursive);
     // If there are, this is a folder and we can create the necessary metadata
-    LOG.info("For debug, checking object listing chunk");
-    if (objs == null) {
-      LOG.info("For debug, objects is null");
-    } else if (objs.getObjectStatuses() == null || objs.getObjectStatuses().length == 0) {
-      LOG.info("For debug, object statuses inside listing chunk is null or empty");
+    if (objs.getObjectStatuses() == null) {
+      LOG.info("For debug, get object statuses is null");
+    } else if (objs.getObjectStatuses().length == 0) {
+      LOG.info("For debug, get object statuses length is 0");
     }
     if (objs != null && ((objs.getObjectStatuses() != null && objs.getObjectStatuses().length > 0)
         || (objs.getCommonPrefixes() != null && objs.getCommonPrefixes().length > 0))) {
       // If the breadcrumb exists, this is a no-op
       if (!mUfsConf.isReadOnly()
           && mUfsConf.getBoolean(PropertyKey.UNDERFS_OBJECT_STORE_BREADCRUMBS_ENABLED)) {
-        LOG.info("For debug, start making directory internal");
         mkdirsInternal(dir);
       }
       return objs;
     }
-    LOG.info("For debug, returning null");
+    LOG.info("For debug, returning null in objectUFS.getObjectListingChunkForPath");
     return null;
   }
 

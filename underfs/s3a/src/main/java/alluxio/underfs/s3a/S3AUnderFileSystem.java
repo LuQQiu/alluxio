@@ -410,7 +410,16 @@ public class S3AUnderFileSystem extends ObjectUnderFileSystem {
     if (result == null) {
       LOG.info("For debug, result is null");
     } else {
-      LOG.info("For debug, result is not null");
+      LOG.info("For debug, bucket name is" + result.getBucketName());
+      List<S3ObjectSummary> objects = result.getObjectSummaries();
+      if (objects == null) {
+        LOG.info("For debug, objects is null");
+      } else {
+        LOG.info("For debug, objects is not null, length is " + objects.size());
+        if (objects.size() > 0) {
+          LOG.info("For debug, objects size is " + )
+        }
+      }
     }
     return result;
   }
