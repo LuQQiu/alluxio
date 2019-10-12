@@ -417,7 +417,10 @@ public class S3AUnderFileSystem extends ObjectUnderFileSystem {
       } else {
         LOG.info("For debug, objects is not null, length is " + objects.size());
         if (objects.size() > 0) {
-          LOG.info("For debug, objects size is " + )
+          LOG.info("For debug, objects size is " + objects.size());
+          for (S3ObjectSummary summary : objects) {
+            LOG.info("For debug, object key is " + summary.getKey());
+          }
         }
       }
     }
