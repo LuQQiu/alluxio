@@ -187,13 +187,21 @@ public final class RocksStore implements Closeable {
     Preconditions.checkState(input.getType() == CheckpointType.ROCKS,
         "Unexpected checkpoint type in RocksStore: " + input.getType());
     stopDb();
+    long stopDbNano = System.nanoTime();
+    LOG.info("Stop Db takes {}ms", (stopDbNano - startNano) / Constants.MS_NANO);
     FileUtils.deletePathRecursively(mDbPath);
+    long deletePathNano = System.nanoTime();
+    LOG.info("Delete path takes {}ms", (deletePathNano - stopDbNano) / Constants.MS_NANO);
     TarUtils.readTarGz(Paths.get(mDbPath), input);
+    long readTarNano = System.nanoTime();
+    LOG.info("Read tar takes {}ms", (readTarNano - deletePathNano) / Constants.MS_NANO);
     try {
       createDb();
     } catch (RocksDBException e) {
       throw new IOException(e);
     }
+    long createDbNano = System.nanoTime();
+    LOG.info("Create db takes {}ms", (createDbNano - readTarNano) / Constants.MS_NANO);
     LOG.info("Restored rocksdb checkpoint in {}ms",
         (System.nanoTime() - startNano) / Constants.MS_NANO);
   }
