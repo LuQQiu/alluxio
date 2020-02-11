@@ -12,6 +12,7 @@
 package alluxio.metrics;
 
 import alluxio.AlluxioURI;
+import alluxio.Constants;
 import alluxio.conf.InstancedConfiguration;
 import alluxio.conf.PropertyKey;
 import alluxio.grpc.MetricType;
@@ -577,14 +578,22 @@ public final class MetricsSystem {
    * @return the worker metrics to send via RPC
    */
   public static List<alluxio.grpc.Metric> reportWorkerMetrics() {
-    return reportMetrics(InstanceType.WORKER);
+    long start = System.currentTimeMillis();
+    List<alluxio.grpc.Metric> metricsList = reportMetrics(InstanceType.WORKER);
+    LOG.debug("Get the worker metrics list to report to leading master in {}ms",
+        System.currentTimeMillis() - start);
+    return metricsList;
   }
 
   /**
    * @return the client metrics to send via RPC
    */
   public static List<alluxio.grpc.Metric> reportClientMetrics() {
-    return reportMetrics(InstanceType.CLIENT);
+    long start = System.currentTimeMillis();
+    List<alluxio.grpc.Metric> metricsList = reportMetrics(InstanceType.CLIENT);
+    LOG.debug("Get the client metrics list to report to leading master in {}ms",
+        System.currentTimeMillis() - start);
+    return metricsList;
   }
 
   /**
@@ -700,6 +709,7 @@ public final class MetricsSystem {
    * This method is not thread-safe and should be used sparingly.
    */
   public static synchronized void resetAllMetrics() {
+    long startNano = System.nanoTime();
     // Gauge metrics don't need to be changed because they calculate value when getting them
     // Counters can be reset to zero values.
     for (Counter counter : METRIC_REGISTRY.getCounters().values()) {
@@ -718,6 +728,8 @@ public final class MetricsSystem {
       METRIC_REGISTRY.timer(timerName);
     }
     LAST_REPORTED_METRICS.clear();
+    LOG.info("Reset all metrics in the metrics system in {}ms",
+        (System.nanoTime() - startNano) / Constants.MS_NANO);
   }
 
   /**
