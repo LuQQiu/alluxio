@@ -71,6 +71,9 @@ public final class MetricsSystem {
   // A map that records all the metrics that should be reported and aggregated at leading master
   // from full metric name to its metric type
   private static final Map<String, MetricType> SHOULD_REPORT_METRICS = new HashMap<>();
+  // A map from AlluxioURI to corresponding cached escaped path.
+  private static final ConcurrentHashMap<AlluxioURI, String> CACHED_ESCAPED_PATH
+      = new ConcurrentHashMap<>();
   // A flag telling whether metrics have been reported yet.
   // Using this prevents us from initializing {@link #SHOULD_REPORT_METRICS} more than once
   private static boolean sReported = false;
@@ -396,7 +399,9 @@ public final class MetricsSystem {
    * @return the string representing the escaped URI
    */
   public static String escape(AlluxioURI uri) {
-    return uri.toString().replace("%", "%25").replace("/", "%2F").replace(".", "%2E");
+    return CACHED_ESCAPED_PATH.computeIfAbsent(uri,
+        u -> u.toString().replace("%", "%25")
+            .replace("/", "%2F").replace(".", "%2E"));
   }
 
   /**
