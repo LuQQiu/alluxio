@@ -222,6 +222,7 @@ public class BaseFileSystem implements FileSystem {
         if (!fileBlockInfo.getUfsLocations().isEmpty()) {
           // Case 1: Fallback to use under file system locations with co-located workers.
           // This maps UFS locations to a worker which is co-located.
+          LOG.info("Getting eligible workers from getBlockLocations.fileBlockInfo.getUfsLocations not empty");
           Map<String, WorkerNetAddress> finalWorkerHosts = getHostWorkerMap();
           locations = fileBlockInfo.getUfsLocations().stream().map(
               location -> finalWorkerHosts.get(HostAndPort.fromString(location).getHost()))
@@ -231,6 +232,7 @@ public class BaseFileSystem implements FileSystem {
             .getBoolean(PropertyKey.USER_UFS_BLOCK_LOCATION_ALL_FALLBACK_ENABLED)) {
           // Case 2: Fallback to add all workers to locations so some apps (Impala) won't panic.
           long start = System.currentTimeMillis();
+          LOG.info("Getting eligible workers from getBlockLocations locations empty fallback enabled");
           locations.addAll(getHostWorkerMap().values());
           Collections.shuffle(locations);
           LOG.info("enter code by enabling location fallback takes " + (System.currentTimeMillis() - start));

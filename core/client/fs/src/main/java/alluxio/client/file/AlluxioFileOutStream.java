@@ -106,6 +106,7 @@ public class AlluxioFileOutStream extends FileOutStream {
       if (!mUnderStorageType.isSyncPersist()) {
         mUnderStorageOutputStream = null;
       } else { // Write is through to the under storage, create mUnderStorageOutputStream.
+        LOG.info("Getting eligible workers from AlluxioFileOutStream");
         GetWorkerOptions getWorkerOptions = GetWorkerOptions.defaults()
             .setBlockWorkerInfos(mBlockStore.getEligibleWorkers())
             .setBlockInfo(new BlockInfo()

@@ -189,12 +189,14 @@ public final class AlluxioBlockStore {
     // Note that, it is possible that the blocks have been written as UFS blocks
     if (options.getStatus().isPersisted()
         || options.getStatus().getPersistenceState().equals("TO_BE_PERSISTED")) {
+      LOG.info("Getting eligible workers from getInStream isPersisted or to be persisted");
       blockWorkerInfo = getEligibleWorkers();
       if (blockWorkerInfo.isEmpty()) {
         throw new UnavailableException(ExceptionMessage.NO_WORKER_AVAILABLE.getMessage());
       }
       workerPool = blockWorkerInfo.stream().map(BlockWorkerInfo::getNetAddress).collect(toSet());
     } else {
+      LOG.info("Getting eligible workers from getInStream NOT isPersisted or to be persisted");
       if (locations.isEmpty()) {
         blockWorkerInfo = getEligibleWorkers();
         if (blockWorkerInfo.isEmpty()) {
@@ -317,6 +319,7 @@ public final class AlluxioBlockStore {
     WorkerNetAddress address;
     BlockLocationPolicy locationPolicy = Preconditions.checkNotNull(options.getLocationPolicy(),
         PreconditionMessage.BLOCK_WRITE_LOCATION_POLICY_UNSPECIFIED);
+    LOG.info("Getting eligible workers from getOutStream");
     GetWorkerOptions workerOptions = GetWorkerOptions.defaults()
         .setBlockInfo(new BlockInfo().setBlockId(blockId).setLength(blockSize))
         .setBlockWorkerInfos(new ArrayList<>(getEligibleWorkers()));
