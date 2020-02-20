@@ -120,6 +120,8 @@ public final class AlluxioBlockStore {
     if (mWorkerInfoList == null || mWorkerRefreshPolicy.attempt()) {
       LOG.info("getting eligible worker mWorkerInfoList == null ? {}", mWorkerInfoList == null);
       mWorkerInfoList = getAllWorkers();
+    } else {
+      LOG.info("getting eligible workers cached");
     }
     return mWorkerInfoList;
   }
@@ -128,6 +130,7 @@ public final class AlluxioBlockStore {
    * @return the info of all block workers
    */
   public List<BlockWorkerInfo> getAllWorkers() throws IOException {
+    LOG.info("Getting worker info list from getAllWorkers");
     try (CloseableResource<BlockMasterClient> masterClientResource =
         mContext.acquireBlockMasterClientResource()) {
       return masterClientResource.get().getWorkerInfoList().stream()

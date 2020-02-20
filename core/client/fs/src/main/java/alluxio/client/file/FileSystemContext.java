@@ -547,6 +547,7 @@ public class FileSystemContext implements Closeable {
    */
   public synchronized boolean hasLocalWorker() throws IOException {
     if (!mLocalWorkerInitialized) {
+      LOG.info("GetWorkerAddresses called by hasLocalWorker");
       initializeLocalWorker();
     }
     return mLocalWorker != null;
@@ -557,6 +558,7 @@ public class FileSystemContext implements Closeable {
    */
   public synchronized WorkerNetAddress getLocalWorker() throws IOException {
     if (!mLocalWorkerInitialized) {
+      LOG.info("GetWorkerAddresses called by getLocalWorker");
       initializeLocalWorker();
     }
     return mLocalWorker;
@@ -581,6 +583,7 @@ public class FileSystemContext implements Closeable {
     List<WorkerInfo> infos;
     BlockMasterClient blockMasterClient = mBlockMasterClientPool.acquire();
     try {
+      LOG.info("Getting worker info list from getWorkerAddresses");
       infos = blockMasterClient.getWorkerInfoList();
     } finally {
       mBlockMasterClientPool.release(blockMasterClient);

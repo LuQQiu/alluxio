@@ -263,6 +263,7 @@ public class AlluxioFileInStream extends FileInStream {
         len -= bytesRead;
         retry.reset();
         lastException = null;
+        LOG.info("position read internal");
         triggerAsyncCaching(mCachedPositionedReadStream);
       } catch (UnavailableException | DeadlineExceededException | ConnectException e) {
         lastException = e;
@@ -359,6 +360,7 @@ public class AlluxioFileInStream extends FileInStream {
       if (blockSource == BlockInStream.BlockInStreamSource.LOCAL) {
         return;
       }
+      LOG.info("close block in stream");
       triggerAsyncCaching(stream);
     }
   }
@@ -375,6 +377,7 @@ public class AlluxioFileInStream extends FileInStream {
     long blockId = stream.getId();
     if (cache && (mLastBlockIdCached != blockId)) {
       WorkerNetAddress worker;
+      LOG.info("GetWorkerAddresses called by triggerAsyncCaching");
       if (mPassiveCachingEnabled && mContext.hasLocalWorker()) { // send request to local worker
         worker = mContext.getLocalWorker();
       } else { // send request to data source
