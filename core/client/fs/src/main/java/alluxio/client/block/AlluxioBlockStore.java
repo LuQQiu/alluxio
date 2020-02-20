@@ -118,6 +118,7 @@ public final class AlluxioBlockStore {
    */
   public synchronized List<BlockWorkerInfo> getEligibleWorkers() throws IOException {
     if (mWorkerInfoList == null || mWorkerRefreshPolicy.attempt()) {
+      LOG.info("getting eligible worker mWorkerInfoList == null ? {}", mWorkerInfoList == null);
       mWorkerInfoList = getAllWorkers();
     }
     return mWorkerInfoList;

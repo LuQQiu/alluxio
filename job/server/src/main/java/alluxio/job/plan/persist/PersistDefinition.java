@@ -76,6 +76,7 @@ public final class PersistDefinition
     }
 
     AlluxioURI uri = new AlluxioURI(config.getFilePath());
+    LOG.info("Getting all workers in job server persist definition");
     List<BlockWorkerInfo> alluxioWorkerInfoList =
         AlluxioBlockStore.create(context.getFsContext()).getAllWorkers();
     BlockWorkerInfo workerWithMostBlocks = JobUtils.getWorkerWithMostBlocks(alluxioWorkerInfoList,

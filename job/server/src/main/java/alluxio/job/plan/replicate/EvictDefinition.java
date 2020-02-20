@@ -106,6 +106,7 @@ public final class EvictDefinition
     long blockId = config.getBlockId();
     String localHostName = NetworkAddressUtils.getConnectHost(ServiceType.WORKER_RPC,
         ServerConfiguration.global());
+    LOG.info("Getting all workers in job server eviction definition");
     List<BlockWorkerInfo> workerInfoList = blockStore.getAllWorkers();
     WorkerNetAddress localNetAddress = null;
 
