@@ -14,6 +14,7 @@ package alluxio.client.block;
 import alluxio.AbstractMasterClient;
 import alluxio.Constants;
 import alluxio.client.block.options.GetWorkerReportOptions;
+import alluxio.client.file.FileSystemContext;
 import alluxio.grpc.BlockMasterClientServiceGrpc;
 import alluxio.grpc.GetBlockInfoPRequest;
 import alluxio.grpc.GetBlockMasterInfoPOptions;
@@ -29,6 +30,8 @@ import alluxio.wire.BlockInfo;
 import alluxio.wire.BlockMasterInfo;
 import alluxio.wire.BlockMasterInfo.BlockMasterInfoField;
 import alluxio.wire.WorkerInfo;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -44,6 +47,7 @@ import javax.annotation.concurrent.ThreadSafe;
 @ThreadSafe
 public final class RetryHandlingBlockMasterClient extends AbstractMasterClient
     implements BlockMasterClient {
+  private static final Logger LOG = LoggerFactory.getLogger(RetryHandlingBlockMasterClient.class);
   private BlockMasterClientServiceGrpc.BlockMasterClientServiceBlockingStub mClient = null;
 
   /**
@@ -77,6 +81,7 @@ public final class RetryHandlingBlockMasterClient extends AbstractMasterClient
 
   @Override
   public List<WorkerInfo> getWorkerInfoList() throws IOException {
+    LOG.info("Request for getWorkerInfoList calls");
     return retryRPC(() -> {
       List<WorkerInfo> result = new ArrayList<>();
       for (alluxio.grpc.WorkerInfo workerInfo : mClient

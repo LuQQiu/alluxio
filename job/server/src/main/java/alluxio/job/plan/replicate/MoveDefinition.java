@@ -90,7 +90,7 @@ public final class MoveDefinition
     long blockId = config.getBlockId();
     String localHostName = NetworkAddressUtils.getConnectHost(ServiceType.WORKER_RPC,
         ServerConfiguration.global());
-    List<BlockWorkerInfo> workerInfoList = context.getFsContext().getAllWorkers();
+    List<BlockWorkerInfo> workerInfoList = context.getFsContext().getEligibleWorkers();
     WorkerNetAddress localNetAddress = null;
 
     for (BlockWorkerInfo workerInfo : workerInfoList) {
