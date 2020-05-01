@@ -15,6 +15,8 @@ import alluxio.exception.status.UnavailableException;
 import alluxio.master.MasterClientContext;
 import alluxio.master.MasterInquireClient;
 import alluxio.retry.RetryPolicy;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.net.InetSocketAddress;
 import java.util.function.Supplier;
@@ -26,6 +28,7 @@ import javax.annotation.concurrent.ThreadSafe;
  */
 @ThreadSafe
 public abstract class AbstractMasterClient extends AbstractClient {
+  private static final Logger LOG = LoggerFactory.getLogger(AbstractMasterClient.class);
   /** Client for determining the master RPC address. */
   private final MasterInquireClient mMasterInquireClient;
 
@@ -60,11 +63,15 @@ public abstract class AbstractMasterClient extends AbstractClient {
 
   @Override
   public synchronized InetSocketAddress getAddress() throws UnavailableException {
-    return mMasterInquireClient.getPrimaryRpcAddress();
+    InetSocketAddress address = mMasterInquireClient.getPrimaryRpcAddress();
+    LOG.info("For debug, getPrimaryRpcAddress with value {}", address.getHostName());
+    return address;
   }
 
   @Override
   public synchronized InetSocketAddress getConfAddress() throws UnavailableException {
-    return mConfMasterInquireClient.getPrimaryRpcAddress();
+    InetSocketAddress address = mConfMasterInquireClient.getPrimaryRpcAddress();
+    LOG.info("For debug, getConfAddress with value {}", address.getHostName());
+    return address;
   }
 }

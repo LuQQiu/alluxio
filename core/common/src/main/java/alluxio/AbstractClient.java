@@ -205,8 +205,9 @@ public abstract class AbstractClient implements Client {
 
     IOException lastConnectFailure = null;
     RetryPolicy retryPolicy = mRetryPolicySupplier.get();
-
+    LOG.info("For debug, Inside connect");
     while (retryPolicy.attempt()) {
+      LOG.info("For debug, connect attemp number is {}", retryPolicy.getAttemptCount());
       if (mClosed) {
         throw new FailedPreconditionException("Failed to connect: client has been closed");
       }
@@ -216,13 +217,13 @@ public abstract class AbstractClient implements Client {
         mAddress = getAddress();
         mConfAddress = getConfAddress();
       } catch (UnavailableException e) {
-        LOG.debug("Failed to determine {} rpc address ({}): {}",
+        LOG.info("Failed to determine {} rpc address ({}): {}",
             getServiceName(), retryPolicy.getAttemptCount(), e.toString());
         continue;
       }
       try {
         beforeConnect();
-        LOG.debug("Alluxio client (version {}) is trying to connect with {} @ {}",
+        LOG.info("Alluxio client (version {}) is trying to connect with {} @ {}",
             RuntimeConstants.VERSION, getServiceName(), mAddress);
         mChannel = GrpcChannelBuilder
             .newBuilder(GrpcServerAddress.create(mAddress), mContext.getClusterConf())
@@ -234,11 +235,11 @@ public abstract class AbstractClient implements Client {
         mConnected = true;
         afterConnect();
         checkVersion(getServiceVersion());
-        LOG.debug("Alluxio client (version {}) is connected with {} @ {}", RuntimeConstants.VERSION,
+        LOG.info("Alluxio client (version {}) is connected with {} @ {}", RuntimeConstants.VERSION,
             getServiceName(), mAddress);
         return;
       } catch (IOException e) {
-        LOG.debug("Failed to connect ({}) with {} @ {}: {}", retryPolicy.getAttemptCount(),
+        LOG.info("Failed to connect ({}) with {} @ {}: {}", retryPolicy.getAttemptCount(),
             getServiceName(), mAddress, e.getMessage());
         lastConnectFailure = e;
         if (e instanceof UnauthenticatedException) {
@@ -390,7 +391,9 @@ public abstract class AbstractClient implements Client {
       throws AlluxioStatusException {
     RetryPolicy retryPolicy = mRetryPolicySupplier.get();
     Exception ex = null;
+    LOG.info("For debug, start retrying RPC internally");
     while (retryPolicy.attempt()) {
+      LOG.info("For debug, attempt number is {}", retryPolicy.getAttemptCount());
       if (mClosed) {
         throw new FailedPreconditionException("Client is closed");
       }
