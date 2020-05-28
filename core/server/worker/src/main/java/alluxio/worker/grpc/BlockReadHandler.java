@@ -224,10 +224,12 @@ public final class BlockReadHandler extends AbstractReadHandler<BlockReadRequest
   protected BlockReadRequestContext createRequestContext(alluxio.grpc.ReadRequest request) {
     BlockReadRequestContext context = new BlockReadRequestContext(request);
     if (mDomainSocketEnabled) {
+      LOG.info("For debug, add worker bytes read domain counter");
       context.setCounter(MetricsSystem.counter(MetricKey.WORKER_BYTES_READ_DOMAIN.getName()));
       context.setMeter(MetricsSystem
           .meter(MetricKey.WORKER_BYTES_READ_DOMAIN_THROUGHPUT.getName()));
     } else {
+      LOG.info("For debug, add worker bytes read alluxio counter");
       context.setCounter(MetricsSystem.counter(MetricKey.WORKER_BYTES_READ_ALLUXIO.getName()));
       context.setMeter(MetricsSystem
           .meter(MetricKey.WORKER_BYTES_READ_ALLUXIO_THROUGHPUT.getName()));

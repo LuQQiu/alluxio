@@ -91,7 +91,7 @@ public class MetricsStore {
     try (LockResource r = new LockResource(mLock.readLock())) {
       putReportedMetrics(InstanceType.WORKER, metrics);
     }
-    LOG.debug("Put {} metrics of worker {}", metrics.size(), source);
+    LOG.info("Put {} metrics of worker {}", metrics.size(), source);
   }
 
   /**
@@ -132,8 +132,12 @@ public class MetricsStore {
         Counter counter = mClusterCounters.get(key);
         if (counter != null) {
           counter.inc((long) metric.getValue());
+          LOG.info("For debug, reporting metric name {} value {}, mClusterCounters incrementing to {}",
+              metric.getName(), metric.getValue(), counter.getCount());
           continue;
         }
+        LOG.info("For debug, reporting metric name {} value {}, mClusterCounters is null!!!!",
+            metric.getName(), metric.getValue(), counter.getCount());
         if (instanceType.equals(InstanceType.CLIENT)) {
           continue;
         }
@@ -177,6 +181,7 @@ public class MetricsStore {
   public void initCounterKeys() {
     try (LockResource r = new LockResource(mLock.readLock())) {
       // worker metrics
+      LOG.info("For debug, putting cluster counters");
       mClusterCounters.putIfAbsent(new ClusterCounterKey(InstanceType.WORKER,
           MetricKey.WORKER_BYTES_READ_ALLUXIO.getMetricName()),
           MetricsSystem.counter(MetricKey.CLUSTER_BYTES_READ_ALLUXIO.getName()));

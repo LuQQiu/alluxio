@@ -294,10 +294,12 @@ abstract class AbstractReadHandler<T extends ReadRequestContext<?>>
    * @param bytesRead bytes read
    */
   private void incrementMetrics(long bytesRead) {
+    LOG.info("For debug, increment metrics of bytes {}", bytesRead);
     Counter counter = mContext.getCounter();
     Meter meter = mContext.getMeter();
     Preconditions.checkState(counter != null);
     counter.inc(bytesRead);
+    LOG.info("For debug, worker metrics count becomes {}", mContext.getCounter().getCount());
     meter.mark(bytesRead);
   }
 

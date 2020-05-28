@@ -583,6 +583,7 @@ public final class MetricsSystem {
           LAST_REPORTED_METRICS.put(entry.getKey(), value);
         }
         double diff = prev != null ? value - prev : value;
+        LOG.info("For debug, Reporting counter {} with value {}, pre value {}, diff {}", entry.getKey(), value, prev, diff);
         if (diff != 0) { // Only report non-zero counter values
           rpcMetrics.add(Metric.from(entry.getKey(), diff, MetricType.COUNTER).toProto());
         }
