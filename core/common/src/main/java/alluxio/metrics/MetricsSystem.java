@@ -267,12 +267,14 @@ public final class MetricsSystem {
     }
     switch (CommonUtils.PROCESS_TYPE.get()) {
       case CLIENT:
+        LOG.info("For debug, name {} is in process {}", name, "CLIENT");
         return getClientMetricName(name);
       case MASTER:
         return getMasterMetricName(name);
       case PROXY:
         return getProxyMetricName(name);
       case WORKER:
+        LOG.info("For debug, name {} is in process {}", name, "WORKER");
         return getWorkerMetricName(name);
       case JOB_MASTER:
         return getJobMasterMetricName(name);

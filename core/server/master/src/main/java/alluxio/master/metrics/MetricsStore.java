@@ -136,9 +136,10 @@ public class MetricsStore {
               metric.getName(), metric.getValue(), counter.getCount());
           continue;
         }
-        LOG.info("For debug, reporting metric name {} value {}, mClusterCounters is null!!!!",
-            metric.getName(), metric.getValue(), counter.getCount());
+        LOG.info("For debug, reporting metric name {} full name {} value {}, mClusterCounters is null!!!!",
+            metric.getName(), metric.getFullMetricName(), metric.getValue());
         if (instanceType.equals(InstanceType.CLIENT)) {
+          LOG.info("For debug, instance type is CLIENT!!!");
           continue;
         }
         // Need to increment two metrics: one for the specific ufs the current metric recorded from
