@@ -25,6 +25,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Clock;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -85,6 +86,7 @@ public class MetricsStore {
    * @param metrics the new worker metrics
    */
   public void putWorkerMetrics(String source, List<Metric> metrics) {
+    LOG.info("Received worker metrics {}", Arrays.toString(metrics.toArray()));
     if (metrics.isEmpty() || source == null) {
       return;
     }

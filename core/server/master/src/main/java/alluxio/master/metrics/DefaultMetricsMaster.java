@@ -192,7 +192,6 @@ public class DefaultMetricsMaster extends CoreMaster implements MetricsMaster, N
 
   @Override
   public void workerHeartbeat(String source, List<Metric> metrics) {
-    LOG.info("Received worker metrics {}", Arrays.toString(metrics.toArray()));
     getExecutorService().submit(() -> mMetricsStore.putWorkerMetrics(source, metrics));
   }
 
