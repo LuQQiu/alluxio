@@ -748,6 +748,7 @@ public final class MetricsSystem {
       SHOULD_REPORT_METRICS.putIfAbsent(
           getMetricNameWithUniqueId(instanceType, metricKey.getName()),
           metricKey.getMetricType());
+      LOG.info("Putting should report metrics of type {} with name {}", instanceType, metricKey.getName());
     }
   }
 

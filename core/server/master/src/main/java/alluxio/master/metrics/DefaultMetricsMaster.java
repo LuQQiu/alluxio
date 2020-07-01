@@ -40,6 +40,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.time.Clock;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -191,6 +192,7 @@ public class DefaultMetricsMaster extends CoreMaster implements MetricsMaster, N
 
   @Override
   public void workerHeartbeat(String source, List<Metric> metrics) {
+    LOG.info("Received worker metrics {}", Arrays.toString(metrics.toArray()));
     getExecutorService().submit(() -> mMetricsStore.putWorkerMetrics(source, metrics));
   }
 
