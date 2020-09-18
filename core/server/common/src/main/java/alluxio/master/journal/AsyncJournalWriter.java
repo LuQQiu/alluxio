@@ -251,16 +251,19 @@ public final class AsyncJournalWriter {
        *   - clients
        *   -::stop()
        */
-      while (mQueue.isEmpty() && !mStopFlushing) {
-        try {
-          // Wait for permit up to batch timeout.
-          // PS: We don't wait for permit indefinitely in order to process
-          // queued entries proactively.
-          if (mFlushSemaphore.tryAcquire(mFlushBatchTimeNs, TimeUnit.NANOSECONDS)) {
+      try (Timer.Context ctx = MetricsSystem
+          .timer("Master.JournalWaitTime").time()) {
+        while (mQueue.isEmpty() && !mStopFlushing) {
+          try {
+            // Wait for permit up to batch timeout.
+            // PS: We don't wait for permit indefinitely in order to process
+            // queued entries proactively.
+            if (mFlushSemaphore.tryAcquire(mFlushBatchTimeNs, TimeUnit.NANOSECONDS)) {
+              break;
+            }
+          } catch (InterruptedException ie) {
             break;
           }
-        } catch (InterruptedException ie) {
-          break;
         }
       }
 
@@ -268,23 +271,26 @@ public final class AsyncJournalWriter {
         long startTime = System.nanoTime();
 
         // Write pending entries to journal.
-        while (!mQueue.isEmpty()) {
-          // Get, but do not remove, the head entry.
-          JournalEntry entry = mQueue.peek();
-          if (entry == null) {
-            // No more entries in the queue. Break write session.
-            break;
-          }
-          mJournalWriter.write(entry);
-          JournalUtils.sinkAppend(mJournalSinks, entry);
-          // Remove the head entry, after the entry was successfully written.
-          mQueue.poll();
-          mWriteCounter++;
+        try (Timer.Context ctx = MetricsSystem
+            .timer("Master.JournalPollBatchTime").time()) {
+          while (!mQueue.isEmpty()) {
+            // Get, but do not remove, the head entry.
+            JournalEntry entry = mQueue.peek();
+            if (entry == null) {
+              // No more entries in the queue. Break write session.
+              break;
+            }
+            mJournalWriter.write(entry);
+            JournalUtils.sinkAppend(mJournalSinks, entry);
+            // Remove the head entry, after the entry was successfully written.
+            mQueue.poll();
+            mWriteCounter++;
 
-          if (((System.nanoTime() - startTime) >= mFlushBatchTimeNs) && !mStopFlushing) {
-            // This thread has been writing to the journal for enough time. Break out of the
-            // infinite while-loop.
-            break;
+            if (((System.nanoTime() - startTime) >= mFlushBatchTimeNs) && !mStopFlushing) {
+              // This thread has been writing to the journal for enough time. Break out of the
+              // infinite while-loop.
+              break;
+            }
           }
         }
 
