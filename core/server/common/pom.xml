@@ -39,7 +39,7 @@
       <artifactId>ratis-server</artifactId>
     </dependency>
     <dependency>
-      <groupId>org.apache.ratis</groupId>
+      <groupId>org.apache.ratis.lu</groupId>
       <artifactId>ratis-grpc</artifactId>
     </dependency>
     <!-- TODO(lu) remove catalyst dependency which used for serialization and move to Grpc impl -->
