@@ -117,12 +117,8 @@
       </snapshots>
     </repository>
     <repository>
-      <id>alluxio.artifacts</id>
-      <url>http://alluxio.artifacts.s3-website-us-east-1.amazonaws.com/release</url>
-    </repository>
-    <repository>
       <id>lu.artifacts</id>
-      <url>http://lu.artifacts.s3-website-us-east-1.amazonaws.com/test</url>
+      <url>http://lu.artifacts.s3-website-us-east-1.amazonaws.com/snapshot</url>
     </repository>
   </repositories>
 
@@ -154,7 +150,7 @@
     <parquet.version>1.11.0</parquet.version>
     <protobuf.version>3.12.4</protobuf.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <ratis.version>1.0.0</ratis.version>
+    <ratis.version>1.1.0-SNAPSHOT</ratis.version>
     <slf4j.version>1.7.30</slf4j.version>
     <jackson.version>2.11.1</jackson.version>
     <ozone.version>0.5.0-beta</ozone.version>
@@ -679,11 +675,11 @@
       <dependency>
         <artifactId>ratis-server</artifactId>
         <groupId>org.apache.ratis.lu</groupId>
-        <version>1.1.0-SNAPSHOT</version>
+        <version>${ratis.version}</version>
       </dependency>
       <dependency>
         <artifactId>ratis-grpc</artifactId>
-        <groupId>org.apache.ratis</groupId>
+        <groupId>org.apache.ratis.lu</groupId>
         <version>${ratis.version}</version>
       </dependency>
 
