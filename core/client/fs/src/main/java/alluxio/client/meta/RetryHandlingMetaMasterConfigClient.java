@@ -33,6 +33,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 import javax.annotation.concurrent.ThreadSafe;
 
@@ -72,7 +73,9 @@ public class RetryHandlingMetaMasterConfigClient extends AbstractMasterClient
 
   @Override
   protected void afterConnect() {
-    mClient = MetaMasterConfigurationServiceGrpc.newBlockingStub(mChannel);
+    mClient = MetaMasterConfigurationServiceGrpc.newBlockingStub(mChannel)
+        .withDeadlineAfter(mContext.getClusterConf().getMs(PropertyKey.USER_MASTER_POLLING_TIMEOUT),
+            TimeUnit.MILLISECONDS);
   }
 
   @Override

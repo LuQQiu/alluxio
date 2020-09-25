@@ -44,6 +44,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.channels.UnresolvedAddressException;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 import javax.annotation.concurrent.ThreadSafe;
@@ -230,7 +231,9 @@ public abstract class AbstractClient implements Client {
             .setClientType(getServiceName())
             .build();
         // Create stub for version service on host
-        mVersionService = ServiceVersionClientServiceGrpc.newBlockingStub(mChannel);
+        mVersionService = ServiceVersionClientServiceGrpc.newBlockingStub(mChannel)
+            .withDeadlineAfter(mContext.getClusterConf().getMs(PropertyKey.USER_MASTER_POLLING_TIMEOUT),
+            TimeUnit.MILLISECONDS);
         mConnected = true;
         afterConnect();
         checkVersion(getServiceVersion());

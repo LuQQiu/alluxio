@@ -13,6 +13,7 @@ package alluxio.client.metrics;
 
 import alluxio.AbstractMasterClient;
 import alluxio.Constants;
+import alluxio.conf.PropertyKey;
 import alluxio.exception.status.AlluxioStatusException;
 import alluxio.exception.status.UnavailableException;
 import alluxio.grpc.ClearMetricsPRequest;
@@ -31,6 +32,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import javax.annotation.concurrent.ThreadSafe;
 
@@ -70,7 +72,9 @@ public class RetryHandlingMetricsMasterClient extends AbstractMasterClient
 
   @Override
   protected void afterConnect() {
-    mClient = MetricsMasterClientServiceGrpc.newBlockingStub(mChannel);
+    mClient = MetricsMasterClientServiceGrpc.newBlockingStub(mChannel)
+        .withDeadlineAfter(mContext.getClusterConf().getMs(PropertyKey.USER_MASTER_POLLING_TIMEOUT),
+            TimeUnit.MILLISECONDS);
   }
 
   @Override

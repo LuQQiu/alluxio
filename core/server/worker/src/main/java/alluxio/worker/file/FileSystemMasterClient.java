@@ -13,6 +13,7 @@ package alluxio.worker.file;
 
 import alluxio.AbstractMasterClient;
 import alluxio.Constants;
+import alluxio.conf.PropertyKey;
 import alluxio.grpc.FileSystemMasterWorkerServiceGrpc;
 import alluxio.grpc.GetFileInfoPRequest;
 import alluxio.grpc.GetPinnedFileIdsPRequest;
@@ -29,6 +30,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 import javax.annotation.concurrent.ThreadSafe;
 
@@ -67,7 +69,9 @@ public final class FileSystemMasterClient extends AbstractMasterClient {
 
   @Override
   protected void afterConnect() throws IOException {
-    mClient = FileSystemMasterWorkerServiceGrpc.newBlockingStub(mChannel);
+    mClient = FileSystemMasterWorkerServiceGrpc.newBlockingStub(mChannel)
+        .withDeadlineAfter(mContext.getClusterConf().getMs(PropertyKey.USER_MASTER_POLLING_TIMEOUT),
+            TimeUnit.MILLISECONDS);
   }
 
   /**

@@ -115,7 +115,9 @@ public class DefaultBlockWorkerClient implements BlockWorkerClient {
       throw lastException;
     }
     mStreamingAsyncStub = BlockWorkerGrpc.newStub(mStreamingChannel);
-    mRpcBlockingStub = BlockWorkerGrpc.newBlockingStub(mRpcChannel);
+    mRpcBlockingStub = BlockWorkerGrpc.newBlockingStub(mRpcChannel)
+        .withDeadlineAfter(alluxioConf.getMs(PropertyKey.USER_MASTER_POLLING_TIMEOUT),
+            TimeUnit.MILLISECONDS);
     mRpcAsyncStub = BlockWorkerGrpc.newStub(mRpcChannel);
     mAddress = address;
     mDataTimeoutMs = alluxioConf.getMs(PropertyKey.USER_STREAMING_DATA_TIMEOUT);

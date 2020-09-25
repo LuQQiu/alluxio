@@ -13,6 +13,7 @@ package alluxio.client.meta;
 
 import alluxio.AbstractMasterClient;
 import alluxio.Constants;
+import alluxio.conf.PropertyKey;
 import alluxio.grpc.BackupPRequest;
 import alluxio.grpc.BackupStatusPRequest;
 import alluxio.grpc.CheckpointPOptions;
@@ -32,6 +33,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 import javax.annotation.concurrent.ThreadSafe;
 
@@ -70,7 +72,9 @@ public class RetryHandlingMetaMasterClient extends AbstractMasterClient
 
   @Override
   protected void afterConnect() {
-    mClient = MetaMasterClientServiceGrpc.newBlockingStub(mChannel);
+    mClient = MetaMasterClientServiceGrpc.newBlockingStub(mChannel)
+        .withDeadlineAfter(mContext.getClusterConf().getMs(PropertyKey.USER_MASTER_POLLING_TIMEOUT),
+            TimeUnit.MILLISECONDS);
   }
 
   @Override

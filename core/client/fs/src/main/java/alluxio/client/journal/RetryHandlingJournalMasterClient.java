@@ -13,6 +13,7 @@ package alluxio.client.journal;
 
 import alluxio.AbstractMasterClient;
 import alluxio.Constants;
+import alluxio.conf.PropertyKey;
 import alluxio.exception.status.AlluxioStatusException;
 import alluxio.grpc.GetQuorumInfoPRequest;
 import alluxio.grpc.GetQuorumInfoPResponse;
@@ -24,6 +25,8 @@ import alluxio.master.MasterClientContext;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.concurrent.TimeUnit;
 
 /**
  * A wrapper for the gRPC client to interact with the journal master, used by alluxio clients.
@@ -59,7 +62,9 @@ public class RetryHandlingJournalMasterClient extends AbstractMasterClient
 
   @Override
   protected void afterConnect() {
-    mClient = JournalMasterClientServiceGrpc.newBlockingStub(mChannel);
+    mClient = JournalMasterClientServiceGrpc.newBlockingStub(mChannel)
+        .withDeadlineAfter(mContext.getClusterConf().getMs(PropertyKey.USER_MASTER_POLLING_TIMEOUT),
+            TimeUnit.MILLISECONDS);
   }
 
   @Override

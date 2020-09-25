@@ -13,6 +13,7 @@ package alluxio.worker.job;
 
 import alluxio.AbstractMasterClient;
 import alluxio.Constants;
+import alluxio.conf.PropertyKey;
 import alluxio.grpc.JobCommand;
 import alluxio.grpc.JobHeartbeatPRequest;
 import alluxio.grpc.JobInfo;
@@ -28,6 +29,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import javax.annotation.concurrent.ThreadSafe;
 
@@ -67,7 +69,9 @@ public final class RetryHandlingJobMasterClient extends AbstractMasterClient
 
   @Override
   protected void afterConnect() {
-    mClient = JobMasterWorkerServiceGrpc.newBlockingStub(mChannel);
+    mClient = JobMasterWorkerServiceGrpc.newBlockingStub(mChannel)
+        .withDeadlineAfter(mContext.getClusterConf().getMs(PropertyKey.USER_MASTER_POLLING_TIMEOUT),
+            TimeUnit.MILLISECONDS);
   }
 
   @Override

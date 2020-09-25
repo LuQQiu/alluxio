@@ -13,6 +13,7 @@ package alluxio.client.table;
 
 import alluxio.AbstractMasterClient;
 import alluxio.Constants;
+import alluxio.conf.PropertyKey;
 import alluxio.exception.status.AlluxioStatusException;
 import alluxio.grpc.ServiceType;
 import alluxio.grpc.table.AttachDatabasePRequest;
@@ -42,6 +43,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import javax.annotation.concurrent.ThreadSafe;
@@ -81,7 +83,9 @@ public final class RetryHandlingTableMasterClient extends AbstractMasterClient
 
   @Override
   protected void afterConnect() {
-    mClient = TableMasterClientServiceGrpc.newBlockingStub(mChannel);
+    mClient = TableMasterClientServiceGrpc.newBlockingStub(mChannel)
+        .withDeadlineAfter(mContext.getClusterConf().getMs(PropertyKey.USER_MASTER_POLLING_TIMEOUT),
+            TimeUnit.MILLISECONDS);
   }
 
   @Override
