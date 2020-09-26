@@ -95,6 +95,7 @@ public class ChannelAuthenticator {
       SaslAuthenticationServiceGrpc.SaslAuthenticationServiceStub serverStub =
           SaslAuthenticationServiceGrpc.newStub(mConnection.getChannel());
 
+      // TODO(lu) possibly require timeout
       StreamObserver<SaslMessage> requestObserver = serverStub.authenticate(mAuthDriver);
       mAuthDriver.setServerObserver(requestObserver);
 

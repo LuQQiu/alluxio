@@ -33,6 +33,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 import javax.annotation.concurrent.ThreadSafe;
 
@@ -78,13 +79,15 @@ public class RetryHandlingMetaMasterConfigClient extends AbstractMasterClient
   @Override
   public Configuration getConfiguration(GetConfigurationPOptions options) throws IOException {
     return Configuration.fromProto(retryRPC(() ->
-        mClient.getConfiguration(options), RPC_LOG, "GetConfiguration", "options=%s", options));
+        mClient.withDeadlineAfter(mContext.getClusterConf().getMs(PropertyKey.USER_MASTER_POLLING_TIMEOUT), TimeUnit.MILLISECONDS)
+        .getConfiguration(options), RPC_LOG, "GetConfiguration", "options=%s", options));
   }
 
   @Override
   public ConfigHash getConfigHash() throws IOException {
-    return ConfigHash.fromProto(retryRPC(() -> mClient.getConfigHash(
-        GetConfigHashPOptions.getDefaultInstance()), RPC_LOG, "GetConfigHash", ""));
+    return ConfigHash.fromProto(retryRPC(() -> mClient
+        .withDeadlineAfter(mContext.getClusterConf().getMs(PropertyKey.USER_MASTER_POLLING_TIMEOUT), TimeUnit.MILLISECONDS)
+        .getConfigHash(GetConfigHashPOptions.getDefaultInstance()), RPC_LOG, "GetConfigHash", ""));
   }
 
   @Override
