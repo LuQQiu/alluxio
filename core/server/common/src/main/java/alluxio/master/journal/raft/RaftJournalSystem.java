@@ -271,7 +271,8 @@ public class RaftJournalSystem extends AbstractJournalSystem {
     mRaftGroup = RaftGroup.valueOf(mRaftGroupId, peers);
 
     RaftProperties properties = new RaftProperties();
-
+    properties.setInt("raft.server.write.element-limit", 16384);
+    properties.set("raft.server.write.byte-limit", "256MB");
     // TODO(feng): implement a custom RpcType to integrate with Alluxio authentication service
     RaftConfigKeys.Rpc.setType(properties, SupportedRpcType.GRPC);
 
