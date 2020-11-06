@@ -156,6 +156,7 @@ public class SharedGrpcDataReader implements DataReader {
     @Override
     public DataReader create(long offset, long len) throws IOException {
       long blockId = mReadRequestPartial.getBlockId();
+      LOG.info("Creating SharedGrpcDataReader for block " + blockId);
       BufferCachingGrpcDataReader reader;
       try (LockResource lockResource = new LockResource(
           BLOCK_LOCKS[(int) (blockId % BLOCK_LOCKS.length)].writeLock())) {

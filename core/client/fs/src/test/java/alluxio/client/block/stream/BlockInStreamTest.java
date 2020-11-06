@@ -20,6 +20,7 @@ import static org.mockito.Mockito.when;
 import alluxio.ClientContext;
 import alluxio.ConfigurationRule;
 import alluxio.ConfigurationTestUtils;
+import alluxio.Constants;
 import alluxio.conf.InstancedConfiguration;
 import alluxio.conf.PropertyKey;
 import alluxio.client.file.FileSystemContext;
@@ -81,7 +82,7 @@ public class BlockInStreamTest {
         .thenReturn(new NoopClosableResource<>(workerClient));
     PowerMockito.when(mMockContext.getClientContext()).thenReturn(ClientContext.create(mConf));
     PowerMockito.when(mMockContext.getClusterConf()).thenReturn(mConf);
-    mInfo = new BlockInfo().setBlockId(1);
+    mInfo = new BlockInfo().setBlockId(1).setLength(5 * Constants.MB);
     mOptions = new InStreamOptions(new URIStatus(new FileInfo().setBlockIds(Collections
         .singletonList(1L))), mConf);
   }
@@ -140,5 +141,19 @@ public class BlockInStreamTest {
     BlockInStream stream = BlockInStream.create(mMockContext, mInfo, dataSource, dataSourceType,
         mOptions);
     assertFalse(stream.isShortCircuit());
+  }
+
+  @Test
+  public void createFuseSharedReaderEnabled() throws Exception {
+    try (Closeable c =
+             new ConfigurationRule(PropertyKey.FUSE_SHARED_CACHING_READER_ENABLED, "true", mConf)
+                 .toResource()) {
+      WorkerNetAddress dataSource = new WorkerNetAddress();
+      when(mMockContext.getClientContext()).thenReturn(ClientContext.create(mConf));
+      BlockInStream.BlockInStreamSource dataSourceType = BlockInStream.BlockInStreamSource.REMOTE;
+      BlockInStream stream =
+          BlockInStream.create(mMockContext, mInfo, dataSource, dataSourceType, mOptions);
+      assertFalse(stream.isShortCircuit());
+    }
   }
 }
