@@ -89,9 +89,10 @@ class ShortCircuitBlockReadHandler implements StreamObserver<OpenLocalBlockReque
             }
           }
           mLockId = mWorker.lockBlock(mSessionId, mRequest.getBlockId());
+          LOG.info("onNext mWorker.lockBlock Lock block {} lock {} READ", mRequest.getBlockId(), mLockId);
           mWorker.accessBlock(mSessionId, mRequest.getBlockId());
         } else {
-          LOG.warn("Lock block {} without releasing previous block lock {}.",
+          LOG.warn("onNext Lock block {} without releasing previous block lock {} READ.",
               mRequest.getBlockId(), mLockId);
           throw new InvalidWorkerStateException(
               ExceptionMessage.LOCK_NOT_RELEASED.getMessage(mLockId));
@@ -106,8 +107,9 @@ class ShortCircuitBlockReadHandler implements StreamObserver<OpenLocalBlockReque
         if (mLockId != BlockLockManager.INVALID_LOCK_ID) {
           try {
             mWorker.unlockBlock(mLockId);
+            LOG.info("exceptionCaught unlocked mLockId {} READ", mLockId);
           } catch (BlockDoesNotExistException ee) {
-            LOG.error("Failed to unlock block {}.", mRequest.getBlockId(), e);
+            LOG.error("Failed to unlock block {} lock {}. READ", mRequest.getBlockId(), mLockId, e);
           }
           mLockId = BlockLockManager.INVALID_LOCK_ID;
         }
@@ -123,8 +125,9 @@ class ShortCircuitBlockReadHandler implements StreamObserver<OpenLocalBlockReque
     if (mLockId != BlockLockManager.INVALID_LOCK_ID) {
       try {
         mWorker.unlockBlock(mLockId);
+        LOG.info("onError unlocked mLockId {} READ", mLockId);
       } catch (BlockDoesNotExistException e) {
-        LOG.warn("Failed to unlock lock {} with error {}.", mLockId, e.getMessage());
+        LOG.warn("Failed to unlock lock {} with error {} READ.", mLockId, e.getMessage());
       }
       mWorker.cleanupSession(mSessionId);
     }
@@ -142,8 +145,9 @@ class ShortCircuitBlockReadHandler implements StreamObserver<OpenLocalBlockReque
         if (mLockId != BlockLockManager.INVALID_LOCK_ID) {
           try {
             mWorker.unlockBlock(mLockId);
+            LOG.info("onComplete unlocked mLockId {} READ", mLockId);
           } catch (BlockDoesNotExistException e) {
-            LOG.warn("Failed to unlock lock {} with error {}.", mLockId, e.getMessage());
+            LOG.warn("Failed to unlock lock {} with error {} READ.", mLockId, e.getMessage());
           }
           mLockId = BlockLockManager.INVALID_LOCK_ID;
         } else if (mRequest != null) {

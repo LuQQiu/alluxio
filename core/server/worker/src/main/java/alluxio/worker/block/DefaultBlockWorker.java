@@ -286,6 +286,7 @@ public final class DefaultBlockWorker extends AbstractWorker implements BlockWor
     // Block successfully committed, update master with new block metadata
     if (lockId == -1) {
       lockId = mBlockStore.lockBlock(sessionId, blockId);
+      LOG.info("commitBlock mBlockStore.lockBlock block {} lock {} READ", blockId, lockId);
     }
     BlockMasterClient blockMasterClient = mBlockMasterClientPool.acquire();
     try {
@@ -302,6 +303,7 @@ public final class DefaultBlockWorker extends AbstractWorker implements BlockWor
     } finally {
       mBlockMasterClientPool.release(blockMasterClient);
       mBlockStore.unlockBlock(lockId);
+      LOG.info("commitBlock mBlockStore.unlockBlock block {} lock {} READ", blockId, lockId);
     }
   }
 
@@ -422,6 +424,7 @@ public final class DefaultBlockWorker extends AbstractWorker implements BlockWor
     // Because the move operation is expensive, we first check if the operation is necessary
     BlockStoreLocation dst = BlockStoreLocation.anyDirInTier(tierAlias);
     long lockId = mBlockStore.lockBlock(sessionId, blockId);
+    LOG.info("moveBlock mBlockStore.lockBlock block {} lock {} READ", blockId, lockId);
     try {
       BlockMeta meta = mBlockStore.getBlockMeta(sessionId, blockId, lockId);
       if (meta.getBlockLocation().belongsTo(dst)) {
@@ -429,6 +432,7 @@ public final class DefaultBlockWorker extends AbstractWorker implements BlockWor
       }
     } finally {
       mBlockStore.unlockBlock(lockId);
+      LOG.info("moveBlock mBlockStore.unlockBlock block {} lock {} READ", blockId, lockId);
     }
     // Execute the block move if necessary
     mBlockStore.moveBlock(sessionId, blockId, AllocateOptions.forMove(dst));
@@ -440,6 +444,7 @@ public final class DefaultBlockWorker extends AbstractWorker implements BlockWor
       WorkerOutOfSpaceException, IOException {
     BlockStoreLocation dst = BlockStoreLocation.anyDirInTierWithMedium(mediumType);
     long lockId = mBlockStore.lockBlock(sessionId, blockId);
+    LOG.info("moveBlockToMedium mBlockStore.lockBlock block {} lock {} READ", blockId, lockId);
     try {
       BlockMeta meta = mBlockStore.getBlockMeta(sessionId, blockId, lockId);
       if (meta.getBlockLocation().belongsTo(dst)) {
@@ -447,6 +452,7 @@ public final class DefaultBlockWorker extends AbstractWorker implements BlockWor
       }
     } finally {
       mBlockStore.unlockBlock(lockId);
+      LOG.info("moveBlockToMedium mBlockStore.unlockBlock block {} lock {} READ", blockId, lockId);
     }
     // Execute the block move if necessary
     mBlockStore.moveBlock(sessionId, blockId, AllocateOptions.forMove(dst));

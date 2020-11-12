@@ -96,13 +96,17 @@ public final class BlockReadHandler extends AbstractReadHandler<BlockReadRequest
         LOG.warn("Failed to close block reader for block {} with error {}.",
             context.getRequest().getId(), e.getMessage());
       } finally {
-        if (!mWorker.unlockBlock(context.getRequest().getSessionId(),
-            context.getRequest().getId())) {
+        boolean result = mWorker.unlockBlock(context.getRequest().getSessionId(),
+                context.getRequest().getId());
+        if (!result) {
+          LOG.info("completeRequest mWorker.unlockBlock blok {} lock not found", context.getRequest().getId());
           if (reader != null) {
             mWorker.closeUfsBlock(context.getRequest().getSessionId(),
                 context.getRequest().getId());
             context.setBlockReader(null);
           }
+        } else {
+          LOG.info("completeRequest mWorker.unlockBlock blok {}", context.getRequest().getId());
         }
       }
     }
@@ -185,6 +189,7 @@ public final class BlockReadHandler extends AbstractReadHandler<BlockReadRequest
         } else {
           lockId = mWorker.lockBlock(request.getSessionId(), request.getId());
         }
+        LOG.info("openBlock mWorker.lockBlock block {} with lock {} READ", request.getId(), lockId);
         if (lockId != BlockLockManager.INVALID_LOCK_ID) {
           try {
             BlockReader reader =
@@ -195,6 +200,11 @@ public final class BlockReadHandler extends AbstractReadHandler<BlockReadRequest
             return;
           } catch (Throwable e) {
             mWorker.unlockBlock(lockId);
+            if (e instanceof RuntimeException) {
+              LOG.warn("openBlock mWorker.unlockBlock of block {} with lock {} throws RuntimeException READ", request.getId(), lockId, e);
+            } else {
+              LOG.warn("openBlock mWorker.unlockBlock of block {} with lock {} throws throwable READ", request.getId(), lockId, e);
+            }
             throw e;
           }
         }

@@ -123,8 +123,8 @@ public final class BlockLockManager {
       lock.lock();
     }
 
+    long lockId = LOCK_ID_GEN.getAndIncrement();
     try {
-      long lockId = LOCK_ID_GEN.getAndIncrement();
       try (LockResource r = new LockResource(mSharedMapsLock.writeLock())) {
         mLockIdToRecordMap.put(lockId, new LockRecord(sessionId, blockId, lock));
         Set<Long> sessionLockIds = mSessionIdToLockIdsMap.get(sessionId);
@@ -136,6 +136,11 @@ public final class BlockLockManager {
       }
       return lockId;
     } catch (Throwable e) {
+      if (e instanceof RuntimeException) {
+        LOG.warn("lockBlock block {} lock {} throws RuntimeException ",blockId, lockId, e);
+      } else {
+        LOG.warn("lockBlock block {} lock {} throws Throwable ", blockId, lockId, e);
+      }
       // If an unexpected exception occurs, we should release the lock to be conservative.
       unlock(lock, blockId);
       throw e;

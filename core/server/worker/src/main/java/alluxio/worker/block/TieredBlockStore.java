@@ -273,6 +273,7 @@ public class TieredBlockStore implements BlockStore {
     LOG.debug("commitBlock: sessionId={}, blockId={}, pinOnCreate={}",
         sessionId, blockId, pinOnCreate);
     long lockId = mLockManager.lockBlock(sessionId, blockId, BlockLockType.WRITE);
+    LOG.info("commitBlockLocked block {} lock {}, write", blockId, lockId);
     try {
       BlockStoreLocation loc = commitBlockInternal(sessionId, blockId, pinOnCreate);
       synchronized (mBlockStoreEventListeners) {
