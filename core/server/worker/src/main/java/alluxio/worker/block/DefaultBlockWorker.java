@@ -155,7 +155,7 @@ public final class DefaultBlockWorker extends AbstractWorker implements BlockWor
     mBlockStore = mResourceCloser.register(blockStore);
     mWorkerId = new AtomicReference<>(-1L);
     mBlockStore.registerBlockStoreEventListener(mHeartbeatReporter);
-    mBlockStore.registerBlockStoreEventListener(mMetricsReporter);
+    // mBlockStore.registerBlockStoreEventListener(mMetricsReporter);
     mUfsManager = ufsManager;
     mUnderFileSystemBlockStore = new UnderFileSystemBlockStore(mBlockStore, ufsManager);
 
