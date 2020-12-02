@@ -383,7 +383,7 @@ public class DefaultBlockIterator implements BlockIterator {
   class Listener extends AbstractBlockStoreEventListener {
     @Override
     public void onAccessBlock(long sessionId, long blockId, BlockStoreLocation location) {
-      blockUpdated(blockId, location);
+      //blockUpdated(blockId, location);
     }
 
     @Override
