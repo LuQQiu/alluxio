@@ -257,14 +257,17 @@ public final class BlockLockManager {
     try (LockResource r = new LockResource(mSharedMapsLock.writeLock())) {
       long start = System.nanoTime();
       Set<Long> sessionLockIds = mSessionIdToLockIdsMap.get(sessionId);
+      long one = System.nanoTime();
+      LOG.info("For debug, one mSessionIdToLockIdsMap.get(sessionId) takes {} nano", one - start);
       if (sessionLockIds == null) {
         long last = System.nanoTime() - start;
         LOG.info("For debug, unlockBlock takes {} ms {} nano", last / 1000000, last);
         return false;
       }
-      LOG.info("For debug, session {} has sessionLockIds of size {}", sessionId, sessionLockIds.size());
       for (long lockId : sessionLockIds) {
         LockRecord record = mLockIdToRecordMap.get(lockId);
+        long two = System.nanoTime();
+        LOG.info("For debug, two mLockIdToRecordMap.get(lockId); takes {} nano", two  - one);
         if (record == null) {
           // TODO(peis): Should this be a check failure?
           return false;
@@ -275,15 +278,15 @@ public final class BlockLockManager {
           if (sessionLockIds.isEmpty()) {
             mSessionIdToLockIdsMap.remove(sessionId);
           }
+          long three = System.nanoTime();
+          LOG.info("For debug, three remove takes {} nano", three - two);
           Lock lock = record.getLock();
           unlock(lock, blockId);
-          long last = System.nanoTime() - start;
-          LOG.info("For debug, unlockBlock takes {} ms {} nano", last / 1000000, last);
+          LOG.info("For debug, four unlockBlock takes {} nano",  System.nanoTime() - three);
           return true;
         }
       }
-      long last = System.nanoTime() - start;
-      LOG.info("For debug, unlockBlock takes {} ms {} nano", last / 1000000, last);
+      LOG.info("For debug, five unlockBlock takes {} nano", System.nanoTime() - start);
       return false;
     }
   }
