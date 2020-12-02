@@ -257,36 +257,31 @@ public final class BlockLockManager {
     try (LockResource r = new LockResource(mSharedMapsLock.writeLock())) {
       long start = System.nanoTime();
       Set<Long> sessionLockIds = mSessionIdToLockIdsMap.get(sessionId);
-      long one = System.nanoTime();
-      LOG.info("For debug, one mSessionIdToLockIdsMap.get(sessionId) takes {} nano", one - start);
       if (sessionLockIds == null) {
         long last = System.nanoTime() - start;
         LOG.info("For debug, unlockBlock takes {} ms {} nano", last / 1000000, last);
         return false;
       }
       for (long lockId : sessionLockIds) {
-        LockRecord record = mLockIdToRecordMap.get(lockId);
+        LockRecord record = mLockIdToRecordMap.get(lockId); // take larger time than expected
         long two = System.nanoTime();
-        LOG.info("For debug, two mLockIdToRecordMap.get(lockId); takes {} nano", two  - one);
+        LOG.info("For debug, two mLockIdToRecordMap.get(lockId) with size {}; takes {} nano", mLockIdToRecordMap.size(), two  - start);
         if (record == null) {
           // TODO(peis): Should this be a check failure?
           return false;
         }
         if (blockId == record.getBlockId()) {
-          mLockIdToRecordMap.remove(lockId);
+          mLockIdToRecordMap.remove(lockId); // take some time
           sessionLockIds.remove(lockId);
           if (sessionLockIds.isEmpty()) {
             mSessionIdToLockIdsMap.remove(sessionId);
           }
-          long three = System.nanoTime();
-          LOG.info("For debug, three remove takes {} nano", three - two);
           Lock lock = record.getLock();
-          unlock(lock, blockId);
-          LOG.info("For debug, four unlockBlock takes {} nano",  System.nanoTime() - three);
+          unlock(lock, blockId); // take some time
+          LOG.info("For debug, four unlockBlock takes {} nano",  System.nanoTime() - two);
           return true;
         }
       }
-      LOG.info("For debug, five unlockBlock takes {} nano", System.nanoTime() - start);
       return false;
     }
   }
