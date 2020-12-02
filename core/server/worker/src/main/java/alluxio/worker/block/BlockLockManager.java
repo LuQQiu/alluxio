@@ -262,6 +262,7 @@ public final class BlockLockManager {
         LOG.info("For debug, unlockBlock takes {} ms {} nano", last / 1000000, last);
         return false;
       }
+      LOG.info("For debug, session {} has sessionLockIds of size {}", sessionId, sessionLockIds.size());
       for (long lockId : sessionLockIds) {
         LockRecord record = mLockIdToRecordMap.get(lockId);
         if (record == null) {
