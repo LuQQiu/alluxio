@@ -115,6 +115,7 @@ public final class BlockLockManager {
     try {
       long lockId = LOCK_ID_GEN.getAndIncrement();
       try (LockResource r = new LockResource(mSharedMapsLock.writeLock())) {
+        long start = System.nanoTime();
         mLockIdToRecordMap.put(lockId, new LockRecord(sessionId, blockId, lock));
         Set<Long> sessionLockIds = mSessionIdToLockIdsMap.get(sessionId);
         if (sessionLockIds == null) {
@@ -122,6 +123,8 @@ public final class BlockLockManager {
         } else {
           sessionLockIds.add(lockId);
         }
+        long last = System.nanoTime() - start;
+        LOG.info("For debug, lockBlock takes {} ms {} nano", last / 1000000, last);
       }
       return lockId;
     } catch (RuntimeException e) {
@@ -180,6 +183,7 @@ public final class BlockLockManager {
       blockLock = mLockPool.acquire(1, TimeUnit.SECONDS);
       if (blockLock != null) {
         try (LockResource r = new LockResource(mSharedMapsLock.writeLock())) {
+          long start = System.nanoTime();
           // Check if someone else acquired a block lock for blockId while we were acquiring one.
           if (mLocks.containsKey(blockId)) {
             mLockPool.release(blockLock);
@@ -188,6 +192,8 @@ public final class BlockLockManager {
             mLocks.put(blockId, blockLock);
           }
           blockLock.addReference();
+          long last = System.nanoTime() - start;
+          LOG.info("For debug, getBlockLock takes {} ms {} nano", last / 1000000, last);
           return blockLock;
         }
       }
@@ -204,8 +210,11 @@ public final class BlockLockManager {
     Lock lock;
     LockRecord record;
     try (LockResource r = new LockResource(mSharedMapsLock.writeLock())) {
+      long start = System.nanoTime();
       record = mLockIdToRecordMap.get(lockId);
       if (record == null) {
+        long last = System.nanoTime() - start;
+        LOG.info("For debug, unlockBlockNoException takes {} ms {} nano", last / 1000000, last);
         return false;
       }
       long sessionId = record.getSessionId();
@@ -216,6 +225,8 @@ public final class BlockLockManager {
       if (sessionLockIds.isEmpty()) {
         mSessionIdToLockIdsMap.remove(sessionId);
       }
+      long last = System.nanoTime() - start;
+      LOG.info("For debug, unlockBlockNoException takes {} ms {} nano", last / 1000000, last);
     }
     unlock(lock, record.getBlockId());
     return true;
@@ -244,8 +255,11 @@ public final class BlockLockManager {
   // TODO(bin): Temporary, remove me later.
   public boolean unlockBlock(long sessionId, long blockId) {
     try (LockResource r = new LockResource(mSharedMapsLock.writeLock())) {
+      long start = System.nanoTime();
       Set<Long> sessionLockIds = mSessionIdToLockIdsMap.get(sessionId);
       if (sessionLockIds == null) {
+        long last = System.nanoTime() - start;
+        LOG.info("For debug, unlockBlock takes {} ms {} nano", last / 1000000, last);
         return false;
       }
       for (long lockId : sessionLockIds) {
@@ -262,9 +276,13 @@ public final class BlockLockManager {
           }
           Lock lock = record.getLock();
           unlock(lock, blockId);
+          long last = System.nanoTime() - start;
+          LOG.info("For debug, unlockBlock takes {} ms {} nano", last / 1000000, last);
           return true;
         }
       }
+      long last = System.nanoTime() - start;
+      LOG.info("For debug, unlockBlock takes {} ms {} nano", last / 1000000, last);
       return false;
     }
   }
@@ -305,8 +323,11 @@ public final class BlockLockManager {
    */
   public void cleanupSession(long sessionId) {
     try (LockResource r = new LockResource(mSharedMapsLock.writeLock())) {
+      long start = System.nanoTime();
       Set<Long> sessionLockIds = mSessionIdToLockIdsMap.get(sessionId);
       if (sessionLockIds == null) {
+        long last = System.nanoTime() - start;
+        LOG.info("For debug, cleanupSession takes {} ms {} nano", last / 1000000, last);
         return;
       }
       for (long lockId : sessionLockIds) {
@@ -320,6 +341,8 @@ public final class BlockLockManager {
         mLockIdToRecordMap.remove(lockId);
       }
       mSessionIdToLockIdsMap.remove(sessionId);
+      long last = System.nanoTime() - start;
+      LOG.info("For debug, cleanupSession takes {} ms {} nano", last / 1000000, last);
     }
   }
 
@@ -358,9 +381,12 @@ public final class BlockLockManager {
    */
   private void releaseBlockLockIfUnused(long blockId) {
     try (LockResource r = new LockResource(mSharedMapsLock.writeLock())) {
+      long start = System.nanoTime();
       ClientRWLock lock = mLocks.get(blockId);
       if (lock == null) {
         // Someone else probably released the block lock already.
+        long last = System.nanoTime() - start;
+        LOG.info("For debug, releaseBlockLockIfUnused takes {} ms {} nano", last / 1000000, last);
         return;
       }
       // If we were the last worker with a reference to the lock, clean it up.
@@ -368,6 +394,8 @@ public final class BlockLockManager {
         mLocks.remove(blockId);
         mLockPool.release(lock);
       }
+      long last = System.nanoTime() - start;
+      LOG.info("For debug, releaseBlockLockIfUnused takes {} ms {} nano", last / 1000000, last);
     }
   }
 
