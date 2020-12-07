@@ -55,6 +55,10 @@
 
   <repositories>
     <repository>
+      <id>lu.artifacts</id>
+      <url>http://lu.artifacts.s3-website-us-east-1.amazonaws.com/</url>
+    </repository>
+    <repository>
       <id>central</id>
       <!-- This should be at top, it makes maven try the central repo first and then others and hence faster dep resolution -->
       <name>Maven Repository</name>
@@ -674,12 +678,12 @@
       </dependency>
       <dependency>
         <artifactId>ratis-server</artifactId>
-        <groupId>org.apache.ratis</groupId>
+        <groupId>org.apache.ratis.lu</groupId>
         <version>${ratis.version}</version>
       </dependency>
       <dependency>
         <artifactId>ratis-grpc</artifactId>
-        <groupId>org.apache.ratis</groupId>
+        <groupId>org.apache.ratis.lu</groupId>
         <version>${ratis.version}</version>
       </dependency>
 
