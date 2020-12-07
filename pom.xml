@@ -56,7 +56,7 @@
   <repositories>
     <repository>
       <id>lu.artifacts</id>
-      <url>http://lu.artifacts.s3-website-us-east-1.amazonaws.com/</url>
+      <url>http://lu.artifacts.s3-website-us-east-1.amazonaws.com/release</url>
     </repository>
     <repository>
       <id>central</id>
