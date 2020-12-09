@@ -98,7 +98,7 @@ function mountAlluxioRootFSWithFuseOption {
   ! mkdir -p ${MOUNT_POINT}
   ! umount ${MOUNT_POINT}
   #! integration/fuse/bin/alluxio-fuse unmount ${MOUNT_POINT}
-  exec integration/fuse/bin/alluxio-fuse mount -n ${fuseOptions} ${MOUNT_POINT} /
+  exec integration/fuse/bin/alluxio-fuse mount -n ${fuseOptions} ${MOUNT_POINT} /alluxio-cache-ssd
 }
 
 # Sends a signal to each of the running background processes
