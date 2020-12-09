@@ -67,7 +67,7 @@ mount_fuse() {
     alluxio.fuse.StackMain \
     ${alluxio_root} \
     ${mount_point} \
-    "-obig_writes -okernel_cache -omax_read=131072 -oattr_timeout=7200 -oentry_timeout=7200 -omax_write=131072"
+    -obig_writes -okernel_cache -omax_read=131072 -oattr_timeout=7200 -oentry_timeout=7200 -omax_write=131072"
   echo "Starting AlluxioFuse process: mounting alluxio path \"${alluxio_root}\" to local mount point \"${mount_point}\" with options=\"${full_mount_option}\""
   if [[ ${NO_DAEMON} -eq "1" ]]; then
     exec ${cmd}
