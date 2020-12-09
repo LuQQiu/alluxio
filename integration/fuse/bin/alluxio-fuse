@@ -59,10 +59,6 @@ mount_fuse() {
     full_mount_option="-obig_writes"
   fi
 
-  if [[ ${full_mount_option} != *"max_write"* ]];then
-    full_mount_option="-obig_writes,${full_mount_option},max_write=131072"
-  fi
-  stackfs_mount_option=`echo "${full_mount_option}" | tr ',' ' -o'`
   if [[ ${NO_DAEMON} -eq "1" ]]; then
     # Assumes that the end of ALLUXIO_FUSE_JAVA_OPTS is -Dalluxio.logger.type=FUSE_LOGGER
     ALLUXIO_FUSE_JAVA_OPTS+=",Console"
@@ -71,7 +67,7 @@ mount_fuse() {
     alluxio.fuse.StackMain \
     ${alluxio_root} \
     ${mount_point} \
-    ${stackfs_mount_option}"
+    "-obig_writes -okernel_cache -omax_read=131072 -oattr_timeout=7200 -oentry_timeout=7200 -omax_write=131072"
   echo "Starting AlluxioFuse process: mounting alluxio path \"${alluxio_root}\" to local mount point \"${mount_point}\" with options=\"${full_mount_option}\""
   if [[ ${NO_DAEMON} -eq "1" ]]; then
     exec ${cmd}
