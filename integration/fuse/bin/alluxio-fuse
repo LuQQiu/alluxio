@@ -52,8 +52,17 @@ set_java_opt() {
 mount_fuse() {
   local mount_point=$1
   local alluxio_root=$2
+  local full_mount_option=""
+  if [[ ! -z "${mount_option}" ]]; then
+    full_mount_option="-obig_writes,${mount_option}"
+  else
+    full_mount_option="-obig_writes"
+  fi
 
-  stackfs_mount_option=`echo "${mount_option}" | tr ',' ' '`
+  if [[ ${full_mount_option} != *"max_write"* ]];then
+    full_mount_option="-obig_writes,${full_mount_option},max_write=131072"
+  fi
+  stackfs_mount_option=`echo "${full_mount_option}" | tr ',' ' -o'`
   if [[ ${NO_DAEMON} -eq "1" ]]; then
     # Assumes that the end of ALLUXIO_FUSE_JAVA_OPTS is -Dalluxio.logger.type=FUSE_LOGGER
     ALLUXIO_FUSE_JAVA_OPTS+=",Console"
