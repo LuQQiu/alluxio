@@ -1517,6 +1517,14 @@ public final class PropertyKey implements Comparable<PropertyKey> {
           .setConsistencyCheckLevel(ConsistencyCheckLevel.WARN)
           .setScope(Scope.MASTER)
           .build();
+  public static final PropertyKey MASTER_EMBEDDED_JOURNAL_FLUSH_SIZE =
+      new Builder(Name.MASTER_EMBEDDED_JOURNAL_FLUSH_SIZE)
+          .setDefaultValue("2MB")
+          .setDescription("The journal entries size to trigger a journal flush. "
+              + "This is added to avoid aggregating big journal entries inside one flush.")
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.WARN)
+          .setScope(Scope.MASTER)
+          .build();
   public static final PropertyKey MASTER_EMBEDDED_JOURNAL_HEARTBEAT_INTERVAL =
       new Builder(Name.MASTER_EMBEDDED_JOURNAL_HEARTBEAT_INTERVAL)
           .setDescription(
@@ -5135,6 +5143,8 @@ public final class PropertyKey implements Comparable<PropertyKey> {
         "alluxio.master.embedded.journal.addresses";
     public static final String MASTER_EMBEDDED_JOURNAL_ELECTION_TIMEOUT =
         "alluxio.master.embedded.journal.election.timeout";
+    public static final String MASTER_EMBEDDED_JOURNAL_FLUSH_SIZE =
+        "alluxio.master.embedded.journal.flush.size";
     public static final String MASTER_EMBEDDED_JOURNAL_APPENDER_BATCH_SIZE =
         "alluxio.master.embedded.journal.appender.batch.size";
     public static final String MASTER_EMBEDDED_JOURNAL_CATCHUP_RETRY_WAIT =

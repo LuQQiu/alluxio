@@ -41,10 +41,12 @@ public class RaftJournalWriter implements JournalWriter {
   private static final Logger LOG = LoggerFactory.getLogger(RaftJournalWriter.class);
   // How long to wait for a response from the cluster before giving up and trying again.
   private final long mWriteTimeoutMs;
+  private final long mFlushBatchSize;
 
   private final AtomicLong mNextSequenceNumberToWrite;
   private final AtomicLong mLastSubmittedSequenceNumber;
   private final AtomicLong mLastCommittedSequenceNumber;
+  private final AtomicLong mJournalEntrySize;
 
   private final LocalFirstRaftClient mClient;
 
@@ -62,14 +64,16 @@ public class RaftJournalWriter implements JournalWriter {
     mNextSequenceNumberToWrite = new AtomicLong(nextSequenceNumberToWrite);
     mLastSubmittedSequenceNumber = new AtomicLong(-1);
     mLastCommittedSequenceNumber = new AtomicLong(-1);
+    mJournalEntrySize = new AtomicLong(0);
     mClient = client;
     mClosed = false;
     mWriteTimeoutMs =
         ServerConfiguration.getMs(PropertyKey.MASTER_EMBEDDED_JOURNAL_WRITE_TIMEOUT);
+    mFlushBatchSize = ServerConfiguration.getBytes(PropertyKey.MASTER_EMBEDDED_JOURNAL_FLUSH_SIZE);
   }
 
   @Override
-  public void write(JournalEntry entry) throws JournalClosedException {
+  public void write(JournalEntry entry) throws IOException, JournalClosedException {
     if (mClosed) {
       throw new JournalClosedException("Cannot write to journal. Journal writer has been closed");
     }
@@ -77,10 +81,18 @@ public class RaftJournalWriter implements JournalWriter {
         "Raft journal entries should never set multiple fields, but found %s", entry);
     if (mJournalEntryBuilder == null) {
       mJournalEntryBuilder = JournalEntry.newBuilder();
+      mJournalEntrySize.set(0);
     }
     LOG.trace("Writing entry {}: {}", mNextSequenceNumberToWrite, entry);
-    mJournalEntryBuilder.addJournalEntries(entry.toBuilder()
-        .setSequenceNumber(mNextSequenceNumberToWrite.getAndIncrement()).build());
+    int size = entry.getSerializedSize();
+    if (mJournalEntrySize.addAndGet(size) > mFlushBatchSize) {
+      mJournalEntryBuilder.addJournalEntries(entry.toBuilder()
+          .setSequenceNumber(mNextSequenceNumberToWrite.getAndIncrement()).build());
+      flush();
+    } else {
+      mJournalEntryBuilder.addJournalEntries(entry.toBuilder()
+          .setSequenceNumber(mNextSequenceNumberToWrite.getAndIncrement()).build());
+    }
   }
 
   @Override
@@ -116,6 +128,7 @@ public class RaftJournalWriter implements JournalWriter {
             mWriteTimeoutMs), e);
       }
       mJournalEntryBuilder = null;
+      mJournalEntrySize.set(0);
     }
   }
 
