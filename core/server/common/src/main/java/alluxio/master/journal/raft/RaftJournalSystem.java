@@ -320,7 +320,7 @@ public class RaftJournalSystem extends AbstractJournalSystem {
     RaftServerConfigKeys.Log.Appender.setBufferByteLimit(properties, SizeInBytes.valueOf(
         ServerConfiguration.getBytes(PropertyKey.MASTER_JOURNAL_LOG_BUFFER_LIMIT)));
     RaftServerConfigKeys.Write.setByteLimit(properties, SizeInBytes.valueOf(
-        ServerConfiguration.getBytes(PropertyKey.MASTER_JOURNAL_LOG_QUEUE_BYTES_SIZE)));
+        ServerConfiguration.getBytes(PropertyKey.MASTER_JOURNAL_WRITE_LIMIT)));
     RaftServerConfigKeys.Log.setQueueByteLimit(properties,
         (int) ServerConfiguration.getBytes(PropertyKey.MASTER_JOURNAL_LOG_QUEUE_BYTES_SIZE));
 
