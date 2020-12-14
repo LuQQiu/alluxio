@@ -11,6 +11,7 @@
 
 package alluxio.master.journal.raft;
 
+import alluxio.Constants;
 import alluxio.conf.PropertyKey;
 import alluxio.conf.ServerConfiguration;
 import alluxio.exception.JournalClosedException;
@@ -85,14 +86,10 @@ public class RaftJournalWriter implements JournalWriter {
     }
     LOG.trace("Writing entry {}: {}", mNextSequenceNumberToWrite, entry);
     int size = entry.getSerializedSize();
-    if (mJournalEntrySize.addAndGet(size) > mFlushBatchSize) {
-      mJournalEntryBuilder.addJournalEntries(entry.toBuilder()
-          .setSequenceNumber(mNextSequenceNumberToWrite.getAndIncrement()).build());
-      flush();
-    } else {
-      mJournalEntryBuilder.addJournalEntries(entry.toBuilder()
-          .setSequenceNumber(mNextSequenceNumberToWrite.getAndIncrement()).build());
-    }
+    LOG.info("writing entry with size {} bytes, {} MB", size, size/ Constants.MB);
+    mJournalEntryBuilder = entry.toBuilder()
+        .setSequenceNumber(mNextSequenceNumberToWrite.getAndIncrement());
+    flush();
   }
 
   @Override
