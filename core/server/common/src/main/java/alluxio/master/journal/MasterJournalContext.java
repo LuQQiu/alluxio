@@ -25,6 +25,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.Arrays;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
@@ -70,12 +71,17 @@ public final class MasterJournalContext implements JournalContext {
     }
 
     RetryPolicy retry = new TimeoutRetry(FLUSH_RETRY_TIMEOUT_MS, FLUSH_RETRY_INTERVAL_MS);
+    boolean first = true;
     while (retry.attempt()) {
       try {
         mAsyncJournalWriter.flush(mFlushCounter);
         return;
       } catch (IOException e) {
         LOG.warn("Journal flush failed. retrying...", e);
+        if (first) {
+          LOG.warn("Journal flush stacktrace is {}", Arrays.toString(Thread.currentThread().getStackTrace()).replace(',','\n'));
+        }
+        first = false;
       } catch (JournalClosedException e) {
         throw new UnavailableException(String.format("Failed to complete request: %s",
             e.getMessage()), e);

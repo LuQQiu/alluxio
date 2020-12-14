@@ -97,7 +97,7 @@ public class RaftJournalWriter implements JournalWriter {
         JournalEntry entry = mJournalEntryBuilder.build();
         Message message = RaftJournalSystem.toRaftMessage(entry);
         mLastSubmittedSequenceNumber.set(flushSN);
-        LOG.trace("Flushing entry {} ({})", entry, message);
+        LOG.debug("Flushing entry {} ({})", entry, message);
         RaftClientReply reply = mClient
             .sendAsync(message, TimeDuration.valueOf(mWriteTimeoutMs, TimeUnit.MILLISECONDS))
             .get(mWriteTimeoutMs, TimeUnit.MILLISECONDS);

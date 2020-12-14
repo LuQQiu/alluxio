@@ -317,6 +317,13 @@ public class RaftJournalSystem extends AbstractJournalSystem {
     RaftServerConfigKeys.Rpc.setTimeoutMin(properties, leaderElectionMinTimeout);
     RaftServerConfigKeys.Rpc.setTimeoutMax(properties, leaderElectionMinTimeout.multiply(2));
 
+    RaftServerConfigKeys.Log.Appender.setBufferByteLimit(properties, SizeInBytes.valueOf(
+        ServerConfiguration.getBytes(PropertyKey.MASTER_JOURNAL_LOG_BUFFER_LIMIT)));
+    RaftServerConfigKeys.Write.setByteLimit(properties, SizeInBytes.valueOf(
+        ServerConfiguration.getBytes(PropertyKey.MASTER_JOURNAL_LOG_QUEUE_BYTES_SIZE)));
+    RaftServerConfigKeys.Log.setQueueByteLimit(properties,
+        (int) ServerConfiguration.getBytes(PropertyKey.MASTER_JOURNAL_LOG_QUEUE_BYTES_SIZE));
+
     // request timeout
     RaftServerConfigKeys.Rpc.setRequestTimeout(properties,
         TimeDuration.valueOf(
@@ -628,7 +635,7 @@ public class RaftJournalSystem extends AbstractJournalSystem {
         clusterAddresses, mConf.getLocalAddress());
     long startTime = System.currentTimeMillis();
     try {
-      mServer.start();
+      mServer.start(); // <- NPE
     } catch (IOException e) {
       String errorMessage = ExceptionMessage.FAILED_RAFT_BOOTSTRAP
           .getMessage(Arrays.toString(clusterAddresses.toArray()), e.getCause().toString());

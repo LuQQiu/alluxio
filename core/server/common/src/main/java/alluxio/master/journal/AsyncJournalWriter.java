@@ -43,6 +43,8 @@ import java.util.function.Supplier;
 
 import javax.annotation.concurrent.ThreadSafe;
 
+import static alluxio.uri.Authority.LOG;
+
 /**
  * This enables async journal writing, as well as some batched journal flushing.
  */
@@ -308,6 +310,7 @@ public final class AsyncJournalWriter {
           }
         }
       } catch (IOException | JournalClosedException exc) {
+        LOG.info("Exception caught when flushing", exc);
         Metrics.JOURNAL_FLUSH_FAILURE.inc();
         // Release only tickets that have been flushed. Fail the rest.
         Iterator<FlushTicket> ticketIterator = mTicketSet.iterator();

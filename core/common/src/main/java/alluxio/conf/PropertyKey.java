@@ -1904,6 +1904,30 @@ public final class PropertyKey implements Comparable<PropertyKey> {
           .setConsistencyCheckLevel(ConsistencyCheckLevel.WARN)
           .setScope(Scope.MASTER)
           .build();
+  public static final PropertyKey MASTER_JOURNAL_LOG_BUFFER_LIMIT =
+      new Builder(Name.MASTER_JOURNAL_LOG_BUFFER_LIMIT)
+          .setDefaultValue("4MB")
+          .setDescription("If a log file is bigger than this value, it will rotate to next "
+              + "file.") // set to 50MB when using catalog service
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.WARN)
+          .setScope(Scope.MASTER)
+          .build();
+  public static final PropertyKey MASTER_JOURNAL_WRITE_LIMIT =
+      new Builder(Name.MASTER_JOURNAL_WRITE_LIMIT)
+          .setDefaultValue("64MB")
+          .setDescription("If a log file is bigger than this value, it will rotate to next "
+              + "file.") // set to 500MB when using catalog service
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.WARN)
+          .setScope(Scope.MASTER)
+          .build();
+  public static final PropertyKey MASTER_JOURNAL_LOG_QUEUE_BYTES_SIZE =
+      new Builder(Name.MASTER_JOURNAL_LOG_QUEUE_BYTES_SIZE)
+          .setDefaultValue("64MB")
+          .setDescription("If a log file is bigger than this value, it will rotate to next "
+              + "file.") // set to 500MB when using catalog service
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.WARN)
+          .setScope(Scope.MASTER)
+          .build();
   public static final PropertyKey MASTER_JOURNAL_TAILER_SHUTDOWN_QUIET_WAIT_TIME_MS =
       new Builder(Name.MASTER_JOURNAL_TAILER_SHUTDOWN_QUIET_WAIT_TIME_MS)
           .setAlias("alluxio.master.journal.tailer.shutdown.quiet.wait.time.ms")
@@ -5060,6 +5084,12 @@ public final class PropertyKey implements Comparable<PropertyKey> {
     public static final String MASTER_JOURNAL_TYPE = "alluxio.master.journal.type";
     public static final String MASTER_JOURNAL_LOG_SIZE_BYTES_MAX =
         "alluxio.master.journal.log.size.bytes.max";
+    public static final String MASTER_JOURNAL_LOG_BUFFER_LIMIT =
+        "alluxio.master.journal.log.buffer.limit";
+    public static final String MASTER_JOURNAL_WRITE_LIMIT =
+        "alluxio.master.journal.write.limit";
+    public static final String MASTER_JOURNAL_LOG_QUEUE_BYTES_SIZE =
+        "alluxio.master.log.queue.bytes.size";
     public static final String MASTER_JOURNAL_TAILER_SHUTDOWN_QUIET_WAIT_TIME_MS =
         "alluxio.master.journal.tailer.shutdown.quiet.wait.time";
     public static final String MASTER_JOURNAL_TAILER_SLEEP_TIME_MS =

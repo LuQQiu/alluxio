@@ -92,6 +92,7 @@ public class RaftJournalDumper extends AbstractJournalDumper {
             path.getStartIndex(), path.getEndIndex(), path.isOpen(),
             RaftServerConfigKeys.Log.CorruptionPolicy.EXCEPTION, null, (proto) -> {
               if (proto.hasStateMachineLogEntry()) {
+                LOG.info("{} Has state machine log entry", path.getPath());
                 try {
                   Journal.JournalEntry entry = Journal.JournalEntry.parseFrom(
                       proto.getStateMachineLogEntry().getLogData().asReadOnlyByteBuffer());
@@ -149,6 +150,7 @@ public class RaftJournalDumper extends AbstractJournalDumper {
    */
   private void writeSelected(PrintStream out, Journal.JournalEntry entry) {
     if (entry == null) {
+      LOG.info("entry is null");
       return;
     }
     Preconditions.checkState(
@@ -158,6 +160,7 @@ public class RaftJournalDumper extends AbstractJournalDumper {
             + "number, but found %s",
         entry);
     if (entry.getJournalEntriesCount() > 0) {
+      out.println("This entry aggregates multiple entries.!!!!");
       // This entry aggregates multiple entries.
       for (Journal.JournalEntry e : entry.getJournalEntriesList()) {
         writeSelected(out, e);
@@ -166,9 +169,7 @@ public class RaftJournalDumper extends AbstractJournalDumper {
         .equals(Journal.JournalEntry.getDefaultInstance())) {
       // Ignore empty entries, they are created during snapshotting.
     } else {
-      if (isSelected(entry)) {
-        out.println(entry);
-      }
+      out.println(entry);
     }
   }
 
