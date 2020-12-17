@@ -404,6 +404,7 @@ public class Database implements Journaled {
         // The new table has been successfully validated, so update the map with the new table,
         // and journal the entry if the journal context exists.
         if (context != null) {
+          LOG.info("context != null context append journal entries");
           // This does not needed for version > 2.5
           // This is added temporarily to transfer add table journal entries before 2.5 to 2.5
           context.append(Journal.JournalEntry.newBuilder().setAddTable(newTable.toTableJournalProto()).build());

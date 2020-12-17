@@ -323,6 +323,7 @@ public class Table {
 
     List<Partition> partitions = getPartitions();
     if (partitions.size() <= PARTITIONS_CHUNK_SIZE) {
+      LOG.info("Adding partitions in toTable, partitions.size() is {}", partitions.size());
       builder.addAllPartitions(partitions.stream().map(Partition::toProto)
           .collect(Collectors.toList()));
     }
@@ -340,6 +341,7 @@ public class Table {
     }
 
     for (List<Partition> partitionChunk : Lists.partition(partitions, PARTITIONS_CHUNK_SIZE)) {
+      LOG.info("Adding partitions of table {} in to table partitions", mName);
       partitionEntries.add(AddTablePartitionsEntry.newBuilder()
           .setDbName(mDatabase.getName())
           .setTableName(mName)
