@@ -404,7 +404,12 @@ public class Database implements Journaled {
         // The new table has been successfully validated, so update the map with the new table,
         // and journal the entry if the journal context exists.
         if (context != null) {
-          context.append(entry);
+          // This does not needed for version > 2.5
+          // This is added temporarily to transfer add table journal entries before 2.5 to 2.5
+          context.append(Journal.JournalEntry.newBuilder().setAddTable(newTable.toTableJournalProto()).build());
+          newTable.toTablePartitionsJournalProto().forEach((partitionsEntry) -> {
+            context.append(Journal.JournalEntry.newBuilder().setAddTablePartitions(partitionsEntry).build());
+          });
         }
         return newTable;
       } else {
