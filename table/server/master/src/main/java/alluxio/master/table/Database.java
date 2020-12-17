@@ -237,6 +237,7 @@ public class Database implements Journaled {
             alluxio.proto.journal.Table.AddTableEntry addTableEntry = newTable.toTableJournalProto();
             Journal.JournalEntry entry =
                 Journal.JournalEntry.newBuilder().setAddTable(addTableEntry).build();
+            LOG.info("Inside sync, add table and add partitions journal entries");
             applyAndJournal(context, entry);
             // separate the possible big table entry into multiple smaller table partitions entry
             newTable.toTablePartitionsJournalProto().forEach((partitionsEntry) -> {
@@ -425,7 +426,9 @@ public class Database implements Journaled {
 
   private boolean applyAddTablePartitions(@Nullable JournalContext context, Journal.JournalEntry entry) {
     alluxio.proto.journal.Table.AddTablePartitionsEntry addTablePartitions = entry.getAddTablePartitions();
+    LOG.info("enter apply add table partitions");
     if (!addTablePartitions.getDbName().equals(mName)) {
+      LOG.info("add table partitions, name is not equal");
       return false;
     }
 
@@ -536,11 +539,16 @@ public class Database implements Journaled {
           Table table = it.next();
           mPartitionsEntries = table.toTablePartitionsJournalProto();
           mIndex = 0;
+          if (!mPartitionsEntries.isEmpty()) {
+            LOG.info("getTablePartitionsIterator has next");
+            return true;
+          }
         }
         while (it.hasNext() && mPartitionsEntries.isEmpty()) {
           Table table = it.next();
           mPartitionsEntries = table.toTablePartitionsJournalProto();
         }
+        LOG.info("mPartitionsEntries size is empty? {}", mPartitionsEntries.isEmpty());
         return !mPartitionsEntries.isEmpty();
       }
 
