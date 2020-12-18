@@ -504,7 +504,7 @@ public class Database implements Journaled {
         }
         if (it.hasNext()) {
           mEntry = it.next();
-          mPartitionIterator = mEntry.getTablePartitionsJournalProto().iterator();
+          mPartitionIterator = mEntry.toTablePartitionsJournalProto().iterator();
           return true;
         }
         return false;
