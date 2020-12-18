@@ -492,14 +492,19 @@ public class Database implements Journaled {
     final Iterator<Table> it = getTables().iterator();
     return new Iterator<Journal.JournalEntry>() {
       private Table mEntry = null;
+      private Iterator<alluxio.proto.journal.Table.AddTablePartitionsEntry> mPartitionIterator;
 
       @Override
       public boolean hasNext() {
         if (mEntry != null) {
           return true;
         }
+        if (mPartitionIterator != null && mPartitionIterator.hasNext()) {
+          return true;
+        }
         if (it.hasNext()) {
           mEntry = it.next();
+          mPartitionIterator = mEntry.getTablePartitionsJournalProto().iterator();
           return true;
         }
         return false;
@@ -510,10 +515,18 @@ public class Database implements Journaled {
         if (!hasNext()) {
           throw new NoSuchElementException();
         }
-        Table table = mEntry;
-        mEntry = null;
-        alluxio.proto.journal.Table.AddTableEntry addTableEntry = table.toTableJournalProto();
-        return Journal.JournalEntry.newBuilder().setAddTable(addTableEntry).build();
+        if (mEntry != null) {
+          Table table = mEntry;
+          mEntry = null;
+          alluxio.proto.journal.Table.AddTableEntry addTableEntry = table.toTableJournalProto();
+          return Journal.JournalEntry.newBuilder().setAddTable(addTableEntry).build();
+        }
+        if (mPartitionIterator != null && mPartitionIterator.hasNext()) {
+          return Journal.JournalEntry.newBuilder()
+              .setAddTablePartitions(mPartitionIterator.next()).build();
+        }
+        // should not reach here
+        throw new NoSuchElementException();
       }
 
       @Override
@@ -524,56 +537,12 @@ public class Database implements Journaled {
     };
   }
 
-  private Iterator<Journal.JournalEntry> getTablePartitionsIterator() {
-    final Iterator<Table> it = getTables().iterator();
-    return new Iterator<Journal.JournalEntry>() {
-      private List<alluxio.proto.journal.Table.AddTablePartitionsEntry> mPartitionsEntries = new ArrayList<>();
-      private int mIndex = 0;
-
-      @Override
-      public boolean hasNext() {
-        if (!mPartitionsEntries.isEmpty() && mIndex < mPartitionsEntries.size()) {
-          return true;
-        }
-        if (it.hasNext()) {
-          Table table = it.next();
-          mPartitionsEntries = table.toTablePartitionsJournalProto();
-          mIndex = 0;
-          if (!mPartitionsEntries.isEmpty()) {
-            LOG.info("getTablePartitionsIterator has next");
-            return true;
-          }
-        }
-        while (it.hasNext() && mPartitionsEntries.isEmpty()) {
-          Table table = it.next();
-          mPartitionsEntries = table.toTablePartitionsJournalProto();
-        }
-        LOG.info("mPartitionsEntries size is empty? {}", mPartitionsEntries.isEmpty());
-        return !mPartitionsEntries.isEmpty();
-      }
-
-      @Override
-      public Journal.JournalEntry next() {
-        if (!hasNext()) {
-          throw new NoSuchElementException();
-        }
-        return Journal.JournalEntry.newBuilder().setAddTablePartitions(mPartitionsEntries.get(mIndex++)).build();
-      }
-
-      @Override
-      public void remove() {
-        throw new UnsupportedOperationException(
-            "GetTablePartitionsIterator#Iterator#remove is not supported.");
-      }
-    };
-  }
-
   @Override
   public CloseableIterator<Journal.JournalEntry> getJournalEntryIterator() {
     Journal.JournalEntry entry = Journal.JournalEntry.newBuilder().setUpdateDatabaseInfo(
         toJournalProto(getDatabaseInfo(), mName)).build();
     return CloseableIterator.noopCloseable(
-        Iterators.concat(Iterators.singletonIterator(entry), getTableIterator(), getTablePartitionsIterator()));
+        Iterators.concat(Iterators.singletonIterator(entry), getTableIterator()));
   }
 
   @Override

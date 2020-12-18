@@ -58,6 +58,7 @@ public final class JournalEntryAssociation {
       return Constants.META_MASTER_NAME;
     }
     if (entry.hasAttachDb()
+        || entry.hasAddTablePartitions()
         || entry.hasAddTable()
         || entry.hasRemoveTable()
         || entry.hasDetachDb()
