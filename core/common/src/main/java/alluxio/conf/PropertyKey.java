@@ -1603,6 +1603,13 @@ public final class PropertyKey implements Comparable<PropertyKey> {
           .setConsistencyCheckLevel(ConsistencyCheckLevel.WARN)
           .setScope(Scope.MASTER)
           .build();
+  public static final PropertyKey MASTER_EMBEDDED_JOURNAL_SHOULD_FLUSH_BYTES =
+      new Builder(Name.MASTER_EMBEDDED_JOURNAL_SHOULD_FLUSH_BYTES)
+          .setDefaultValue("1MB")
+          .setDescription("Maximum time to wait for a write/flush on embedded journal.")
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.WARN)
+          .setScope(Scope.MASTER)
+          .build();
   public static final PropertyKey MASTER_EMBEDDED_JOURNAL_SNAPSHOT_REPLICATION_CHUNK_SIZE =
       new Builder(Name.MASTER_EMBEDDED_JOURNAL_SNAPSHOT_REPLICATION_CHUNK_SIZE)
           .setDefaultValue("4MB")
@@ -5160,6 +5167,8 @@ public final class PropertyKey implements Comparable<PropertyKey> {
         "alluxio.master.embedded.journal.write.local.first.enabled";
     public static final String MASTER_EMBEDDED_JOURNAL_WRITE_TIMEOUT =
         "alluxio.master.embedded.journal.write.timeout";
+    public static final String MASTER_EMBEDDED_JOURNAL_SHOULD_FLUSH_BYTES =
+        "alluxio.master.embedded.journal.should.flush.bytes";
     public static final String MASTER_EMBEDDED_JOURNAL_SNAPSHOT_REPLICATION_CHUNK_SIZE =
         "alluxio.master.embedded.journal.snapshot.replication.chunk.size";
     public static final String MASTER_EMBEDDED_JOURNAL_TRIGGERED_SNAPSHOT_WAIT_TIMEOUT =
