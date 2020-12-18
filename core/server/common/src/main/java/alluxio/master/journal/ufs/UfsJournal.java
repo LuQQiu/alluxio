@@ -548,7 +548,7 @@ public class UfsJournal implements Journal {
           case LOG:
             JournalEntry entry = journalReader.getEntry();
             try {
-              if (!mMaster.processJournalEntry(entry)) {
+              if (!mMaster.processJournalEntry(null, entry)) {
                 JournalUtils
                     .handleJournalReplayFailure(LOG, null, "%s: Unrecognized journal entry: %s",
                         mMaster.getName(), entry);

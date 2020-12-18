@@ -672,7 +672,7 @@ public class InodeTreePersistentState implements Journaled {
   }
 
   @Override
-  public boolean processJournalEntry(JournalEntry entry) {
+  public boolean processJournalEntry(Supplier<JournalContext> context, JournalEntry entry) {
     if (entry.hasDeleteFile()) {
       applyDelete(entry.getDeleteFile());
     } else if (entry.hasInodeDirectory()) {

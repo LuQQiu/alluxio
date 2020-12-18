@@ -339,9 +339,9 @@ public class Database implements Journaled {
   }
 
   @Override
-  public boolean processJournalEntry(Journal.JournalEntry entry) {
+  public boolean processJournalEntry(Supplier<JournalContext> context, Journal.JournalEntry entry) {
     // Do not journal when processing journal entries
-    return processJournalEntryInternal(entry, null);
+    return processJournalEntryInternal(entry, context);
   }
 
   /**
@@ -350,18 +350,18 @@ public class Database implements Journaled {
    * @return whether the entry type is supported by this journaled object
    */
   private boolean processJournalEntryInternal(Journal.JournalEntry entry,
-      @Nullable JournalContext context) {
+      @Nullable Supplier<JournalContext> context) {
     if (entry.hasAddTable()) {
-      return applyAddTable(context, entry);
+      return applyAddTable(context.get(), entry);
     }
     if (entry.hasAddTablePartitions()) {
-      return applyAddTablePartitions(context, entry);
+      return applyAddTablePartitions(null, entry);
     }
     if (entry.hasRemoveTable()) {
-      return applyRemoveTable(context, entry);
+      return applyRemoveTable(null, entry);
     }
     if (entry.hasUpdateDatabaseInfo()) {
-      return applyUpdateDbInfo(context, entry);
+      return applyUpdateDbInfo(null, entry);
     }
     return false;
   }

@@ -152,7 +152,7 @@ public final class MasterUfsManager extends AbstractUfsManager implements Delega
     }
 
     @Override
-    public boolean processJournalEntry(JournalEntry entry) {
+    public boolean processJournalEntry(Supplier<JournalContext> context, JournalEntry entry) {
       if (entry.hasUpdateUfsMode()) {
         apply(entry.getUpdateUfsMode());
       } else {

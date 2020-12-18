@@ -26,6 +26,7 @@ import alluxio.util.CommonUtils;
 import com.google.common.base.Preconditions;
 
 import javax.annotation.concurrent.ThreadSafe;
+import java.util.function.Supplier;
 
 /**
  * Inode id management for directory inodes. Keep track of a block container id, along with a block
@@ -90,7 +91,7 @@ public class InodeDirectoryIdGenerator implements Journaled {
   }
 
   @Override
-  public boolean processJournalEntry(JournalEntry entry) {
+  public boolean processJournalEntry(Supplier<JournalContext> context, JournalEntry entry) {
     if (entry.hasInodeDirectoryIdGenerator()) {
       InodeDirectoryIdGeneratorEntry e = entry.getInodeDirectoryIdGenerator();
       mNextDirectoryId.setContainerId(e.getContainerId());

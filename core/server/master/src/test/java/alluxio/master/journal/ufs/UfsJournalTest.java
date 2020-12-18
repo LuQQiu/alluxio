@@ -13,6 +13,7 @@ package alluxio.master.journal.ufs;
 
 import alluxio.exception.status.UnavailableException;
 import alluxio.master.NoopMaster;
+import alluxio.master.journal.JournalContext;
 import alluxio.proto.journal.Journal;
 import alluxio.util.CommonUtils;
 import alluxio.util.URIUtils;
@@ -27,6 +28,7 @@ import org.junit.rules.TemporaryFolder;
 import java.io.File;
 import java.net.URI;
 import java.util.Collections;
+import java.util.function.Supplier;
 
 /**
  * Unit tests for {@link UfsJournal}.
@@ -282,7 +284,7 @@ public final class UfsJournalTest {
     private long mApplyCount = 0;
 
     @Override
-    public boolean processJournalEntry(Journal.JournalEntry entry) {
+    public boolean processJournalEntry(Supplier<JournalContext> context, Journal.JournalEntry entry) {
       mApplyCount++;
       return true;
     }
@@ -307,14 +309,14 @@ public final class UfsJournalTest {
     }
 
     @Override
-    public boolean processJournalEntry(Journal.JournalEntry entry) {
+    public boolean processJournalEntry(Supplier<JournalContext> context, Journal.JournalEntry entry) {
       try {
         Thread.sleep(mSleepMs);
       } catch (Exception e) {
         // Do not interfere with interrupt handling.
         Thread.currentThread().interrupt();
       }
-      return super.processJournalEntry(entry);
+      return super.processJournalEntry(context, entry);
     }
   }
 }

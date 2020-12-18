@@ -106,6 +106,7 @@ import java.util.concurrent.locks.Lock;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import javax.annotation.Nullable;
@@ -298,7 +299,7 @@ public final class DefaultBlockMaster extends CoreMaster implements BlockMaster 
   }
 
   @Override
-  public boolean processJournalEntry(JournalEntry entry) {
+  public boolean processJournalEntry(Supplier<JournalContext> context, JournalEntry entry) {
     // TODO(gene): A better way to process entries besides a huge switch?
     if (entry.hasBlockContainerIdGenerator()) {
       mJournaledNextContainerId = (entry.getBlockContainerIdGenerator()).getNextContainerId();

@@ -28,10 +28,12 @@ public interface Journaled extends Checkpointed, JournalEntryIterable {
   /**
    * Attempts to apply a journal entry.
    *
+   *
+   * @param context
    * @param entry the entry to apply
    * @return whether the entry type is supported by this journaled object
    */
-  boolean processJournalEntry(JournalEntry entry);
+  boolean processJournalEntry(Supplier<JournalContext> context, JournalEntry entry);
 
   /**
    * Resets the object's journaled state.
@@ -47,7 +49,7 @@ public interface Journaled extends Checkpointed, JournalEntryIterable {
    * @param entry the entry to apply and journal
    */
   default void applyAndJournal(Supplier<JournalContext> context, JournalEntry entry) {
-    processJournalEntry(entry);
+    processJournalEntry(context, entry);
     context.get().append(entry);
   }
 

@@ -21,13 +21,14 @@ import alluxio.resource.CloseableIterator;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.Collections;
+import java.util.function.Supplier;
 
 /**
  * Interface providing default implementations which do nothing.
  */
 public interface NoopJournaled extends Journaled {
   @Override
-  default boolean processJournalEntry(JournalEntry entry) {
+  default boolean processJournalEntry(Supplier<JournalContext> context, JournalEntry entry) {
     return true;
   }
 

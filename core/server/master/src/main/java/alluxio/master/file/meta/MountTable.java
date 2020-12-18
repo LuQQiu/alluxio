@@ -553,7 +553,7 @@ public final class MountTable implements DelegatingJournaled {
     }
 
     @Override
-    public boolean processJournalEntry(JournalEntry entry) {
+    public boolean processJournalEntry(Supplier<JournalContext> context, JournalEntry entry) {
       if (entry.hasAddMountPoint()) {
         applyAddMountPoint(entry.getAddMountPoint());
       } else if (entry.hasDeleteMountPoint()) {

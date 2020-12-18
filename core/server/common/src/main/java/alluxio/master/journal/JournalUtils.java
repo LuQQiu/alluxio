@@ -109,7 +109,7 @@ public final class JournalUtils {
     JournalEntry entry;
     while ((entry = reader.readEntry()) != null) {
       try {
-        journaled.processJournalEntry(entry);
+        journaled.processJournalEntry(null, entry);
       } catch (Throwable t) {
         handleJournalReplayFailure(LOG, t,
             "Failed to process journal entry %s from a journal checkpoint", entry);

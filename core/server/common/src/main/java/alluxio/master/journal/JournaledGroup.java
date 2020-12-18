@@ -22,6 +22,7 @@ import com.google.common.collect.Lists;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.List;
+import java.util.function.Supplier;
 
 /**
  * Convenience class which groups together multiple Journaled components as a single Journaled
@@ -50,9 +51,9 @@ public class JournaledGroup implements Journaled {
   }
 
   @Override
-  public boolean processJournalEntry(JournalEntry entry) {
+  public boolean processJournalEntry(Supplier<JournalContext> context, JournalEntry entry) {
     for (Journaled journaled : mJournaled) {
-      if (journaled.processJournalEntry(entry)) {
+      if (journaled.processJournalEntry(context, entry)) {
         return true;
       }
     }

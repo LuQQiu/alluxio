@@ -109,7 +109,7 @@ public interface JournalSystem {
    * written when the journal system is in PRIMARY mode.
    *
    * When the journal is started in secondary mode, it will call
-   * {@link Journaled#processJournalEntry(JournalEntry)} and
+   * {@link Journaled#processJournalEntry(java.util.function.Supplier, JournalEntry)} and
    * {@link Journaled#resetState()} to keep the state machine's state in sync with
    * the entries written to the journal.
    *

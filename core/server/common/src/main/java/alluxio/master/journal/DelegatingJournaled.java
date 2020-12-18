@@ -26,8 +26,8 @@ import java.util.function.Supplier;
  */
 public interface DelegatingJournaled extends Journaled {
   @Override
-  default boolean processJournalEntry(JournalEntry entry) {
-    return getDelegate().processJournalEntry(entry);
+  default boolean processJournalEntry(Supplier<JournalContext> context, JournalEntry entry) {
+    return getDelegate().processJournalEntry(context, entry);
   }
 
   @Override

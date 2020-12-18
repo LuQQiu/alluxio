@@ -40,6 +40,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ForkJoinPool;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 public class RaftJournalTest {
@@ -531,7 +532,7 @@ public class RaftJournalTest {
     private long mApplyCount = 0;
 
     @Override
-    public boolean processJournalEntry(Journal.JournalEntry entry) {
+    public boolean processJournalEntry(Supplier<JournalContext> context, Journal.JournalEntry entry) {
       mApplyCount++;
       return true;
     }

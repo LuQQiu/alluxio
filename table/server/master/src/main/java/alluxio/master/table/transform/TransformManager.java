@@ -60,6 +60,7 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 /**
  * Manages transformations.
@@ -403,7 +404,7 @@ public class TransformManager implements DelegatingJournaled {
     }
 
     @Override
-    public boolean processJournalEntry(JournalEntry entry) {
+    public boolean processJournalEntry(Supplier<JournalContext> context, JournalEntry entry) {
       if (entry.hasAddTransformJobInfo()) {
         applyAddTransformJobInfoEntry(entry.getAddTransformJobInfo());
       } else if (entry.hasRemoveTransformJobInfo()) {

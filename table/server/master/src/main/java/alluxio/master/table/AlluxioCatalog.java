@@ -47,6 +47,7 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 /**
@@ -387,16 +388,19 @@ public class AlluxioCatalog implements Journaled {
   }
 
   @Override
-  public boolean processJournalEntry(Journal.JournalEntry entry) {
+  public boolean processJournalEntry(Supplier<JournalContext> context, Journal.JournalEntry entry) {
     if (entry.hasAttachDb()) {
       apply(entry.getAttachDb());
       return true;
     } else if (entry.hasUpdateDatabaseInfo()) {
       Database db = mDBs.get(entry.getUpdateDatabaseInfo().getDbName());
-      return db.processJournalEntry(entry);
+      return db.processJournalEntry(null, entry);
     } else if (entry.hasAddTable()) {
       Database db = mDBs.get(entry.getAddTable().getDbName());
-      return db.processJournalEntry(entry);
+      return db.processJournalEntry(context, entry);
+    } else if (entry.hasAddTablePartitions()) {
+      Database db = mDBs.get(entry.getAddTablePartitions().getDbName());
+      return db.processJournalEntry(null, entry);
     } else if (entry.hasDetachDb()) {
       apply(entry.getDetachDb());
       return true;

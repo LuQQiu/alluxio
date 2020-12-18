@@ -188,7 +188,7 @@ public final class UfsJournalCheckpointThread extends Thread {
           case LOG:
             entry = mJournalReader.getEntry();
             try {
-              if (!mMaster.processJournalEntry(entry)) {
+              if (!mMaster.processJournalEntry(null, entry)) {
                 JournalUtils
                     .handleJournalReplayFailure(LOG, null, "%s: Unrecognized journal entry: %s",
                         mMaster.getName(), entry);

@@ -619,21 +619,21 @@ public final class InodeTreeTest {
     MutableInode<?> test1 = getInodeByPath("/nested/test1");
     MutableInode<?> file1 = getInodeByPath("/nested/test1/file1");
     // reset the tree
-    mTree.processJournalEntry(root.toJournalEntry());
+    mTree.processJournalEntry(null, root.toJournalEntry());
     // re-init the root since the tree was reset above
     mTree.getRoot();
     try (LockedInodePath inodePath =
              mTree.lockFullInodePath(new AlluxioURI("/"), LockPattern.WRITE_INODE)) {
       assertEquals(0, mTree.getDescendants(inodePath).getInodePathList().size());
-      mTree.processJournalEntry(nested.toJournalEntry());
+      mTree.processJournalEntry(null, nested.toJournalEntry());
       verifyChildrenNames(mTree, inodePath, Sets.newHashSet("nested"));
-      mTree.processJournalEntry(test.toJournalEntry());
+      mTree.processJournalEntry(null, test.toJournalEntry());
       verifyChildrenNames(mTree, inodePath, Sets.newHashSet("nested", "test"));
-      mTree.processJournalEntry(test1.toJournalEntry());
+      mTree.processJournalEntry(null, test1.toJournalEntry());
       verifyChildrenNames(mTree, inodePath, Sets.newHashSet("nested", "test", "test1"));
-      mTree.processJournalEntry(file.toJournalEntry());
+      mTree.processJournalEntry(null, file.toJournalEntry());
       verifyChildrenNames(mTree, inodePath, Sets.newHashSet("nested", "test", "test1", "file"));
-      mTree.processJournalEntry(file1.toJournalEntry());
+      mTree.processJournalEntry(null, file1.toJournalEntry());
       verifyChildrenNames(mTree, inodePath,
           Sets.newHashSet("nested", "test", "test1", "file", "file1"));
     }
@@ -653,15 +653,15 @@ public final class InodeTreeTest {
       child.setMode((short) 0600);
     }
     // reset the tree
-    mTree.processJournalEntry(root.toJournalEntry());
+    mTree.processJournalEntry(null, root.toJournalEntry());
     // re-init the root since the tree was reset above
     mTree.getRoot();
     try (LockedInodePath inodePath =
              mTree.lockFullInodePath(new AlluxioURI("/"), LockPattern.WRITE_INODE)) {
       assertEquals(0, mTree.getDescendants(inodePath).getInodePathList().size());
-      mTree.processJournalEntry(nested.toJournalEntry());
-      mTree.processJournalEntry(test.toJournalEntry());
-      mTree.processJournalEntry(file.toJournalEntry());
+      mTree.processJournalEntry(null, nested.toJournalEntry());
+      mTree.processJournalEntry(null, test.toJournalEntry());
+      mTree.processJournalEntry(null, file.toJournalEntry());
       List<LockedInodePath> descendants = mTree.getDescendants(inodePath).getInodePathList();
       assertEquals(inodeChildren.length, descendants.size());
       for (LockedInodePath childPath : descendants) {

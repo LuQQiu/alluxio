@@ -78,6 +78,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Executors;
+import java.util.function.Supplier;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
@@ -181,7 +182,7 @@ public final class DefaultMetaMaster extends CoreMaster implements MetaMaster {
     }
 
     @Override
-    public boolean processJournalEntry(Journal.JournalEntry entry) {
+    public boolean processJournalEntry(Supplier<JournalContext> context, Journal.JournalEntry entry) {
       if (entry.hasClusterInfo()) {
         mClusterID = entry.getClusterInfo().getClusterId();
         return true;
@@ -572,8 +573,8 @@ public final class DefaultMetaMaster extends CoreMaster implements MetaMaster {
   }
 
   @Override
-  public boolean processJournalEntry(Journal.JournalEntry entry) {
-    return mState.processJournalEntry(entry) || mPathProperties.processJournalEntry(entry);
+  public boolean processJournalEntry(Supplier<JournalContext> context, Journal.JournalEntry entry) {
+    return mState.processJournalEntry(null, entry) || mPathProperties.processJournalEntry(null, entry);
   }
 
   @Override

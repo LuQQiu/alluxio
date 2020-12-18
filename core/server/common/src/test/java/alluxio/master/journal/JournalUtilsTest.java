@@ -31,6 +31,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.function.Supplier;
 
 /**
  * Unit tests for {@link JournalUtils}.
@@ -84,7 +85,7 @@ public final class JournalUtilsTest {
     }
 
     @Override
-    public boolean processJournalEntry(JournalEntry entry) {
+    public boolean processJournalEntry(Supplier<JournalContext> context, JournalEntry entry) {
       mNumEntriesProcessed++;
       return true;
     }

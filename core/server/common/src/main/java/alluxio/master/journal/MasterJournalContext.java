@@ -57,6 +57,9 @@ public final class MasterJournalContext implements JournalContext {
 
   @Override
   public void append(JournalEntry entry) {
+    if (entry.hasAddTable()) {
+      return;
+    }
     mFlushCounter = mAsyncJournalWriter.appendEntry(entry);
   }
 

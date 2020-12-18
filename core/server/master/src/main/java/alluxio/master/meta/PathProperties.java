@@ -187,7 +187,7 @@ public final class PathProperties implements DelegatingJournaled {
     }
 
     @Override
-    public boolean processJournalEntry(Journal.JournalEntry entry) {
+    public boolean processJournalEntry(Supplier<JournalContext> context, JournalEntry entry) {
       if (entry.hasPathProperties()) {
         applyPathProperties(entry.getPathProperties());
       } else if (entry.hasRemovePathProperties()) {

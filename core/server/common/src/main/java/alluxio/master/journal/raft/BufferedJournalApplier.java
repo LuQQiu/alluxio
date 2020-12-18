@@ -240,7 +240,7 @@ public class BufferedJournalApplier {
     try {
       Journaled master = mJournals.get(masterName).getStateMachine();
       LOG.trace("Applying entry to master {}: {} ", masterName, entry);
-      master.processJournalEntry(entry);
+      master.processJournalEntry(null, entry);
       JournalUtils.sinkAppend(mJournalSinks, entry);
     } catch (Exception t) {
       JournalUtils.handleJournalReplayFailure(LOG, t,

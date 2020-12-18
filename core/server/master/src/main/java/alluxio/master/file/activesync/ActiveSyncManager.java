@@ -715,7 +715,7 @@ public class ActiveSyncManager implements Journaled {
   }
 
   @Override
-  public boolean processJournalEntry(JournalEntry entry) {
+  public boolean processJournalEntry(Supplier<JournalContext> context, JournalEntry entry) {
     if (entry.hasAddSyncPoint()) {
       apply(entry.getAddSyncPoint());
       return true;

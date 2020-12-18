@@ -16,7 +16,6 @@ import alluxio.grpc.GrpcService;
 import alluxio.grpc.ServiceType;
 import alluxio.master.journal.checkpoint.CheckpointName;
 import alluxio.master.journal.JournalContext;
-import alluxio.proto.journal.Journal;
 import alluxio.proto.journal.Journal.JournalEntry;
 import alluxio.resource.CloseableIterator;
 
@@ -24,6 +23,7 @@ import java.util.ArrayDeque;
 import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
+import java.util.function.Supplier;
 
 import javax.annotation.Nullable;
 
@@ -64,7 +64,7 @@ public final class MockMaster implements Master {
   public void close() {}
 
   @Override
-  public boolean processJournalEntry(Journal.JournalEntry entry) {
+  public boolean processJournalEntry(Supplier<JournalContext> context, JournalEntry entry) {
     mEntries.add(entry);
     return true;
   }
