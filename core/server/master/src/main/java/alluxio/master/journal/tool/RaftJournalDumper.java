@@ -100,6 +100,8 @@ public class RaftJournalDumper extends AbstractJournalDumper {
                 } catch (Exception e) {
                   throw new RuntimeException(e);
                 }
+              } else {
+                LOG.info("proto does not have stat machine log entry");
               }
             });
         LOG.info("Read {} entries from log {}.", entryCount, path.getPath());
@@ -159,6 +161,9 @@ public class RaftJournalDumper extends AbstractJournalDumper {
         "Raft journal entries should never set multiple fields in addition to sequence "
             + "number, but found %s",
         entry);
+    if (entry.hasAddTablePartitions()) {
+      LOG.info("Has add table partitions");
+    }
     if (entry.getJournalEntriesCount() > 0) {
       out.println("This entry aggregates multiple entries.!!!!");
       // This entry aggregates multiple entries.
@@ -167,6 +172,7 @@ public class RaftJournalDumper extends AbstractJournalDumper {
       }
     } else if (entry.toBuilder().clearSequenceNumber().build()
         .equals(Journal.JournalEntry.getDefaultInstance())) {
+      LOG.info("Empty entries");
       // Ignore empty entries, they are created during snapshotting.
     } else {
       out.println(entry);

@@ -352,7 +352,11 @@ public class Database implements Journaled {
   private boolean processJournalEntryInternal(Journal.JournalEntry entry,
       @Nullable Supplier<JournalContext> context) {
     if (entry.hasAddTable()) {
-      return applyAddTable(context.get(), entry);
+      if (context != null) {
+        return applyAddTable(context.get(), entry);
+      } else {
+        return applyAddTable(null, entry);
+      }
     }
     if (entry.hasAddTablePartitions()) {
       return applyAddTablePartitions(null, entry);

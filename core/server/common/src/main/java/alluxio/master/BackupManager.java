@@ -308,6 +308,9 @@ public class BackupManager {
           // Continue interrupt chain.
           Thread.currentThread().interrupt();
           throw new RuntimeException("Thread interrupted while applying backup content.", ie);
+        } catch (Throwable t) {
+          LOG.warn("Failed to apply journal", t);
+          throw t;
         }
       }));
 
