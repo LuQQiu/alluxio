@@ -50,7 +50,9 @@ public interface Journaled extends Checkpointed, JournalEntryIterable {
    */
   default void applyAndJournal(Supplier<JournalContext> context, JournalEntry entry) {
     processJournalEntry(context, entry);
-    context.get().append(entry);
+    if (!entry.hasAddTable()) {
+      context.get().append(entry);
+    }
   }
 
   @Override
