@@ -57,6 +57,9 @@ public final class MasterJournalContext implements JournalContext {
 
   @Override
   public void append(JournalEntry entry) {
+    if (entry.hasAddTablePartitions()) {
+      LOG.info("append to async writer entry has add table partititons");
+    }
     mFlushCounter = mAsyncJournalWriter.appendEntry(entry);
   }
 

@@ -89,6 +89,9 @@ public class RaftJournalWriter implements JournalWriter {
     if (size > Constants.MB) {
       LOG.info("writing entry with size {} bytes, {} MB", size, size/ Constants.MB);
     }
+    if (entry.hasAddTablePartitions()) {
+      LOG.info("Write and flush add table partitions");
+    }
     mJournalEntryBuilder = entry.toBuilder()
         .setSequenceNumber(mNextSequenceNumberToWrite.getAndIncrement());
     flush();
