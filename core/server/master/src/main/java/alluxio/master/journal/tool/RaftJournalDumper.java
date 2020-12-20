@@ -58,6 +58,7 @@ public class RaftJournalDumper extends AbstractJournalDumper {
   public RaftJournalDumper(String master, long start, long end, String outputDir, String inputDir)
       throws IOException {
     super(master, start, end, outputDir, inputDir);
+    LOG.info("start is {}, end is {}", start, end);
   }
 
   @Override
@@ -184,9 +185,11 @@ public class RaftJournalDumper extends AbstractJournalDumper {
       try {
         return JournalEntryAssociation.getMasterForEntry(entry).equalsIgnoreCase(mMaster);
       } catch (IllegalStateException e) {
+        LOG.info("illegalSatteExceotion ", e);
         return false;
       }
     }
+    LOG.info("entry is not in range, entry sn {}", sn);
     return false;
   }
 }
