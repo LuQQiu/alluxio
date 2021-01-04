@@ -44,6 +44,7 @@ public abstract class AbstractJournalDumper {
   protected final String mOutputDir;
   protected final String mCheckpointsDir;
   protected final String mJournalEntryFile;
+  protected final String mJournalFailureFile;
 
   /**
    * @param master journal master
@@ -61,6 +62,7 @@ public abstract class AbstractJournalDumper {
     mOutputDir = outputDir;
     mCheckpointsDir = PathUtils.concatPath(outputDir, "checkpoints");
     mJournalEntryFile = PathUtils.concatPath(outputDir, "edits.txt");
+    mJournalFailureFile = PathUtils.concatPath(outputDir, "failure.txt");
 
     // Ensure output directory.
     Files.createDirectories(Paths.get(mOutputDir));

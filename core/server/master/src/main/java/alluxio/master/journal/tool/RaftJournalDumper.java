@@ -83,6 +83,8 @@ public class RaftJournalDumper extends AbstractJournalDumper {
     try (
         PrintStream out =
             new PrintStream(new BufferedOutputStream(new FileOutputStream(mJournalEntryFile)));
+        PrintStream failureOut =
+            new PrintStream(new BufferedOutputStream(new FileOutputStream(mJournalFailureFile)));
         RaftStorage storage = new RaftStorage(getJournalDir(),
             RaftServerConstants.StartupOption.REGULAR)) {
       List<RaftStorageDirectory.LogPathAndIndex> paths =
@@ -95,7 +97,7 @@ public class RaftJournalDumper extends AbstractJournalDumper {
                 try {
                   Journal.JournalEntry entry = Journal.JournalEntry.parseFrom(
                       proto.getStateMachineLogEntry().getLogData().asReadOnlyByteBuffer());
-                  writeSelected(out, entry);
+                  writeSelected(out, failureOut, entry);
                 } catch (Exception e) {
                   throw new RuntimeException(e);
                 }
@@ -147,7 +149,7 @@ public class RaftJournalDumper extends AbstractJournalDumper {
    * @param out out stream to write the entry to
    * @param entry the entry to write to
    */
-  private void writeSelected(PrintStream out, Journal.JournalEntry entry) {
+  private void writeSelected(PrintStream out, PrintStream failureOut, Journal.JournalEntry entry) {
     if (entry == null) {
       return;
     }
@@ -159,8 +161,9 @@ public class RaftJournalDumper extends AbstractJournalDumper {
         entry);
     if (entry.getJournalEntriesCount() > 0) {
       // This entry aggregates multiple entries.
+      LOG.info("Multiple entries embedded");
       for (Journal.JournalEntry e : entry.getJournalEntriesList()) {
-        writeSelected(out, e);
+        writeSelected(out, failureOut, e);
       }
     } else if (entry.toBuilder().clearSequenceNumber().build()
         .equals(Journal.JournalEntry.getDefaultInstance())) {
@@ -168,6 +171,8 @@ public class RaftJournalDumper extends AbstractJournalDumper {
     } else {
       if (isSelected(entry)) {
         out.println(entry);
+      } else {
+        failureOut.println(entry);
       }
     }
   }
@@ -184,9 +189,11 @@ public class RaftJournalDumper extends AbstractJournalDumper {
       try {
         return JournalEntryAssociation.getMasterForEntry(entry).equalsIgnoreCase(mMaster);
       } catch (IllegalStateException e) {
+        LOG.info("IllegalException ", e);
         return false;
       }
     }
+    LOG.info("sn {} is not in range {} to {}", sn, mStart, mEnd);
     return false;
   }
 }
