@@ -31,9 +31,7 @@ Where ACTION is one of:
   job_workers        \tStart monitors for all job_worker nodes.
   proxy              \tStart the proxy monitor on this node.
   proxies            \tStart monitors for all proxies nodes.
-
 [host1,host2,...] is a comma separated list of host to monitor, if not given the default config for the target is used.
-
 -L  enables the log mode, this option disable the monitor checks and causes alluxio-monitor to only print the node log tail.
 -h  display this help.
 "
@@ -82,23 +80,18 @@ print_node_logs() {
 run_monitor() {
   local node_type=$1
   local mode=$2
-  local alluxio_config="${ALLUXIO_JAVA_OPTS}"
   case "${node_type}" in
     master)
       monitor_exec=alluxio.master.AlluxioMasterMonitor
-      alluxio_config="${alluxio_config} ${ALLUXIO_MASTER_JAVA_OPTS}"
       ;;
     worker)
       monitor_exec=alluxio.worker.AlluxioWorkerMonitor
-      alluxio_config="${alluxio_config} ${ALLUXIO_WORKER_JAVA_OPTS}"
       ;;
     job_master)
       monitor_exec=alluxio.master.job.AlluxioJobMasterMonitor
-      alluxio_config="${alluxio_config} ${ALLUXIO_JOB_MASTER_JAVA_OPTS}"
       ;;
     job_worker)
       monitor_exec=alluxio.worker.job.AlluxioJobWorkerMonitor
-      alluxio_config="${alluxio_config} ${ALLUXIO_JOB_WORKER_JAVA_OPTS}"
       ;;
     proxy)
       monitor_exec=alluxio.proxy.AlluxioProxyMonitor
@@ -113,7 +106,7 @@ run_monitor() {
     print_node_logs "${node_type}"
     return 0
   else
-    "${JAVA}" -cp ${CLASSPATH} ${alluxio_config} ${monitor_exec}
+    "${JAVA}" -cp ${CLASSPATH} ${ALLUXIO_JAVA_OPTS} ${monitor_exec}
     if [[ $? -ne 0 ]]; then
       echo -e "${WHITE}---${NC} ${RED}[ FAILED ]${NC} The ${CYAN}${node_type}${NC} @ ${PURPLE}$(hostname -f)${NC} is not serving requests.${NC}"
       print_node_logs "${node_type}"
