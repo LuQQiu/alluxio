@@ -216,6 +216,7 @@ public final class AlluxioBlockStore {
     try {
       return BlockInStream.create(mContext, info, dataSource, dataSourceType, options);
     } catch (UnavailableException e) {
+      LOG.info("Failed to BlockInStream.create", e);
       //When BlockInStream created failed, it will update the passed-in failedWorkers
       //to attempt to avoid reading from this failed worker in next try.
       failedWorkers.put(dataSource, System.currentTimeMillis());

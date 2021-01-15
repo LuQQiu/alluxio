@@ -28,6 +28,8 @@ import alluxio.worker.block.io.LocalFileBlockReader;
 
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -96,6 +98,7 @@ public final class LocalFileDataReader implements DataReader {
    */
   @NotThreadSafe
   public static class Factory implements DataReader.Factory {
+    private static final Logger LOG = LoggerFactory.getLogger(Factory.class);
     private final CloseableResource<BlockWorkerClient> mBlockWorker;
     private final long mBlockId;
     private final String mPath;
@@ -124,6 +127,7 @@ public final class LocalFileDataReader implements DataReader {
       mReadBufferSize = conf.getInt(PropertyKey.USER_STREAMING_READER_BUFFER_SIZE_MESSAGES);
       mDataTimeoutMs = conf.getMs(PropertyKey.USER_STREAMING_DATA_TIMEOUT);
       if (conf.getBoolean(PropertyKey.USER_DIRECT_MEMORY_IO_ENABLED)) {
+        LOG.info("Direct memory io enabled");
         mBlockWorker = null;
         mStream = null;
         PropertyKey tierDirPathConf =
@@ -140,6 +144,7 @@ public final class LocalFileDataReader implements DataReader {
 
       mBlockWorker = context.acquireBlockWorkerClient(address);
       try {
+        LOG.info("Direct memory io not enabled, create GrpcBlockingStream");
         mStream = new GrpcBlockingStream<>(mBlockWorker.get()::openLocalBlock, mReadBufferSize,
             MoreObjects.toStringHelper(LocalFileDataReader.class)
                 .add("request", request)
