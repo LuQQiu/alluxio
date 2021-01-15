@@ -946,6 +946,7 @@ public final class DefaultFileSystemMaster extends CoreMaster
     Metrics.getUfsCounter(mMountTable.getMountInfo(resolution.getMountId()).getUfsUri().toString(),
         Metrics.UFSOps.GET_FILE_INFO).inc();
     Metrics.FILE_INFOS_GOT.inc();
+    LOG.info("File id {} name {} created and return succeed", fileInfo.getFileId(), fileInfo.getFileIdentifier());
     return fileInfo;
   }
 
@@ -1348,6 +1349,7 @@ public final class DefaultFileSystemMaster extends CoreMaster
             .create(context.getOptions().getAsyncPersistOptionsBuilder()), rpcContext);
       }
       auditContext.setSucceeded(true);
+      LOG.info("Complete file {} succeed", path);
     }
   }
 
@@ -2145,6 +2147,7 @@ public final class DefaultFileSystemMaster extends CoreMaster
         }
         createDirectoryInternal(rpcContext, inodePath, context);
         auditContext.setSrcInode(inodePath.getInode()).setSucceeded(true);
+        LOG.info("Create directory {} succeed", path);
         return inodePath.getInode().getId();
       }
     }
@@ -2253,7 +2256,7 @@ public final class DefaultFileSystemMaster extends CoreMaster
         mMountTable.checkUnderWritableMountPoint(dstPath);
         renameInternal(rpcContext, srcInodePath, dstInodePath, context);
         auditContext.setSrcInode(srcInodePath.getInode()).setSucceeded(true);
-        LOG.debug("Renamed {} to {}", srcPath, dstPath);
+        LOG.info("Renamed {} to {} succeed", srcPath, dstPath);
       }
     }
   }
@@ -2550,6 +2553,7 @@ public final class DefaultFileSystemMaster extends CoreMaster
       freeInternal(rpcContext, inodePath, context);
       auditContext.setSucceeded(true);
     }
+    LOG.info("free {} succeed", path);
   }
 
   /**
@@ -3195,6 +3199,13 @@ public final class DefaultFileSystemMaster extends CoreMaster
         setAttributeInternal(rpcContext, inodePath, context);
         auditContext.setSucceeded(true);
       }
+      if (options.hasCommonOptions()) {
+        if (options.getCommonOptions().hasTtlAction()) {
+          LOG.info("Set attribute ttl {} of {} succeed", options.getCommonOptions().getTtlAction(), path);
+        }
+      }
+      LOG.info("Set Attribute set owner {} / group {} / mode {} / pinned {} of {} succeed",
+          options.hasOwner(), options.hasGroup(), options.hasMode(), options.hasPinned(), path);
     }
   }
 
