@@ -138,9 +138,9 @@ public class AlluxioFileInStream extends FileInStream {
     if (mPosition == mLength) { // at end of file
       return -1;
     }
-    RetryPolicy retry = mRetryPolicySupplier.get();
+    RetryPolicy retry = null;
     IOException lastException = null;
-    while (retry.attempt()) {
+    do {
       try {
         updateStream();
         int result = mBlockInStream.read();
@@ -157,8 +157,13 @@ public class AlluxioFileInStream extends FileInStream {
           handleRetryableException(mBlockInStream, e);
           mBlockInStream = null;
         }
+        if (retry == null) {
+          // create time bound retry (Instant.plus) is time consuming
+          // so we only want to create it after the first read failed
+          retry = mRetryPolicySupplier.get();
+        }
       }
-    }
+    } while (retry != null && retry.attempt());
     throw lastException;
   }
 
