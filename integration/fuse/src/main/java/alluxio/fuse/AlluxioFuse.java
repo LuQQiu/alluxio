@@ -31,6 +31,7 @@ import org.apache.commons.cli.ParseException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.file.Paths;
@@ -93,6 +94,11 @@ public final class AlluxioFuse {
    */
   public static void main(String[] args) {
     LOG.info("Alluxio version: {}-{}", RuntimeConstants.VERSION, ProjectConstants.REVISION);
+    LOG.info("java.library.path {}", System.getProperty("java.library.path"));
+    File temp = new File("/usr/lib/libjnifuse.so");
+    boolean exists = temp.exists();
+    System.out.println("/usr/lib/libjnifuse.so : " + exists);
+
     AlluxioConfiguration conf = InstancedConfiguration.defaults();
     FileSystemContext fsContext = FileSystemContext.create(conf);
     try {
