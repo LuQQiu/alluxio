@@ -24,6 +24,11 @@ service BlockWorker {
   rpc RemoveBlock (RemoveBlockRequest) returns (RemoveBlockResponse);
   rpc MoveBlock (MoveBlockRequest) returns (MoveBlockResponse);
 
+  // Manages fuse embedded in a certain worker
+  rpc MountEmbeddedFuse(MountEmbeddedFuseRequest) returns (MountEmbeddedFuseResponse);
+  rpc UnmountEmbeddedFuse(UnmountEmbeddedFuseRequest) returns (UnmountEmbeddedFuseResponse);
+  rpc GetEmbeddedFuseMountTable(GetEmbeddedFuseMountTableRequest) returns (GetEmbeddedFuseMountTableResponse);
+
   // TODO(lu) Move to metrics worker
   rpc ClearMetrics (ClearMetricsRequest) returns (ClearMetricsResponse);
 }
@@ -164,6 +169,30 @@ message MoveBlockRequest {
 }
 
 message MoveBlockResponse {}
+
+// next available id: 5
+message FuseMountInfo {
+  optional string mount_point = 1;
+  optional string alluxio_path = 2;
+  optional bool debug = 3;
+  repeated string fuse_opts = 4;
+}
+message MountEmbeddedFuseRequest {
+  optional FuseMountInfo fuse_mount_info = 1;
+}
+message MountEmbeddedFuseResponse {}
+
+// next available id: 2
+message UnmountEmbeddedFuseRequest {
+  optional string mount_point = 1;
+}
+message UnmountEmbeddedFuseResponse {}
+
+message GetEmbeddedFuseMountTableRequest {}
+// next available id: 2
+message GetEmbeddedFuseMountTableResponse {
+  map<string, FuseMountInfo> fuse_mount_table = 1;
+}
 
 message ClearMetricsRequest {}
 

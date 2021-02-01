@@ -24,11 +24,15 @@ import alluxio.grpc.CreateLocalBlockRequest;
 import alluxio.grpc.CreateLocalBlockResponse;
 import alluxio.grpc.DataMessageMarshaller;
 import alluxio.grpc.DataMessageMarshallerProvider;
+import alluxio.grpc.GetEmbeddedFuseMountTableRequest;
+import alluxio.grpc.GetEmbeddedFuseMountTableResponse;
 import alluxio.grpc.GrpcChannel;
 import alluxio.grpc.GrpcChannelBuilder;
 import alluxio.grpc.GrpcNetworkGroup;
 import alluxio.grpc.GrpcSerializationUtils;
 import alluxio.grpc.GrpcServerAddress;
+import alluxio.grpc.MountEmbeddedFuseRequest;
+import alluxio.grpc.MountEmbeddedFuseResponse;
 import alluxio.grpc.MoveBlockRequest;
 import alluxio.grpc.MoveBlockResponse;
 import alluxio.grpc.OpenLocalBlockRequest;
@@ -37,6 +41,8 @@ import alluxio.grpc.ReadRequest;
 import alluxio.grpc.ReadResponse;
 import alluxio.grpc.RemoveBlockRequest;
 import alluxio.grpc.RemoveBlockResponse;
+import alluxio.grpc.UnmountEmbeddedFuseRequest;
+import alluxio.grpc.UnmountEmbeddedFuseResponse;
 import alluxio.grpc.WriteRequest;
 import alluxio.grpc.WriteResponse;
 import alluxio.retry.RetryPolicy;
@@ -205,6 +211,24 @@ public class DefaultBlockWorkerClient implements BlockWorkerClient {
   public MoveBlockResponse moveBlock(MoveBlockRequest request) {
     return mRpcBlockingStub.withDeadlineAfter(mRpcTimeoutMs, TimeUnit.MILLISECONDS)
         .moveBlock(request);
+  }
+
+  @Override
+  public MountEmbeddedFuseResponse mountEmbeddedFuse(MountEmbeddedFuseRequest request) {
+    return mRpcBlockingStub.withDeadlineAfter(mRpcTimeoutMs, TimeUnit.MILLISECONDS)
+        .mountEmbeddedFuse(request);
+  }
+
+  @Override
+  public UnmountEmbeddedFuseResponse unmountEmbeddedFuse(UnmountEmbeddedFuseRequest request) {
+    return mRpcBlockingStub.withDeadlineAfter(mRpcTimeoutMs, TimeUnit.MILLISECONDS)
+        .unmountEmbeddedFuse(request);
+  }
+
+  @Override
+  public GetEmbeddedFuseMountTableResponse getEmbeddedFuseMountTable(GetEmbeddedFuseMountTableRequest request) {
+    return mRpcBlockingStub.withDeadlineAfter(mRpcTimeoutMs, TimeUnit.MILLISECONDS)
+        .getEmbeddedFuseMountTable(request);
   }
 
   @Override

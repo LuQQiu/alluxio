@@ -22,6 +22,10 @@ import alluxio.grpc.ClearMetricsRequest;
 import alluxio.grpc.ClearMetricsResponse;
 import alluxio.grpc.CreateLocalBlockRequest;
 import alluxio.grpc.CreateLocalBlockResponse;
+import alluxio.grpc.GetEmbeddedFuseMountTableRequest;
+import alluxio.grpc.GetEmbeddedFuseMountTableResponse;
+import alluxio.grpc.MountEmbeddedFuseRequest;
+import alluxio.grpc.MountEmbeddedFuseResponse;
 import alluxio.grpc.MoveBlockRequest;
 import alluxio.grpc.MoveBlockResponse;
 import alluxio.grpc.OpenLocalBlockRequest;
@@ -31,6 +35,8 @@ import alluxio.grpc.ReadResponse;
 import alluxio.grpc.ReadResponseMarshaller;
 import alluxio.grpc.RemoveBlockRequest;
 import alluxio.grpc.RemoveBlockResponse;
+import alluxio.grpc.UnmountEmbeddedFuseRequest;
+import alluxio.grpc.UnmountEmbeddedFuseResponse;
 import alluxio.grpc.WriteRequestMarshaller;
 import alluxio.grpc.WriteResponse;
 import alluxio.security.authentication.AuthenticatedClientUser;
@@ -41,6 +47,7 @@ import alluxio.worker.WorkerProcess;
 import alluxio.worker.block.AsyncCacheRequestManager;
 import alluxio.worker.block.BlockWorker;
 
+import alluxio.worker.block.fuse.EmbeddedFuseUtils;
 import com.google.common.collect.ImmutableMap;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import io.grpc.MethodDescriptor;
@@ -53,6 +60,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Server side implementation of the gRPC BlockWorker interface.
@@ -181,9 +189,38 @@ public class BlockWorkerImpl extends BlockWorkerGrpc.BlockWorkerImplBase {
   }
 
   @Override
+  public void mountEmbeddedFuse(MountEmbeddedFuseRequest request,
+      StreamObserver<MountEmbeddedFuseResponse> responseObserver) {
+    RpcUtils.call(LOG, () -> {
+      mWorkerProcess.getWorker(BlockWorker.class).mountEmbeddedFuse(
+          EmbeddedFuseUtils.fromProto(request.getFuseMountInfo()));
+      return MountEmbeddedFuseResponse.getDefaultInstance();
+    }, "mountEmbeddedFuse", "request=%s", responseObserver, request);
+  }
+
+  @Override
+  public void unmountEmbeddedFuse(UnmountEmbeddedFuseRequest request,
+      StreamObserver<UnmountEmbeddedFuseResponse> responseObserver) {
+    RpcUtils.call(LOG, () -> {
+      mWorkerProcess.getWorker(BlockWorker.class).unmountEmbeddedFuse(request.getMountPoint());
+      return UnmountEmbeddedFuseResponse.getDefaultInstance();
+    }, "unmountEmbeddedFuse", "request=%s", responseObserver, request);
+  }
+
+  @Override
+  public void getEmbeddedFuseMountTable(GetEmbeddedFuseMountTableRequest request,
+      StreamObserver<GetEmbeddedFuseMountTableResponse> responseObserver) {
+    RpcUtils.call(LOG, () -> GetEmbeddedFuseMountTableResponse.newBuilder()
+          .putAllFuseMountTable(mWorkerProcess.getWorker(BlockWorker.class)
+              .getEmbeddedFuseMountTable().entrySet().stream()
+              .collect(Collectors.toMap(Map.Entry::getKey,
+                  e -> EmbeddedFuseUtils.toProto(e.getValue())))).build()
+    , "getEmbeddedFuseMountTable", "request=%s", responseObserver, request);
+  }
+
+  @Override
   public void clearMetrics(ClearMetricsRequest request,
       StreamObserver<ClearMetricsResponse> responseObserver) {
-    long sessionId = IdUtils.createSessionId();
     RpcUtils.call(LOG, (RpcUtils.RpcCallableThrowsIOException<ClearMetricsResponse>) () -> {
       mWorkerProcess.getWorker(BlockWorker.class).clearMetrics();
       return ClearMetricsResponse.getDefaultInstance();

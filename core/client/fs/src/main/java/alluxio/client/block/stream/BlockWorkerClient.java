@@ -16,7 +16,11 @@ import alluxio.grpc.ClearMetricsRequest;
 import alluxio.grpc.ClearMetricsResponse;
 import alluxio.grpc.CreateLocalBlockRequest;
 import alluxio.grpc.CreateLocalBlockResponse;
+import alluxio.grpc.GetEmbeddedFuseMountTableRequest;
+import alluxio.grpc.GetEmbeddedFuseMountTableResponse;
 import alluxio.grpc.GrpcServerAddress;
+import alluxio.grpc.MountEmbeddedFuseRequest;
+import alluxio.grpc.MountEmbeddedFuseResponse;
 import alluxio.grpc.MoveBlockRequest;
 import alluxio.grpc.MoveBlockResponse;
 import alluxio.grpc.OpenLocalBlockRequest;
@@ -26,6 +30,8 @@ import alluxio.grpc.ReadRequest;
 import alluxio.grpc.ReadResponse;
 import alluxio.grpc.RemoveBlockRequest;
 import alluxio.grpc.RemoveBlockResponse;
+import alluxio.grpc.UnmountEmbeddedFuseRequest;
+import alluxio.grpc.UnmountEmbeddedFuseResponse;
 import alluxio.grpc.WriteRequest;
 import alluxio.grpc.WriteResponse;
 import alluxio.security.user.UserState;
@@ -133,6 +139,27 @@ public interface BlockWorkerClient extends Closeable {
    * @throws StatusRuntimeException if any error occurs
    */
   MoveBlockResponse moveBlock(MoveBlockRequest request);
+
+  /**
+   * Mounts embedded FUSE inside this worker.
+   * @param request the mount request
+   * @return the mount response
+   */
+  MountEmbeddedFuseResponse mountEmbeddedFuse(MountEmbeddedFuseRequest request);
+
+  /**
+   * Unmounts embedded FUSE inside this worker.
+   * @param request the unmount request
+   * @return the unmount response
+   */
+  UnmountEmbeddedFuseResponse unmountEmbeddedFuse(UnmountEmbeddedFuseRequest request);
+
+  /**
+   * Gets the embedded fuse mount table.
+   * @param request the get fuse mount table request
+   * @return the get fuse mount table response
+   */
+  GetEmbeddedFuseMountTableResponse getEmbeddedFuseMountTable(GetEmbeddedFuseMountTableRequest request);
 
   /**
    * Clear the worker metrics.

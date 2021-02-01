@@ -18,7 +18,9 @@ import alluxio.client.file.FileSystemContext;
 import alluxio.conf.AlluxioConfiguration;
 import alluxio.conf.InstancedConfiguration;
 import alluxio.conf.PropertyKey;
-import alluxio.jnifuse.FuseException;
+import alluxio.fuse.jni.AlluxioJniFuseFileSystem;
+import alluxio.fuse.jni.FuseException;
+import alluxio.fuse.jnr.AlluxioJNRFuseFileSystem;
 import alluxio.retry.RetryUtils;
 
 import org.apache.commons.cli.CommandLine;
@@ -91,7 +93,7 @@ public final class AlluxioFuse {
    *
    * @param args arguments to run the command line
    */
-  public static void main(String[] args) {
+  public static void main(String[] args) throws IOException {
     LOG.info("Alluxio version: {}-{}", RuntimeConstants.VERSION, ProjectConstants.REVISION);
     AlluxioConfiguration conf = InstancedConfiguration.defaults();
     FileSystemContext fsContext = FileSystemContext.create(conf);
@@ -109,10 +111,28 @@ public final class AlluxioFuse {
           + "Proceed with local configuration for FUSE: {}", e.toString());
     }
     conf = fsContext.getClusterConf();
-    final AlluxioFuseOptions opts = parseOptions(args, conf);
+    final FuseMountInfo opts = parseOptions(args, conf);
     if (opts == null) {
       System.exit(1);
     }
+    launchFuse(fsContext, opts);
+  }
+
+  /**
+   * Launches the fuse application.
+   *
+   * @param fsContext the file system context
+   * @param opts the fuse options
+   * @return true if fuse is launched successfully
+   */
+  // TODO(lu) change to void return and throws Exceptions
+  public static FuseUmountable launchFuse(FileSystemContext fsContext, FuseMountInfo opts) throws IOException {
+    if (opts == null) {
+      throw new IOException("The given fuse options cannot be null");
+    }
+    AlluxioConfiguration conf = fsContext.getClusterConf();
+    // TODO(lu) add a interface for both JNI-Fuse and JNR-Fuse to share constructor, mount, unmount operations ?
+    // call FuseUnmountable?
     try (final FileSystem fs = FileSystem.Factory.create(fsContext)) {
       final List<String> fuseOpts = opts.getFuseOpts();
       if (conf.getBoolean(PropertyKey.FUSE_JNIFUSE_ENABLED)) {
@@ -127,14 +147,16 @@ public final class AlluxioFuse {
           // jni-fuse registers JVM shutdown hook to ensure fs.umount()
           // will be executed when this process is exiting.
           fuseFs.umount();
+          throw new IOException(String.format("Failed to mount %s", opts.getMountPoint()), e);
         }
+        return fuseFs;
       } else {
         // Force direct_io in JNR-FUSE: writes and reads bypass the kernel page
         // cache and go directly to alluxio. This avoids extra memory copies
         // in the write path.
         // TODO(binfan): support kernel_cache (issues#10840)
         fuseOpts.add("-odirect_io");
-        final AlluxioFuseFileSystem fuseFs = new AlluxioFuseFileSystem(fs, opts, conf);
+        final AlluxioJNRFuseFileSystem fuseFs = new AlluxioJNRFuseFileSystem(fs, opts, conf);
         try {
           fuseFs.mount(Paths.get(opts.getMountPoint()), true, opts.isDebug(),
               fuseOpts.toArray(new String[0]));
@@ -144,10 +166,13 @@ public final class AlluxioFuse {
           // jnr-fuse registers JVM shutdown hook to ensure fs.umount()
           // will be executed when this process is exiting.
           fuseFs.umount();
+          throw new IOException(String.format("Failed to mount %s", opts.getMountPoint()), e);
         }
+        return fuseFs;
       }
-    } catch (IOException e) {
+    } catch (Throwable e) {
       LOG.error("Failed to mount Alluxio file system", e);
+      throw new IOException("Failed to mount Alluxio file system", e);
     }
   }
 
@@ -158,7 +183,7 @@ public final class AlluxioFuse {
    * @return Alluxio-FUSE configuration options
    */
   @Nullable
-  private static AlluxioFuseOptions parseOptions(String[] args, AlluxioConfiguration alluxioConf) {
+  private static FuseMountInfo parseOptions(String[] args, AlluxioConfiguration alluxioConf) {
     final CommandLineParser parser = new DefaultParser();
     try {
       CommandLine cli = parser.parse(OPTIONS, args);
@@ -193,7 +218,7 @@ public final class AlluxioFuse {
 
       final boolean fuseDebug = alluxioConf.getBoolean(PropertyKey.FUSE_DEBUG_ENABLED);
 
-      return new AlluxioFuseOptions(mntPointValue, alluxioRootValue, fuseDebug, fuseOpts);
+      return new FuseMountInfo(mntPointValue, alluxioRootValue, fuseDebug, fuseOpts);
     } catch (ParseException e) {
       System.err.println("Error while parsing CLI: " + e.getMessage());
       final HelpFormatter fmt = new HelpFormatter();

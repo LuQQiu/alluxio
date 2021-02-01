@@ -16,6 +16,8 @@ import alluxio.exception.BlockDoesNotExistException;
 import alluxio.exception.InvalidWorkerStateException;
 import alluxio.exception.UfsBlockAccessTokenUnavailableException;
 import alluxio.exception.WorkerOutOfSpaceException;
+import alluxio.fuse.FuseMountInfo;
+import alluxio.grpc.GetEmbeddedFuseMountTableResponse;
 import alluxio.proto.dataserver.Protocol;
 import alluxio.wire.FileInfo;
 import alluxio.worker.SessionCleanable;
@@ -25,6 +27,8 @@ import alluxio.worker.block.io.BlockWriter;
 import alluxio.worker.block.meta.BlockMeta;
 
 import java.io.IOException;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -422,6 +426,12 @@ public interface BlockWorker extends Worker, SessionCleanable {
   void closeUfsBlock(long sessionId, long blockId)
       throws BlockAlreadyExistsException, BlockDoesNotExistException, IOException,
       WorkerOutOfSpaceException;
+
+  void mountEmbeddedFuse(FuseMountInfo info) throws IOException;
+
+  void unmountEmbeddedFuse(String mountPoint) throws IOException;
+
+  Map<String, FuseMountInfo> getEmbeddedFuseMountTable();
 
   /**
    * Clears the worker metrics.

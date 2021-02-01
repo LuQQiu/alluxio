@@ -24,6 +24,7 @@ import alluxio.exception.BlockDoesNotExistException;
 import alluxio.exception.ExceptionMessage;
 import alluxio.exception.InvalidWorkerStateException;
 import alluxio.exception.WorkerOutOfSpaceException;
+import alluxio.fuse.FuseMountInfo;
 import alluxio.grpc.GrpcService;
 import alluxio.grpc.ServiceType;
 import alluxio.heartbeat.HeartbeatContext;
@@ -42,6 +43,7 @@ import alluxio.wire.FileInfo;
 import alluxio.wire.WorkerNetAddress;
 import alluxio.worker.AbstractWorker;
 import alluxio.worker.SessionCleaner;
+import alluxio.worker.block.fuse.EmbeddedFuseManager;
 import alluxio.worker.block.io.BlockReader;
 import alluxio.worker.block.io.BlockWriter;
 import alluxio.worker.block.meta.BlockMeta;
@@ -56,7 +58,9 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
@@ -121,6 +125,8 @@ public final class DefaultBlockWorker extends AbstractWorker implements BlockWor
 
   private final UfsManager mUfsManager;
 
+  private final EmbeddedFuseManager mFuseManager;
+
   /**
    * Constructs a default block worker.
    *
@@ -158,6 +164,7 @@ public final class DefaultBlockWorker extends AbstractWorker implements BlockWor
     mBlockStore.registerBlockStoreEventListener(mMetricsReporter);
     mUfsManager = ufsManager;
     mUnderFileSystemBlockStore = new UnderFileSystemBlockStore(mBlockStore, ufsManager);
+    mFuseManager = new EmbeddedFuseManager();
 
     Metrics.registerGauges(this);
   }
@@ -550,6 +557,21 @@ public final class DefaultBlockWorker extends AbstractWorker implements BlockWor
     } finally {
       mUnderFileSystemBlockStore.releaseAccess(sessionId, blockId);
     }
+  }
+
+  @Override
+  public void mountEmbeddedFuse(FuseMountInfo info) throws IOException {
+    mFuseManager.mount(info);
+  }
+
+  @Override
+  public void unmountEmbeddedFuse(String mountPoint) throws IOException {
+    mFuseManager.unmount(mountPoint);
+  }
+
+  @Override
+  public Map<String, FuseMountInfo> getEmbeddedFuseMountTable() {
+    return mFuseManager.getMountTable();
   }
 
   @Override

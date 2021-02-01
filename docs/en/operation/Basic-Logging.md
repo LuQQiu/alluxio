@@ -151,7 +151,7 @@ to turn on GC for each individual process.
 Set in `conf/log4j.properties`:
 
 ```properties
-log4j.logger.alluxio.fuse.AlluxioFuseFileSystem=DEBUG
+log4j.logger.alluxio.fuse.jnr.AlluxioJNRFuseFileSystem=DEBUG
 ```
 
 You will see debug logs at the beginning and the end of each FUSE API call with its arguments and result

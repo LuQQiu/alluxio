@@ -257,6 +257,8 @@ public final class FileSystemMasterClientServiceHandler
     RpcUtils.call(LOG, () -> {
       mFileSystemMaster.mount(new AlluxioURI(request.getAlluxioPath()),
           new AlluxioURI(request.getUfsPath()),
+          // TODO(lu) why need to use MountContext
+          // TODO(lu) why GrpcCallTracker is needed
           MountContext.create(request.getOptions().toBuilder())
               .withTracker(new GrpcCallTracker(responseObserver)));
       return MountPResponse.newBuilder().build();
