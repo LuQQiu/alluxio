@@ -14,10 +14,15 @@ package alluxio.worker.block.fuse;
 import alluxio.fuse.FuseMountInfo;
 import alluxio.grpc.MountEmbeddedFuseRequest;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class EmbeddedFuseUtils {
   // TODO(lu) deal with the not set case
   public static FuseMountInfo fromProto(alluxio.grpc.FuseMountInfo info) {
-    return new FuseMountInfo(info.getMountPoint(), info.getAlluxioPath(), info.getDebug(), info.getFuseOptsList());
+    List<String> list = new ArrayList<>();
+    list.addAll(info.getFuseOptsList());
+    return new FuseMountInfo(info.getMountPoint(), info.getAlluxioPath(), info.getDebug(), list);
   }
 
   public static alluxio.grpc.FuseMountInfo toProto(FuseMountInfo info) {
