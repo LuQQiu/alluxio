@@ -43,6 +43,7 @@ import alluxio.util.network.NetworkAddressUtils;
 import alluxio.wire.WorkerInfo;
 import alluxio.wire.WorkerNetAddress;
 
+import alluxio.worker.block.LocalBlockWorker;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Objects;
@@ -139,6 +140,8 @@ public class FileSystemContext implements Closeable {
   @GuardedBy("this")
   private WorkerNetAddress mLocalWorker;
 
+  private LocalBlockWorker mLocalBlockWorker = null;
+
   /**
    * Reinitializer contains a daemon heartbeat thread to reinitialize this context when
    * configuration hashes change.
@@ -168,6 +171,17 @@ public class FileSystemContext implements Closeable {
   }
 
   /**
+   * Creates a {@link FileSystemContext} with a null subject and local block worker.
+   *
+   * @param conf Alluxio configuration
+   * @return an instance of file system context with no subject associated
+   */
+  public static FileSystemContext create(AlluxioConfiguration conf, LocalBlockWorker localBlockWorker) {
+    Preconditions.checkNotNull(conf);
+    return create(null, conf, localBlockWorker);
+  }
+
+  /**
    * @param subject the parent subject, set to null if not present
    * @param conf Alluxio configuration
    * @return a context
@@ -178,6 +192,21 @@ public class FileSystemContext implements Closeable {
     MasterInquireClient inquireClient =
         MasterInquireClient.Factory.create(ctx.getClusterConf(), ctx.getUserState());
     FileSystemContext context = new FileSystemContext(ctx.getClusterConf());
+    context.init(ctx, inquireClient);
+    return context;
+  }
+
+  /**
+   * @param subject the parent subject, set to null if not present
+   * @param conf Alluxio configuration
+   * @return a context
+   */
+  public static FileSystemContext create(@Nullable Subject subject,
+      @Nullable AlluxioConfiguration conf, LocalBlockWorker localBlockWorker) {
+    ClientContext ctx = ClientContext.create(subject, conf);
+    MasterInquireClient inquireClient =
+        MasterInquireClient.Factory.create(ctx.getClusterConf(), ctx.getUserState());
+    FileSystemContext context = new FileSystemContext(ctx.getClusterConf(), localBlockWorker);
     context.init(ctx, inquireClient);
     return context;
   }
@@ -221,6 +250,18 @@ public class FileSystemContext implements Closeable {
     mId = IdUtils.createFileSystemContextId();
     mWorkerRefreshPolicy =
         new TimeoutRefresh(conf.getMs(PropertyKey.USER_WORKER_LIST_REFRESH_INTERVAL));
+    LOG.debug("Created context with id: {}", mId);
+  }
+
+  /**
+   * Initializes FileSystemContext ID.
+   * @param conf Alluxio configuration
+   */
+  private FileSystemContext(AlluxioConfiguration conf, LocalBlockWorker localBlockWorker) {
+    mId = IdUtils.createFileSystemContextId();
+    mWorkerRefreshPolicy =
+        new TimeoutRefresh(conf.getMs(PropertyKey.USER_WORKER_LIST_REFRESH_INTERVAL));
+    mLocalBlockWorker = localBlockWorker;
     LOG.debug("Created context with id: {}", mId);
   }
 
@@ -486,6 +527,10 @@ public class FileSystemContext implements Closeable {
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
+  }
+
+  public LocalBlockWorker acquireLocalBlockWorkerClient() {
+    return mLocalBlockWorker;
   }
 
   /**

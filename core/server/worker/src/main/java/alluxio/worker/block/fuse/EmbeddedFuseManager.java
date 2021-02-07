@@ -16,6 +16,8 @@ import alluxio.conf.ServerConfiguration;
 import alluxio.fuse.AlluxioFuse;
 import alluxio.fuse.FuseMountInfo;
 import alluxio.fuse.FuseUmountable;
+import alluxio.worker.block.DefaultBlockWorker;
+import alluxio.worker.block.LocalBlockWorker;
 import com.google.common.base.Supplier;
 import com.google.common.base.Suppliers;
 
@@ -37,9 +39,10 @@ public class EmbeddedFuseManager {
   /**
    * Constructs a new {@link EmbeddedFuseManager}.
    */
-  public EmbeddedFuseManager() {
+  public EmbeddedFuseManager(DefaultBlockWorker blockWorker) {
+    LocalBlockWorkerImpl localBlockWorker = new LocalBlockWorkerImpl(blockWorker);
     mFsContextSupplier = Suppliers.memoize(()
-        -> FileSystemContext.create(ServerConfiguration.global()));
+        -> FileSystemContext.create(ServerConfiguration.global(), localBlockWorker));
     mFuseUmountableMap = new HashMap<>();
     mFuseMountTable = new HashMap<>();
   }

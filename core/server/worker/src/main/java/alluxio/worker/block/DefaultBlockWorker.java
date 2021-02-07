@@ -164,7 +164,7 @@ public final class DefaultBlockWorker extends AbstractWorker implements BlockWor
     mBlockStore.registerBlockStoreEventListener(mMetricsReporter);
     mUfsManager = ufsManager;
     mUnderFileSystemBlockStore = new UnderFileSystemBlockStore(mBlockStore, ufsManager);
-    mFuseManager = new EmbeddedFuseManager();
+    mFuseManager = new EmbeddedFuseManager(this);
 
     Metrics.registerGauges(this);
   }

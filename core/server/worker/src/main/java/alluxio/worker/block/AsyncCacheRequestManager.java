@@ -85,6 +85,7 @@ public class AsyncCacheRequestManager {
    *
    * @param request the async cache request fields will be available
    */
+  // TODO(lu) this class don't directly bound to grpc AsyncCacheRequest
   public void submitRequest(AsyncCacheRequest request) {
     ASYNC_CACHE_REQUESTS.inc();
     long blockId = request.getBlockId();
