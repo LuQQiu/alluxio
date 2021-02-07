@@ -115,7 +115,7 @@ public final class AlluxioFuse {
     if (opts == null) {
       System.exit(1);
     }
-    launchFuse(fsContext, opts);
+    launchFuse(fsContext, opts, true);
   }
 
   /**
@@ -126,7 +126,7 @@ public final class AlluxioFuse {
    * @return true if fuse is launched successfully
    */
   // TODO(lu) change to void return and throws Exceptions
-  public static FuseUmountable launchFuse(FileSystemContext fsContext, FuseMountInfo opts) throws IOException {
+  public static FuseUmountable launchFuse(FileSystemContext fsContext, FuseMountInfo opts, boolean blocking) throws IOException {
     if (opts == null) {
       throw new IOException("The given fuse options cannot be null");
     }
@@ -140,7 +140,7 @@ public final class AlluxioFuse {
         try {
           LOG.info("Mounting AlluxioJniFuseFileSystem: mount point=\"{}\", OPTIONS=\"{}\"",
               opts.getMountPoint(), fuseOpts.toArray(new String[0]));
-          fuseFs.mount(true, opts.isDebug(), fuseOpts.toArray(new String[0]));
+          fuseFs.mount(blocking, opts.isDebug(), fuseOpts.toArray(new String[0]));
         } catch (FuseException e) {
           LOG.error("Failed to mount {}", opts.getMountPoint(), e);
           // only try to umount file system when exception occurred.
@@ -158,7 +158,7 @@ public final class AlluxioFuse {
         fuseOpts.add("-odirect_io");
         final AlluxioJNRFuseFileSystem fuseFs = new AlluxioJNRFuseFileSystem(fs, opts, conf);
         try {
-          fuseFs.mount(Paths.get(opts.getMountPoint()), true, opts.isDebug(),
+          fuseFs.mount(Paths.get(opts.getMountPoint()), blocking, opts.isDebug(),
               fuseOpts.toArray(new String[0]));
         } catch (ru.serce.jnrfuse.FuseException e) {
           LOG.error("Failed to mount {}", opts.getMountPoint(), e);

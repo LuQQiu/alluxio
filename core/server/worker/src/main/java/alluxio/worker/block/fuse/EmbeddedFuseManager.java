@@ -48,7 +48,7 @@ public class EmbeddedFuseManager {
     if (mFuseUmountableMap.containsKey(info.getMountPoint())) {
       throw new IOException(String.format("the given mount point %s is mounted already", info.getMountPoint()));
     }
-    FuseUmountable fuse = AlluxioFuse.launchFuse(mFsContextSupplier.get(), info);
+    FuseUmountable fuse = AlluxioFuse.launchFuse(mFsContextSupplier.get(), info, false);
     mFuseUmountableMap.put(info.getMountPoint(), fuse);
     mFuseMountTable.put(info.getMountPoint(), info);
   }
