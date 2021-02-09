@@ -11,6 +11,7 @@
 
 package alluxio.worker.grpc;
 
+import alluxio.block.ReadRequest;
 import alluxio.conf.PropertyKey;
 import alluxio.conf.ServerConfiguration;
 import alluxio.exception.status.AlluxioStatusException;

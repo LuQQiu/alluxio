@@ -11,13 +11,13 @@
 
 package alluxio.worker.block;
 
+import alluxio.block.BlockReadRequest;
 import alluxio.exception.BlockAlreadyExistsException;
 import alluxio.exception.BlockDoesNotExistException;
 import alluxio.exception.InvalidWorkerStateException;
 import alluxio.exception.UfsBlockAccessTokenUnavailableException;
 import alluxio.exception.WorkerOutOfSpaceException;
 import alluxio.fuse.FuseMountInfo;
-import alluxio.grpc.GetEmbeddedFuseMountTableResponse;
 import alluxio.proto.dataserver.Protocol;
 import alluxio.wire.FileInfo;
 import alluxio.worker.SessionCleanable;
@@ -27,7 +27,6 @@ import alluxio.worker.block.io.BlockWriter;
 import alluxio.worker.block.meta.BlockMeta;
 
 import java.io.IOException;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
@@ -396,6 +395,10 @@ public interface BlockWorker extends Worker, SessionCleanable {
    */
   FileInfo getFileInfo(long fileId) throws IOException;
 
+  BlockReader getBlockReader(BlockReadRequest request) throws Exception;
+
+  void closeBlockReader(BlockReader reader, long sessionId, long blockId)
+      throws BlockAlreadyExistsException, IOException, WorkerOutOfSpaceException;
   /**
    * Opens a UFS block. It registers the block metadata information to the UFS block store. It
    * throws an {@link UfsBlockAccessTokenUnavailableException} if the number of concurrent readers

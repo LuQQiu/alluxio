@@ -11,11 +11,12 @@
 
 package alluxio.worker.block.fuse;
 
+import alluxio.block.BlockReadRequest;
+import alluxio.proto.dataserver.Protocol;
 import alluxio.util.IdUtils;
 import alluxio.worker.block.BlockWorker;
-import alluxio.worker.block.DefaultBlockWorker;
 import alluxio.worker.block.LocalBlockWorker;
-import alluxio.worker.grpc.ShortCircuitBlockReadHandler;
+import alluxio.worker.block.io.BlockReader;
 
 import java.io.IOException;
 
@@ -29,32 +30,16 @@ public class LocalBlockWorkerImpl implements LocalBlockWorker {
     mBlockWorker = blockWorker;
   }
 
-  /**
-   *
-   * @return the local block path
-   */
-  private void readBlock() throws Exception{
+  // TODO(lu) where to use this two methods, and how to change to inputstream
+  public BlockReader getBlockReader(BlockReadRequest request) throws Exception{
     // GrpcBlockReadHandler -> general BlockReadHandler
     // GrpcShortCircuitReadHandler -> general ShortCircuitBlockReadHandler
     // LocalBlockWorkerImpl -> directly create BlockReadHandler, ShortCircuitBlockReadHandler without problem
+    return mBlockWorker.getBlockReader(request);
   }
 
-  /**
-   *
-   * @return the local block path
-   */
-  private String openLocalBlock() throws Exception{
-    // TODO(lu) shortCircuitBlockReadHandler is also grpc, try to remove it
-
-    // do the same logic as ShortCircuitBlockReadHandler.onNext (checkBlockId, block promote, mWorker.readBlock
-    // TODO(lu) I should put all those logics around DefaultBlockWorker operations in DefaultBlockWorker, or have another layer somewhere ? and where?
-
-    // this include two step: openLocalBlock(): return path, lockId and other information, closeLocalBlock (deal with onError, ExceptionCaught, onComplete, need lockId, session id, )
-    // Have another layer before ShortCircuitBlockReadHandler to deal with the general cases! and allow other operation to openLocalBlock and closeLocalBlock
-    // workerLocalBlockOperations.openLocalBlock, closeLocalBlock
-
-    // all the operations we can take the GRPC logics out
-    // where should i put those operations? may be still put in DefaultBlockWorker for now? if it's not that long and complex, if not, we can have another blockreadwriteManager
+  public void  closeBlockReader(BlockReader reader, long sessionId, long blockId) throws Exception {
+    mBlockWorker.closeBlockReader(reader, sessionId, blockId);
   }
 
   private void asyncCache() throws Exception {

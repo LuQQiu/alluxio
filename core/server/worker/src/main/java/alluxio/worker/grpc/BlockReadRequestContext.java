@@ -11,6 +11,7 @@
 
 package alluxio.worker.grpc;
 
+import alluxio.block.BlockReadRequest;
 import alluxio.worker.block.io.BlockReader;
 
 import javax.annotation.Nullable;

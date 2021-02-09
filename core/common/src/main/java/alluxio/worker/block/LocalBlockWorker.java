@@ -11,7 +11,17 @@
 
 package alluxio.worker.block;
 
+import alluxio.block.BlockReadRequest;
+import alluxio.proto.dataserver.Protocol;
+import alluxio.worker.block.io.BlockReader;
+
+import java.io.IOException;
+
 public interface LocalBlockWorker {
 
+  // TODO(lu) where to use this two methods, and how to change to inputstream
+  BlockReader getBlockReader(BlockReadRequest request) throws Exception;
+
+  void  closeBlockReader(BlockReader reader, long sessionId, long blockId) throws Exception;
 
 }

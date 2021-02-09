@@ -109,12 +109,17 @@ public class BlockInStream extends InputStream implements BoundedStream, Seekabl
     // Add UFS fallback options
     builder.setOpenUfsBlockOptions(options.getOpenUfsBlockOptions(blockId));
     builder.setPositionShort(options.getPositionShort());
+
     AlluxioConfiguration alluxioConf = context.getClusterConf();
     boolean shortCircuit = alluxioConf.getBoolean(PropertyKey.USER_SHORT_CIRCUIT_ENABLED);
     boolean shortCircuitPreferred =
         alluxioConf.getBoolean(PropertyKey.USER_SHORT_CIRCUIT_PREFERRED);
     boolean sourceSupportsDomainSocket = NettyUtils.isDomainSocketSupported(dataSource);
     boolean sourceIsLocal = dataSourceType == BlockInStreamSource.LOCAL;
+
+    if (sourceIsLocal && context.acquireLocalBlockWorkerClient() != null) {
+      createEmbeddedBlockInStream(context, dataSource, blockId, blockSize, options);
+    }
 
     // Short circuit is enabled when
     // 1. data source is local node
@@ -157,6 +162,15 @@ public class BlockInStream extends InputStream implements BoundedStream, Seekabl
         PropertyKey.USER_LOCAL_READER_CHUNK_SIZE_BYTES);
     return new BlockInStream(
         new LocalFileDataReader.Factory(context, address, blockId, chunkSize, options),
+        address, BlockInStreamSource.LOCAL, blockId, length);
+  }
+
+  private static BlockInStream createEmbeddedBlockInStream(FileSystemContext context,
+      WorkerNetAddress address, long blockId, long length, InStreamOptions options) {
+    long chunkSize = context.getClusterConf().getBytes(
+        PropertyKey.USER_LOCAL_READER_CHUNK_SIZE_BYTES);
+    return new BlockInStream(
+        new EmbeddedClientDataReader.Factory(context, blockId, chunkSize, options),
         address, BlockInStreamSource.LOCAL, blockId, length);
   }
 
