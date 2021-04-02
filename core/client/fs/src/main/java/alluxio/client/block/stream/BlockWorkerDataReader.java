@@ -101,7 +101,8 @@ public final class BlockWorkerDataReader implements DataReader {
     private BlockReadRequest mBlockReadRequest;
     private boolean mClosed;
     private BlockReader mReader;
-    private ReadRequest mReadRequestPartial;
+    private long mBlockId;
+    private boolean mPromote;
 
     /**
      * Creates an instance of {@link Factory}.
@@ -117,16 +118,15 @@ public final class BlockWorkerDataReader implements DataReader {
       mClosed = false;
       boolean isPromote = ReadType
           .fromProto(options.getOptions().getReadType()).isPromote();
-      mReadRequestPartial = ReadRequest.newBuilder()
-          .setBlockId(blockId).setPromote(isPromote).build();
+      mBlockId = blockId;
+      mPromote = isPromote;
       mBlockWorker = context.getProcessLocalWorker();
     }
 
     @Override
     public DataReader create(long offset, long len) throws IOException {
-      mReadRequestPartial = mReadRequestPartial.toBuilder()
-          .setOffset(offset).setLength(len).build();
-      mBlockReadRequest = new BlockReadRequest(mReadRequestPartial);
+      mBlockReadRequest = new BlockReadRequest(ReadRequest.newBuilder().setBlockId(mBlockId)
+          .setPromote(mPromote).setOffset(offset).setLength(len).build());
       try {
         mReader = mBlockWorker.createBlockReader(mBlockReadRequest);
         return new BlockWorkerDataReader(mReader, offset, len, mChunkSize);
