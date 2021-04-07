@@ -35,6 +35,7 @@ import alluxio.jnifuse.struct.FuseFileInfo;
 import alluxio.metrics.MetricsSystem;
 import alluxio.security.authorization.Mode;
 
+import com.codahale.metrics.Timer;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
@@ -356,35 +357,37 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
   private int readInternal(String path, ByteBuffer buf, long size, long offset, FuseFileInfo fi) {
     MetricsSystem.counter("Client.JniFuseReadOps").inc();
     MetricsSystem.counter("Client.JniFuseReadRequestTotalBytes").inc(size);
-    final int sz = (int) size;
-    int nread = 0;
-    Long fd = fi.fh.get();
-    try {
-      FileInStream is = mOpenFileEntries.get(fd);
-      if (is == null) {
-        LOG.error("Cannot find fd {} for {}", fd, path);
-        return -ErrorCodes.EBADFD();
-      }
-      // FileInStream is not thread safe
-      synchronized (is) {
-        if (!mOpenFileEntries.containsKey(fd)) {
+    try (Timer.Context timer = MetricsSystem.timer("Client.JniFuseReadTimer").time()) {
+      final int sz = (int) size;
+      int nread = 0;
+      Long fd = fi.fh.get();
+      try {
+        FileInStream is = mOpenFileEntries.get(fd);
+        if (is == null) {
           LOG.error("Cannot find fd {} for {}", fd, path);
           return -ErrorCodes.EBADFD();
         }
-        if (offset - is.getPos() < is.remaining()) {
-          is.seek(offset);
-          int rd = 0;
-          while (rd >= 0 && nread < sz) {
-            rd = ((AlluxioFileInStream) is).read(buf, nread, sz - nread);
-            if (rd >= 0) {
-              nread += rd;
+        // FileInStream is not thread safe
+        synchronized (is) {
+          if (!mOpenFileEntries.containsKey(fd)) {
+            LOG.error("Cannot find fd {} for {}", fd, path);
+            return -ErrorCodes.EBADFD();
+          }
+          if (offset - is.getPos() < is.remaining()) {
+            is.seek(offset);
+            int rd = 0;
+            while (rd >= 0 && nread < sz) {
+              rd = ((AlluxioFileInStream) is).read(buf, nread, sz - nread);
+              if (rd >= 0) {
+                nread += rd;
+              }
             }
           }
         }
+      } catch (Throwable e) {
+        LOG.error("Failed to read, path: {} size: {} offset: {}", path, size, offset, e);
+        return -ErrorCodes.EIO();
       }
-    } catch (Throwable e) {
-      LOG.error("Failed to read, path: {} size: {} offset: {}", path, size, offset, e);
-      return -ErrorCodes.EIO();
     }
     MetricsSystem.counter("Client.JniFuseReadResponseTotalBytes").inc(nread);
     return nread;
