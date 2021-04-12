@@ -486,7 +486,8 @@ public class BlockInStream extends InputStream implements BoundedStream, Seekabl
       mCurrentChunk.release();
       mCurrentChunk = null;
     }
-    if (mCurrentChunk == null) {
+    mCurrentChunk = mDataReader.readChunk();
+/*    if (mCurrentChunk == null) {
       if (mDetailedMetricsEnabled) {
         try (Timer.Context ctx = MetricsSystem
             .timer(MetricKey.CLIENT_BLOCK_READ_CHUNK.getName()).time()) {
@@ -495,7 +496,7 @@ public class BlockInStream extends InputStream implements BoundedStream, Seekabl
       } else {
         mCurrentChunk = mDataReader.readChunk();
       }
-    }
+    }*/
   }
 
   /**

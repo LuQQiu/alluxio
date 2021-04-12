@@ -36,6 +36,7 @@ import alluxio.metrics.MetricKey;
 import alluxio.metrics.MetricsSystem;
 import alluxio.security.authorization.Mode;
 
+import com.codahale.metrics.Timer;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
@@ -374,10 +375,12 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
         }
         if (offset - is.getPos() < is.remaining()) {
           is.seek(offset);
-          while (rd >= 0 && nread < sz) {
-            rd = ((AlluxioFileInStream) is).read(buf, nread, sz - nread);
-            if (rd >= 0) {
-              nread += rd;
+          try (Timer.Context context = MetricsSystem.timer("JNIFuseRead.AlluxioFileInStreamRead").time()) {
+            while (rd >= 0 && nread < sz) {
+              rd = ((AlluxioFileInStream) is).read(buf, nread, sz - nread);
+              if (rd >= 0) {
+                nread += rd;
+              }
             }
           }
         }

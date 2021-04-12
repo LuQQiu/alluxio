@@ -3829,7 +3829,7 @@ public final class PropertyKey implements Comparable<PropertyKey> {
   public static final PropertyKey USER_BLOCK_READ_METRICS_ENABLED =
       new Builder(Name.USER_BLOCK_READ_METRICS_ENABLED)
           .setDescription("Whether detailed block read metrics will be recorded and sink.")
-          .setDefaultValue(false)
+          .setDefaultValue(true)
           .setScope(Scope.CLIENT)
           .build();
   public static final PropertyKey USER_BLOCK_WRITE_LOCATION_POLICY =
