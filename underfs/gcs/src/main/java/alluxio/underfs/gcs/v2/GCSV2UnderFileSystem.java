@@ -88,7 +88,8 @@ public class GCSV2UnderFileSystem extends ObjectUnderFileSystem {
       LOG.info("Created GCSV2UnderFileSystem with default Google application credentials");
     }
 
-    Storage storage = StorageOptions.newBuilder().setCredentials(credentials).build().getService();
+    Storage storage = StorageOptions.newBuilder().setHost("https://storage.googleapis.com/")
+        .setCredentials(credentials).build().getService();
     return new GCSV2UnderFileSystem(uri, storage, bucketName, conf);
   }
 
