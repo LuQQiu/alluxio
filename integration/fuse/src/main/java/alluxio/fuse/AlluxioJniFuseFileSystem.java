@@ -378,7 +378,7 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
         return -ErrorCodes.EBADFD();
       }
       // FileInStream is not thread safe
-      synchronized (is) {
+      synchronized (is) { //TODO(lu) 3 threads waiting to acquire this!! 1 thread is locking the FileInStream and is blocking on other thing
         if (!mOpenFileEntries.containsKey(fd)) {
           LOG.error("Cannot find fd {} for {}", fd, path);
           return -ErrorCodes.EBADFD();

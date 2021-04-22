@@ -131,7 +131,7 @@ public final class BlockLockManager {
               + " holds a lock on the block", sessionId, blockId));
     }
     if (blocking) {
-      lock.lock();
+      lock.lock(); // TODO(lu) The reading thread is parking to wait for
     } else {
       Preconditions.checkNotNull(time, "time");
       Preconditions.checkNotNull(unit, "unit");
