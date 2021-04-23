@@ -275,12 +275,12 @@ public final class AlluxioFuseUtils {
   public static int call(Logger logger, FuseCallable callable, String methodName,
       String description, Object... args) {
     String debugDesc = logger.isDebugEnabled() ? String.format(description, args) : null;
-    logger.debug("Enter: {}({})", methodName, debugDesc);
+    logger.debug("Thread name {} id {} Enter: {}({})", Thread.currentThread().getName(), Thread.currentThread().getId(), methodName, debugDesc);
     long startMs = System.currentTimeMillis();
     int ret = callable.call();
     long durationMs = System.currentTimeMillis() - startMs;
     MetricsSystem.timer(methodName).update(durationMs, TimeUnit.MILLISECONDS);
-    logger.debug("Exit ({}): {}({}) in {} ms", ret, methodName, debugDesc, durationMs);
+    logger.debug("Thread name {} id {} Exit ({}): {}({}) in {} ms", Thread.currentThread().getName(), Thread.currentThread().getId(), ret, methodName, debugDesc, durationMs);
     if (ret < 0) {
       MetricsSystem.counter(methodName + "Failures").inc();
     }

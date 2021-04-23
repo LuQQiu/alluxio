@@ -25,6 +25,7 @@ import com.google.common.collect.Sets;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -37,6 +38,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.stream.Collectors;
 
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
@@ -131,9 +133,17 @@ public final class BlockLockManager {
               + " holds a lock on the block", sessionId, blockId));
     }
     if (blocking) {
-      LOG.info("lockBlockInternal with thread name {} id {} start blocking locking  sessionId {} blockId {} blockType {}",
-          Thread.currentThread().getName(), Thread.currentThread().getId(), sessionId, blockId, blockLockType.name());
+      if (LOG.isDebugEnabled()) {
+        String stackTrace = Arrays.stream(Thread.currentThread().getStackTrace()).map(a -> a.toString()).collect(Collectors.joining("\n"));
+        LOG.info("lockBlockInternal with thread name {} id {} start blocking locking  sessionId {} blockId {} blockType {} with stacktrace {}",
+            Thread.currentThread().getName(), Thread.currentThread().getId(), sessionId, blockId, blockLockType.name(), stackTrace);
+
+      } else {
+        LOG.info("lockBlockInternal with thread name {} id {} start blocking locking  sessionId {} blockId {} blockType {}",
+            Thread.currentThread().getName(), Thread.currentThread().getId(), sessionId, blockId, blockLockType.name());
+      }
       lock.lock(); // TODO(lu) The reading thread is parking to wait for
+      // TODO(lu) why that many calling for lock.lock()? add stacktrace?
     } else {
       Preconditions.checkNotNull(time, "time");
       Preconditions.checkNotNull(unit, "unit");
@@ -261,7 +271,9 @@ public final class BlockLockManager {
         mSessionIdToLockIdsMap.remove(sessionId);
       }
     }
-    LOG.info("thread name {} id {}  Start unlockBlockNoException lockId {} blockId {}", Thread.currentThread().getName(), Thread.currentThread().getId(), lockId, record.getBlockId());
+    String stackTrace = Arrays.stream(Thread.currentThread().getStackTrace()).map(a -> a.toString()).collect(Collectors.joining("\n"));
+    LOG.info("thread name {} id {}  Start unlockBlockNoException lockId {} blockId {} stacktrace {}",
+        Thread.currentThread().getName(), Thread.currentThread().getId(), lockId, record.getBlockId(), stackTrace);
     unlock(lock, record.getBlockId());
     LOG.info("thread name {} id {} Finish unlockBlockNoException lockId {} blockId {}", Thread.currentThread().getName(), Thread.currentThread().getId(), lockId, record.getBlockId());
     return true;
