@@ -131,11 +131,15 @@ public final class BlockLockManager {
               + " holds a lock on the block", sessionId, blockId));
     }
     if (blocking) {
+      LOG.info("lockBlockInternal with thread name {} id {} start blocking locking  sessionId {} blockId {} blockType {}",
+          Thread.currentThread().getName(), Thread.currentThread().getId(), sessionId, blockId, blockLockType.name());
       lock.lock(); // TODO(lu) The reading thread is parking to wait for
     } else {
       Preconditions.checkNotNull(time, "time");
       Preconditions.checkNotNull(unit, "unit");
       try {
+        LOG.info("lockBlockInternal with thread name {} id {} start locking  sessionId {} blockId {} blockType {}",
+            Thread.currentThread().getName(), Thread.currentThread().getId(), sessionId, blockId, blockLockType.name());
         if (!lock.tryLock(time, unit)) {
           LOG.warn("Failed to acquire lock for block {} after {} {}.  "
                   + "session: {}, blockLockType: {}, lock reference count = {}",
@@ -159,10 +163,14 @@ public final class BlockLockManager {
           sessionLockIds.add(lockId);
         }
       }
+      LOG.info("thread name {} id {} lockBlockInternal finish locking  sessionId {} blockId {} blockType {} lockId {}",
+          Thread.currentThread().getName(), Thread.currentThread().getId(), sessionId, blockId, blockLockType.name(), lockId);
       return lockId;
     } catch (Throwable e) {
       // If an unexpected exception occurs, we should release the lock to be conservative.
       unlock(lock, blockId);
+      LOG.info("thread name {} id {} lockBlockInternal error {}, finish locking  sessionId {} blockId {} blockType {}",
+          Thread.currentThread().getName(), Thread.currentThread().getId(), e.getMessage(), sessionId, blockId, blockLockType.name());
       throw e;
     }
   }
@@ -253,7 +261,9 @@ public final class BlockLockManager {
         mSessionIdToLockIdsMap.remove(sessionId);
       }
     }
+    LOG.info("thread name {} id {}  Start unlockBlockNoException lockId {} blockId {}", Thread.currentThread().getName(), Thread.currentThread().getId(), lockId, record.getBlockId());
     unlock(lock, record.getBlockId());
+    LOG.info("thread name {} id {} Finish unlockBlockNoException lockId {} blockId {}", Thread.currentThread().getName(), Thread.currentThread().getId(), lockId, record.getBlockId());
     return true;
   }
 
@@ -279,6 +289,7 @@ public final class BlockLockManager {
    */
   // TODO(bin): Temporary, remove me later.
   public boolean unlockBlock(long sessionId, long blockId) {
+    LOG.info("thread name {} id {}  Start unlockBlock session id {}, block id {}", Thread.currentThread().getName(), Thread.currentThread().getId(), sessionId, blockId);
     try (LockResource r = new LockResource(mSharedMapsLock.writeLock())) {
       Set<Long> sessionLockIds = mSessionIdToLockIdsMap.get(sessionId);
       if (sessionLockIds == null) {
@@ -298,6 +309,8 @@ public final class BlockLockManager {
           }
           Lock lock = record.getLock();
           unlock(lock, blockId);
+          LOG.info("thread name {} id {} finish unlockBlock sessionId {}, blockId {}, lockId {}",
+              Thread.currentThread().getName(), Thread.currentThread().getId(),sessionId, blockId, lockId);
           return true;
         }
       }
@@ -340,6 +353,7 @@ public final class BlockLockManager {
    * @param sessionId the id of the session to cleanup
    */
   public void cleanupSession(long sessionId) {
+    LOG.info("thread name {} id {} cleaning up session id {}", Thread.currentThread().getName(), Thread.currentThread().getId(),sessionId);
     try (LockResource r = new LockResource(mSharedMapsLock.writeLock())) {
       Set<Long> sessionLockIds = mSessionIdToLockIdsMap.get(sessionId);
       if (sessionLockIds == null) {
@@ -353,6 +367,8 @@ public final class BlockLockManager {
         }
         Lock lock = record.getLock();
         unlock(lock, record.getBlockId());
+        LOG.info("thread name {} id {} finish cleaning up session id {} and remove lock id {} block id {}",
+            Thread.currentThread().getName(), Thread.currentThread().getId(),sessionId, lockId, record.getBlockId());
         mLockIdToRecordMap.remove(lockId);
       }
       mSessionIdToLockIdsMap.remove(sessionId);
