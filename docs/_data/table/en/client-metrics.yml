@@ -1,6 +1,10 @@
-Client.BlockReadDataChunk:
+Client.BlockReadDataChunkDirect:
   'The timer statistics of reading block data in chunks from Alluxio workers. This metrics will only be recorded when alluxio.user.block.read.metrics.enabled is set to true'
-Client.BlockReadDataFromChunk:
+Client.BlockReadDataChunkRemote:
+  'The timer statistics of reading block data in chunks from Alluxio workers. This metrics will only be recorded when alluxio.user.block.read.metrics.enabled is set to true'
+Client.BlockReadDataFromChunkDirect:
+  'The timer statistics of reading data from data chunks which have already fetched from Alluxio workers. This metrics will only be recorded when alluxio.user.block.read.metrics.enabled is set to true'
+Client.BlockReadDataFromChunkRemote:
   'The timer statistics of reading data from data chunks which have already fetched from Alluxio workers. This metrics will only be recorded when alluxio.user.block.read.metrics.enabled is set to true'
 Client.BytesReadLocal:
   'Total number of bytes short-circuit read from local storage by this client'
@@ -64,6 +68,8 @@ Client.CachePutStoreDeleteErrors:
   'Number of failures when putting cached data in the client cache due to failed deletes in page store.'
 Client.CachePutStoreWriteErrors:
   'Number of failures when putting cached data in the client cache due to failed writes to page store.'
+Client.CachePutStoreWriteNoSpaceErrors:
+  'Number of failures when putting cached data in the client cache but getting disk is full while cache capacity is not achieved. This can happen if the storage overhead ratio to write data is underestimated.'
 Client.CacheSpaceAvailable:
   'Amount of bytes available in the client cache.'
 Client.CacheSpaceUsed:

@@ -14,6 +14,11 @@ Master.EdgeCacheLoadTimes,GAUGE
 Master.EdgeCacheMisses,GAUGE
 Master.EdgeCacheSize,GAUGE
 Master.EdgeLockPoolSize,GAUGE
+Master.EmbeddedJournalSnapshotDownloadGenerate,TIMER
+Master.EmbeddedJournalSnapshotGenerateTimer,TIMER
+Master.EmbeddedJournalSnapshotInstallTimer,TIMER
+Master.EmbeddedJournalSnapshotLastIndex,GAUGE
+Master.EmbeddedJournalSnapshotReplayTimer,TIMER
 Master.FileBlockInfosGot,COUNTER
 Master.FileInfosGot,COUNTER
 Master.FilesCompleted,COUNTER
@@ -33,6 +38,8 @@ Master.InodeCacheSize,GAUGE
 Master.InodeLockPoolSize,GAUGE
 Master.JournalFlushFailure,COUNTER
 Master.JournalFlushTimer,TIMER
+Master.JournalFreeBytes,GAUGE
+Master.JournalFreePercent,GAUGE
 Master.JournalGainPrimacyTimer,TIMER
 Master.LastBackupEntriesCount,GAUGE
 Master.LastBackupRestoreCount,GAUGE
