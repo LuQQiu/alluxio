@@ -265,6 +265,10 @@ public final class MultiProcessCluster {
     }
   }
 
+  public File getWorkDir() {
+    return mWorkDir;
+  }
+  
   /**
    * Kills the primary master.
    *

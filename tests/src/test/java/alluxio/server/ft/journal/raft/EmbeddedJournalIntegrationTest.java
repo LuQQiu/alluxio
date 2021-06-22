@@ -101,6 +101,9 @@ public final class EmbeddedJournalIntegrationTest extends BaseIntegrationTest {
         .addProperty(PropertyKey.MASTER_EMBEDDED_JOURNAL_HEARTBEAT_INTERVAL, "250ms")
         .build();
     mCluster.start();
+    mCluster.getWorkDir();
+    System.out.println( mCluster.getWorkDir());
+    Thread.sleep(5000);
 
     AlluxioURI testDir = new AlluxioURI("/dir");
     FileSystem fs = mCluster.getFileSystemClient();
