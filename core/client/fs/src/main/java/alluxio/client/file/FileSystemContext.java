@@ -270,8 +270,12 @@ public class FileSystemContext implements Closeable {
       MetricsHeartbeatContext.addHeartbeat(getClientContext(), masterInquireClient);
     }
     mFileSystemMasterClientPool = new FileSystemMasterClientPool(mMasterClientContext);
+    MetricsSystem.registerGaugeIfAbsent(MetricsSystem.getMetricName("Client.FileSystemMasterClientPoolSize"), mBlockMasterClientPool::size);
     mBlockMasterClientPool = new BlockMasterClientPool(mMasterClientContext);
+    MetricsSystem.registerGaugeIfAbsent(MetricsSystem.getMetricName("Client.BlockMasterClientPoolSize"), mBlockMasterClientPool::size);
     mBlockWorkerClientPoolMap = new ConcurrentHashMap<>();
+    MetricsSystem.registerGaugeIfAbsent(MetricsSystem.getMetricName("Client.BlockWorkerClientPoolSize"), () ->
+      mBlockWorkerClientPoolMap.values().stream().map(DynamicResourcePool::size).reduce(Integer::sum));
     mUriValidationEnabled = ctx.getUriValidationEnabled();
   }
 
