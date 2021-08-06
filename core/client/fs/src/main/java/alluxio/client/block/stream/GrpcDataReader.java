@@ -170,6 +170,10 @@ public final class GrpcDataReader implements DataReader {
       return null;
     }
     mPosToRead += buffer.readableBytes();
+    if (mPosToRead - mReadRequest.getOffset() == mReadRequest.getLength()) {
+      close();
+      return buffer;
+    }
     try {
       mStream.send(mReadRequest.toBuilder().setOffsetReceived(mPosToRead).build());
     } catch (Exception e) {
