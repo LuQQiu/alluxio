@@ -57,6 +57,7 @@ import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -274,8 +275,10 @@ public class FileSystemContext implements Closeable {
     mBlockMasterClientPool = new BlockMasterClientPool(mMasterClientContext);
     MetricsSystem.registerGaugeIfAbsent(MetricsSystem.getMetricName("Client.BlockMasterClientPoolSize"), mBlockMasterClientPool::size);
     mBlockWorkerClientPoolMap = new ConcurrentHashMap<>();
-    MetricsSystem.registerGaugeIfAbsent(MetricsSystem.getMetricName("Client.BlockWorkerClientPoolSize"), () ->
-      mBlockWorkerClientPoolMap.values().stream().map(DynamicResourcePool::size).reduce(Integer::sum));
+    MetricsSystem.registerGaugeIfAbsent(MetricsSystem.getMetricName("Client.BlockWorkerClientPoolSize"), () -> {
+      Optional<Integer> value = mBlockWorkerClientPoolMap.values().stream().map(DynamicResourcePool::size).reduce(Integer::sum);
+      return value.orElse(-1);
+    });
     mUriValidationEnabled = ctx.getUriValidationEnabled();
   }
 
