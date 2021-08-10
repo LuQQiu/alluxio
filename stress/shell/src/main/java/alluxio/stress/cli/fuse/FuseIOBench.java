@@ -249,9 +249,11 @@ public class FuseIOBench extends Benchmark<FuseIOTaskResult> {
       mContext = context;
       mThreadId = threadId;
       mFilesPath = new ArrayList<>();
+      LOG.info("Bench thread id {} numThreads {}", threadId, numThreads);
       for (int i = mThreadId; i < mParameters.mNumFiles; i += numThreads) {
         mFilesPath.add(mParameters.mLocalPath + "/data-" + i);
       }
+      LOG.info("Bench thread id {} numThreads {} mFilesPath size {} numFiles {}", threadId, numThreads, mFilesPath.size(), mParameters.mNumFiles);
 
       mBuffer = new byte[(int) FormatUtils.parseSpaceSize(mParameters.mBufferSize)];
       Arrays.fill(mBuffer, (byte) 'A');
@@ -296,6 +298,7 @@ public class FuseIOBench extends Benchmark<FuseIOTaskResult> {
       for (int i = 0; i < mFilesPath.size(); i++) {
         mCurrentOffset = 0;
         String filePath = mFilesPath.get(i);
+        LOG.info("Thread {} writing {}", mThreadId, filePath);
         while (!Thread.currentThread().isInterrupted()) {
           if (isRead && CommonUtils.getCurrentMs() > mContext.getEndMs()) {
             closeInStream();
