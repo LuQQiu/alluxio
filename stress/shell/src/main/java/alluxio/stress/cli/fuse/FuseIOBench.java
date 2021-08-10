@@ -249,7 +249,6 @@ public class FuseIOBench extends Benchmark<FuseIOTaskResult> {
       mContext = context;
       mThreadId = threadId;
       mFilesPath = new ArrayList<>();
-      LOG.info("Bench thread id {} numThreads {}", threadId, numThreads);
       for (int i = mThreadId; i < mParameters.mNumFiles; i += numThreads) {
         mFilesPath.add(mParameters.mLocalPath + "/data-" + i);
       }
