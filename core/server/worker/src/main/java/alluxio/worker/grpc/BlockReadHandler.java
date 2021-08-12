@@ -50,6 +50,7 @@ import org.slf4j.LoggerFactory;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 
 import javax.annotation.Nullable;
@@ -102,8 +103,8 @@ public class BlockReadHandler implements StreamObserver<alluxio.grpc.ReadRequest
   private final ReentrantLock mLock = new ReentrantLock();
   private final boolean mDomainSocketEnabled;
   private final AuthenticatedUserInfo mUserInfo;
-  private final Timer.Context mTimer;
-
+  private final long mStartTime;
+  
   /**
    * This is only created in the gRPC event thread when a read request is received.
    * Using "volatile" because we want any value change of this variable to be
@@ -126,7 +127,7 @@ public class BlockReadHandler implements StreamObserver<alluxio.grpc.ReadRequest
       StreamObserver<ReadResponse> responseObserver,
       AuthenticatedUserInfo userInfo,
       boolean domainSocketEnabled) {
-    mTimer = MetricsSystem.timer(MetricKey.WORKER_BLOCK_READ.getName()).time();
+    mStartTime = System.currentTimeMillis();
     mDataReaderExecutor = executorService;
     mResponseObserver = responseObserver;
     mUserInfo = userInfo;
@@ -155,7 +156,7 @@ public class BlockReadHandler implements StreamObserver<alluxio.grpc.ReadRequest
       validateReadRequest(request);
       mContext.setPosToQueue(mContext.getRequest().getStart());
       mContext.setPosReceived(mContext.getRequest().getStart());
-      mDataReaderExecutor.submit(createDataReader(mContext, mResponseObserver, mTimer));
+      mDataReaderExecutor.submit(createDataReader(mContext, mResponseObserver, mStartTime));
       mContext.setDataReaderActive(true);
     } catch (RejectedExecutionException e) {
       handleStreamEndingException(Status.RESOURCE_EXHAUSTED.withCause(e)
@@ -239,7 +240,7 @@ public class BlockReadHandler implements StreamObserver<alluxio.grpc.ReadRequest
       mContext.setError(error);
       if (!mContext.isDataReaderActive()) {
         mContext.setDataReaderActive(true);
-        createDataReader(mContext, mResponseObserver, mTimer).run();
+        createDataReader(mContext, mResponseObserver, mStartTime).run();
       }
     }
   }
@@ -253,7 +254,7 @@ public class BlockReadHandler implements StreamObserver<alluxio.grpc.ReadRequest
       mContext.setEof(true);
       if (!mContext.isDataReaderActive()) {
         mContext.setDataReaderActive(true);
-        createDataReader(mContext, mResponseObserver, mTimer).run();
+        createDataReader(mContext, mResponseObserver, mStartTime).run();
       }
     }
   }
@@ -267,7 +268,7 @@ public class BlockReadHandler implements StreamObserver<alluxio.grpc.ReadRequest
       mContext.setCancel(true);
       if (!mContext.isDataReaderActive()) {
         mContext.setDataReaderActive(true);
-        createDataReader(mContext, mResponseObserver, mTimer).run();
+        createDataReader(mContext, mResponseObserver, mStartTime).run();
       }
     }
   }
@@ -299,8 +300,8 @@ public class BlockReadHandler implements StreamObserver<alluxio.grpc.ReadRequest
    * @return the data reader for this handler
    */
   private DataReader createDataReader(BlockReadRequestContext context,
-      StreamObserver<ReadResponse> response, Timer.Context timer) {
-    return new DataReader(context, response, timer);
+      StreamObserver<ReadResponse> response, long startTime) {
+    return new DataReader(context, response, startTime);
   }
 
   /**
@@ -310,7 +311,7 @@ public class BlockReadHandler implements StreamObserver<alluxio.grpc.ReadRequest
     try (LockResource lr = new LockResource(mLock)) {
       if (shouldRestartDataReader()) {
         try {
-          mDataReaderExecutor.submit(createDataReader(mContext, mResponseObserver, mTimer));
+          mDataReaderExecutor.submit(createDataReader(mContext, mResponseObserver, mStartTime));
           mContext.setDataReaderActive(true);
         } catch (RejectedExecutionException e) {
           handleStreamEndingException(Status.RESOURCE_EXHAUSTED.withCause(e)
@@ -356,7 +357,7 @@ public class BlockReadHandler implements StreamObserver<alluxio.grpc.ReadRequest
      * @param context context of the request to complete
      * @param response the response
      */
-    DataReader(BlockReadRequestContext context, StreamObserver<ReadResponse> response, Timer.Context timer) {
+    DataReader(BlockReadRequestContext context, StreamObserver<ReadResponse> response, long startTime) {
       mContext = Preconditions.checkNotNull(context);
       mRequest = Preconditions.checkNotNull(context.getRequest());
       mChunkSize = Math.min(mRequest.getChunkSize(), MAX_CHUNK_SIZE);
@@ -430,8 +431,8 @@ public class BlockReadHandler implements StreamObserver<alluxio.grpc.ReadRequest
                 } else {
                   mResponse.onNext(response);
                 }
+                MetricsSystem.timer(MetricKey.WORKER_BLOCK_READ.getName()).update(System.currentTimeMillis() - mStartTime, TimeUnit.MILLISECONDS);
                 incrementMetrics(finalChunk.getLength());
-                mTimer.close();
               } catch (Exception e) {
                 LogUtils.warnWithException(LOG,
                     "Exception occurred while sending data for read request {}.",
@@ -441,6 +442,7 @@ public class BlockReadHandler implements StreamObserver<alluxio.grpc.ReadRequest
                 finalChunk.release();
               }
             });
+            LOG.info("reached here");
           }
         } catch (Exception e) {
           LogUtils.warnWithException(LOG,
