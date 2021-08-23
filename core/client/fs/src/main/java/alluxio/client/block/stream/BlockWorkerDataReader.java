@@ -127,7 +127,7 @@ public final class BlockWorkerDataReader implements DataReader {
     @Override
     public DataReader create(long offset, long len) throws IOException {
       mBlockReadRequest = new BlockReadRequest(mBlockId, offset, offset + len, mChunkSize,
-          mIsPromote, mIsPositionShort, mOpenUfsBlockOptions);
+          mIsPromote, mIsPositionShort, mOpenUfsBlockOptions, System.currentTimeMillis());
       try {
         BlockReader reader = mBlockWorker.createBlockReader(mBlockReadRequest);
         return new BlockWorkerDataReader(reader, offset, len, mChunkSize);

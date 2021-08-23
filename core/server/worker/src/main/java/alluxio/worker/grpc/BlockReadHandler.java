@@ -34,7 +34,6 @@ import alluxio.worker.block.io.BlockReader;
 
 import com.codahale.metrics.Counter;
 import com.codahale.metrics.Meter;
-import com.codahale.metrics.Timer;
 import com.google.common.base.Preconditions;
 import com.google.protobuf.UnsafeByteOperations;
 import io.grpc.Status;
@@ -51,6 +50,7 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
 
 import javax.annotation.Nullable;
@@ -103,7 +103,7 @@ public class BlockReadHandler implements StreamObserver<alluxio.grpc.ReadRequest
   private final ReentrantLock mLock = new ReentrantLock();
   private final boolean mDomainSocketEnabled;
   private final AuthenticatedUserInfo mUserInfo;
-  private final long mStartTime;
+  private long mStartTime;
   
   /**
    * This is only created in the gRPC event thread when a read request is received.
@@ -127,7 +127,6 @@ public class BlockReadHandler implements StreamObserver<alluxio.grpc.ReadRequest
       StreamObserver<ReadResponse> responseObserver,
       AuthenticatedUserInfo userInfo,
       boolean domainSocketEnabled) {
-    mStartTime = System.currentTimeMillis();
     mDataReaderExecutor = executorService;
     mResponseObserver = responseObserver;
     mUserInfo = userInfo;
@@ -152,8 +151,11 @@ public class BlockReadHandler implements StreamObserver<alluxio.grpc.ReadRequest
         return;
       }
       Preconditions.checkState(mContext == null || !mContext.isDataReaderActive());
+      mStartTime = System.currentTimeMillis();
       mContext = createRequestContext(request);
       validateReadRequest(request);
+      MetricsSystem.timer("ClientSentWorkerReceiveReadRequest")
+          .update(mStartTime - mContext.getRequest().getStartTime(), TimeUnit.MILLISECONDS);
       mContext.setPosToQueue(mContext.getRequest().getStart());
       mContext.setPosReceived(mContext.getRequest().getStart());
       mDataReaderExecutor.submit(createDataReader(mContext, mResponseObserver, mStartTime));
@@ -375,9 +377,12 @@ public class BlockReadHandler implements StreamObserver<alluxio.grpc.ReadRequest
     }
 
     private void runInternal() {
+      long startRunInternal = System.currentTimeMillis();
+      MetricsSystem.timer("AfterCreateBeforeDataReaderStartWorking").update(startRunInternal - mStartTime, TimeUnit.MILLISECONDS);
       boolean eof;  // End of file. Everything requested has been read.
       boolean cancel;
       Error error;  // error occurred, abort requested.
+      AtomicBoolean firstChunk = new AtomicBoolean(true);
       while (true) {
         final long start;
         final int chunkSize;
@@ -431,7 +436,12 @@ public class BlockReadHandler implements StreamObserver<alluxio.grpc.ReadRequest
                 } else {
                   mResponse.onNext(response);
                 }
-                MetricsSystem.timer(MetricKey.WORKER_BLOCK_READ.getName()).update(System.currentTimeMillis() - mStartTime, TimeUnit.MILLISECONDS);
+                if (firstChunk.get()) {
+                  MetricsSystem.timer("WorkerSentFirstChunk").update(System.currentTimeMillis() - startRunInternal, TimeUnit.MILLISECONDS);
+                  firstChunk.set(false);
+                } else {
+                  LOG.info("Reading one more chunk");
+                }
                 incrementMetrics(finalChunk.getLength());
               } catch (Exception e) {
                 LogUtils.warnWithException(LOG,

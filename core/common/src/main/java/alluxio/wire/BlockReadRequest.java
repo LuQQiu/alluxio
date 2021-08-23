@@ -31,6 +31,7 @@ public final class BlockReadRequest {
   private final long mSessionId;
   private final boolean mPromote;
   private final boolean mPositionShort;
+  private final long mStartTime;
 
   /**
    * Creates an instance of {@link BlockReadRequest}.
@@ -40,7 +41,7 @@ public final class BlockReadRequest {
   public BlockReadRequest(alluxio.grpc.ReadRequest request) {
     this(request.getBlockId(), request.getOffset(), request.getOffset() + request.getLength(),
         request.getChunkSize(), request.getPromote(), request.getPositionShort(),
-        request.hasOpenUfsBlockOptions() ? request.getOpenUfsBlockOptions() : null);
+        request.hasOpenUfsBlockOptions() ? request.getOpenUfsBlockOptions() : null, request.getStartTime());
   }
 
   /**
@@ -55,7 +56,7 @@ public final class BlockReadRequest {
    * @param openUfsBlockOptions options to read file from UFS
    */
   public BlockReadRequest(long id, long start, long end, long chunkSize, boolean promote,
-      boolean positionShort, Protocol.OpenUfsBlockOptions openUfsBlockOptions) {
+      boolean positionShort, Protocol.OpenUfsBlockOptions openUfsBlockOptions, long startTime) {
     mId = id;
     mStart = start;
     mEnd = end;
@@ -64,6 +65,7 @@ public final class BlockReadRequest {
     mOpenUfsBlockOptions = openUfsBlockOptions;
     mPromote = promote;
     mPositionShort = positionShort;
+    mStartTime = startTime;
   }
 
   /**
@@ -115,6 +117,13 @@ public final class BlockReadRequest {
     return mPositionShort;
   }
 
+  /**
+   * @return the chunk size in bytes of this read request
+   */
+  public long getStartTime() {
+    return mStartTime;
+  }
+  
   /**
    * @return the option to open UFS block
    */

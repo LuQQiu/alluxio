@@ -66,6 +66,8 @@ message ReadRequest {
 
   // Is position read to a small buffer
   optional bool position_short = 8;
+
+  optional int64 start_time = 9;
 }
 
 // The read response.

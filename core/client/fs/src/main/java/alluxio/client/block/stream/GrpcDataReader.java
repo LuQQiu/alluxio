@@ -35,6 +35,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.concurrent.TimeUnit;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
@@ -69,6 +70,8 @@ public final class GrpcDataReader implements DataReader {
 
   /** The next pos to read. */
   private long mPosToRead;
+  private long mStart;
+  private long mLastReadTime;
 
   /**
    * Creates an instance of {@link GrpcDataReader}.
@@ -116,6 +119,7 @@ public final class GrpcDataReader implements DataReader {
             desc);
       }
       mStream.send(mReadRequest, mDataTimeoutMs);
+      mStart = System.currentTimeMillis();
     } catch (Exception e) {
       mClient.close();
       throw e;
@@ -129,13 +133,13 @@ public final class GrpcDataReader implements DataReader {
 
   @Override
   public DataBuffer readChunk() throws IOException {
-    if (mDetailedMetricsEnabled) {
-      try (Timer.Context ctx = MetricsSystem
-          .timer(MetricKey.CLIENT_BLOCK_READ_CHUNK_REMOTE.getName()).time()) {
-        return readChunkInternal();
-      }
+    DataBuffer buffer = readChunkInternal();
+    mLastReadTime = System.currentTimeMillis();
+    if (mStart != -1) {
+      MetricsSystem.timer("SentReadRequestReadFirstChunk").update(mLastReadTime - mStart, TimeUnit.MILLISECONDS);
+      mStart = -1;
     }
-    return readChunkInternal();
+    return buffer;
   }
 
   private DataBuffer readChunkInternal() throws IOException {
@@ -187,6 +191,8 @@ public final class GrpcDataReader implements DataReader {
       if (mClient.get().isShutdown()) {
         return;
       }
+      long beforeClose = System.currentTimeMillis();
+      MetricsSystem.timer("AfterReadLastChunkBeforeClose").update(beforeClose - mLastReadTime, TimeUnit.MILLISECONDS);
       mStream.close();
 
       // When a reader is closed, there is technically nothing the client requires from the server.
@@ -206,6 +212,8 @@ public final class GrpcDataReader implements DataReader {
             "Closing gRPC read stream took longer than {}ms, moving on. blockId: {}, address: {}",
             mCloseWaitMs, mReadRequest.getBlockId(), mAddress);
       }
+      MetricsSystem.timer("GrpcDataReaderClose")
+          .update(System.currentTimeMillis() - beforeClose, TimeUnit.MILLISECONDS);
     } finally {
       mMarshaller.close();
       mClient.close();
@@ -236,8 +244,11 @@ public final class GrpcDataReader implements DataReader {
 
     @Override
     public DataReader create(long offset, long len) throws IOException {
-      return new GrpcDataReader(mContext, mAddress,
-          mReadRequestBuilder.setOffset(offset).setLength(len).build());
+      try (Timer.Context ctx = MetricsSystem
+          .timer("CreateGrpcDataReader").time()) {
+        return new GrpcDataReader(mContext, mAddress,
+            mReadRequestBuilder.setOffset(offset).setLength(len).setStartTime(System.currentTimeMillis()).build());
+      }
     }
 
     @Override
