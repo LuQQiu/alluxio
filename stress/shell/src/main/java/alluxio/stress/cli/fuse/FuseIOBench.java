@@ -24,13 +24,17 @@ import alluxio.util.FormatUtils;
 import alluxio.util.executor.ExecutorServiceFactories;
 
 import com.beust.jcommander.ParametersDelegate;
+import com.google.common.collect.ImmutableList;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -67,22 +71,51 @@ public class FuseIOBench extends Benchmark<FuseIOTaskResult> {
   }
 
   @Override
+  public String getBenchDescription() {
+    return String.join("\n", ImmutableList.of(
+        "A stress bench for testing the reading throughput of Fuse-based POSIX API.",
+        "To run the test, data must be written first by executing \"Write\" operation, then "
+            + "run \"Read\" operation to test the reading throughput. Optionally one can set "
+            + "alluxio.user.metadata.cache.enabled=true when mounting Alluxio Fuse and run "
+            + "\"ListFile\" before \"Read\" to cache the metadata of the test files and eliminate "
+            + "the effect of metadata operations while getting the reading throughput data.",
+        "Note that \"--operation\" is required, and \"--local-path\" can be a local filesystem "
+            + "path or a mounted Fuse path.",
+        "",
+        "Example:",
+        "# The test data will be written to /mnt/alluxio-fuse/FuseIOTest",
+        "# Files will be evenly distributed into 32 directories, each contains 10 files of "
+            + "size 100 MB",
+        "# Metadata of the test files will be cached",
+        "# 32 threads will be used for writing the data, and 16 threads will be used for "
+            + "testing the reading throughput",
+        "# 5 seconds of warmup time and 30 seconds of actual reading test time",
+        "$ bin/alluxio runClass alluxio.stress.cli.fuse.fuseIOBench --operation Write \\",
+        "--local-path /mnt/alluxio-fuse/FuseIOTest --num-dirs 32 --num-files-per-dir 10 \\",
+        "--file-size 100m --threads 32",
+        "$ bin/alluxio runClass alluxio.stress.cli.fuse.fuseIOBench --operation ListFile \\",
+        "--local-path /mnt/alluxio-fuse/FuseIOTest",
+        "$ bin/alluxio runClass alluxio.stress.cli.fuse.fuseIOBench --operation Read \\",
+        "--local-path /mnt/alluxio-fuse/FuseIOTest --num-dirs 32 --num-files-per-dir 10 \\",
+        "--file-size 100m --threads 16 --warmup 5s --duration 30s",
+        ""
+    ));
+  }
+
+  @Override
   public void prepare() throws Exception {
-    for (Integer numOfThreads: mParameters.mThreads) {
-      if (numOfThreads > mParameters.mNumFiles) {
-        throw new IllegalArgumentException(String
-            .format("Number of threads (%d) must be larger than number of files (%d)",
-                numOfThreads, mParameters.mNumFiles));
-      }
-    }
-    if (mParameters.mReadRandom) {
-      LOG.warn("Random read is not supported for now. Read sequentially");
-      // TODO(Shawn): support random read
-      mParameters.mReadRandom = false;
+    if (mParameters.mThreads > mParameters.mNumDirs) {
+      throw new IllegalArgumentException(String.format(
+          "Some of the threads are not being used. Please set the number of directories to "
+              + "be at least the number of threads, preferably a multiple of it."
+      ));
     }
     if (mParameters.mOperation == FuseIOOperation.WRITE) {
       LOG.warn("Cannot write repeatedly, so warmup is not possible. Setting warmup to 0s.");
       mParameters.mWarmup = "0s";
+      for (int i = 0; i < mParameters.mNumDirs; i++) {
+        Files.createDirectories(Paths.get(mParameters.mLocalPath + "/" + i));
+      }
     }
   }
 
@@ -94,11 +127,9 @@ public class FuseIOBench extends Benchmark<FuseIOTaskResult> {
     FuseIOTaskResult taskResult = new FuseIOTaskResult();
     taskResult.setBaseParameters(mBaseParameters);
     taskResult.setParameters(mParameters);
+    FuseIOTaskResult.ThreadCountResult threadCountResult = runForThreadCount(mParameters.mThreads);
+    taskResult.addThreadCountResults(mParameters.mThreads, threadCountResult);
 
-    for (Integer numThreads: threadCounts) {
-      FuseIOTaskResult.ThreadCountResult threadCountResult = runForThreadCount(numThreads);
-      taskResult.addThreadCountResults(numThreads, threadCountResult);
-    }
     return taskResult;
   }
 
@@ -233,7 +264,6 @@ public class FuseIOBench extends Benchmark<FuseIOTaskResult> {
 
   private final class BenchThread implements Callable<Void> {
     private final BenchContext mContext;
-    private final List<String> mFilesPath;
     private final int mThreadId;
     private final byte[] mBuffer;
     private final long mFileSize;
@@ -248,10 +278,6 @@ public class FuseIOBench extends Benchmark<FuseIOTaskResult> {
     private BenchThread(BenchContext context, int threadId, int numThreads) {
       mContext = context;
       mThreadId = threadId;
-      mFilesPath = new ArrayList<>();
-      for (int i = mThreadId; i < mParameters.mNumFiles; i += numThreads) {
-        mFilesPath.add(mParameters.mLocalPath + "/data-" + i);
-      }
 
       mBuffer = new byte[(int) FormatUtils.parseSpaceSize(mParameters.mBufferSize)];
       Arrays.fill(mBuffer, (byte) 'A');
@@ -293,23 +319,33 @@ public class FuseIOBench extends Benchmark<FuseIOTaskResult> {
       CommonUtils.sleepMs(waitMs);
       mStartBarrierPassed = true;
 
-      for (int i = 0; i < mFilesPath.size(); i++) {
-        mCurrentOffset = 0;
-        String filePath = mFilesPath.get(i);
-        while (!Thread.currentThread().isInterrupted()) {
-          if (isRead && CommonUtils.getCurrentMs() > mContext.getEndMs()) {
-            closeInStream();
-            return;
-          }
-          long ioBytes = applyOperation(filePath);
+      if (mParameters.mOperation == FuseIOOperation.LIST_FILE) {
+        for (int dirId = mThreadId; dirId < mParameters.mNumDirs; dirId += mParameters.mThreads) {
+          String dirPath = String.format("%s/%d", mParameters.mLocalPath, dirId);
+          File dir = new File(dirPath);
+          dir.listFiles();
+        }
+        return;
+      }
 
-          // Start recording after the warmup
-          if (CommonUtils.getCurrentMs() > recordMs) {
-            if (ioBytes > 0) {
-              mThreadCountResult.incrementIOBytes(ioBytes);
-            } else {
-              // Done reading/writing one file
+      for (int dirId = mThreadId; dirId < mParameters.mNumDirs; dirId += mParameters.mThreads) {
+        for (int fileId = 0; fileId < mParameters.mNumFilesPerDir; fileId++) {
+          mCurrentOffset = 0;
+          String filePath = String.format("%s/%d/%d", mParameters.mLocalPath, dirId, fileId);
+          while (!Thread.currentThread().isInterrupted()) {
+            if (isRead && CommonUtils.getCurrentMs() > mContext.getEndMs()) {
+              closeInStream();
+              return;
+            }
+            long ioBytes = applyOperation(filePath);
+
+            // Done reading/writing one file
+            if (ioBytes <= 0) {
               break;
+            }
+            // Start recording after the warmup
+            if (CommonUtils.getCurrentMs() > recordMs) {
+              mThreadCountResult.incrementIOBytes(ioBytes);
             }
           }
         }
