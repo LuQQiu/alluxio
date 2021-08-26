@@ -129,13 +129,10 @@ public final class GrpcDataReader implements DataReader {
 
   @Override
   public DataBuffer readChunk() throws IOException {
-    if (mDetailedMetricsEnabled) {
-      try (Timer.Context ctx = MetricsSystem
-          .timer(MetricKey.CLIENT_BLOCK_READ_CHUNK_REMOTE.getName()).time()) {
-        return readChunkInternal();
-      }
-    }
-    return readChunkInternal();
+    DataBuffer buffer = readChunkInternal();
+    // Hacky close try out to see if performance is affected.
+    close();
+    return buffer;
   }
 
   private DataBuffer readChunkInternal() throws IOException {
