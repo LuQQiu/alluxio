@@ -448,6 +448,9 @@ public class AlluxioFileInStream extends FileInStream {
     LOG.warn("Failed to read block {} of file {} from worker {}. "
         + "This worker will be skipped for future read operations, will retry: {}.",
         stream.getId(), mStatus.getPath(), workerAddress, e.toString());
+    LOG.info("Failed to read block {} of file {} from worker {}. "
+            + "This worker will be skipped for future read operations, will retry: {}.",
+        stream.getId(), mStatus.getPath(), workerAddress, e);
     try {
       stream.close();
     } catch (Exception ex) {
