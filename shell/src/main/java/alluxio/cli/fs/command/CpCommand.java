@@ -162,6 +162,7 @@ public final class CpCommand extends AbstractFileSystemCommand {
      */
     public CopyThreadPoolExecutor(int threads, PrintStream stdout, PrintStream stderr,
         FileSystem fileSystem, AlluxioURI path) {
+      LOG.info("CopyThreadPoolExecutor launchecd with {} threads", threads);
       mPool = new ThreadPoolExecutor(threads, threads,
           1, TimeUnit.SECONDS, new ArrayBlockingQueue<>(threads * 2),
           new ThreadPoolExecutor.CallerRunsPolicy());
@@ -174,10 +175,14 @@ public final class CpCommand extends AbstractFileSystemCommand {
           try {
             Object message = mMessages.take();
             if (message == MESSAGE_DONE) {
+              mStdout.println(mPool.getPoolSize());
+              mStdout.println(mPool.getActiveCount());
               break;
             }
             if (message instanceof String) {
               mStdout.println(message);
+              mStdout.println("pool size is " + mPool.getPoolSize());
+              mStdout.println("pool active count is " + mPool.getActiveCount());
             } else if (message instanceof CopyException) {
               CopyException e = (CopyException) message;
               mStderr.println(messageAndCause(e));
