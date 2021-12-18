@@ -329,7 +329,7 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
     boolean overwrite = OpenFlags.valueOf(flags) == OpenFlags.O_WRONLY;
     String methodName = overwrite ? "Fuse.OpenOverwrite" : "Fuse.Open";
     return AlluxioFuseUtils.call(LOG, () -> openInternal(path, fi, overwrite),
-        methodName, "path=%s,flags=0x%x", path, flags);
+        methodName, "path=%s,flags=0x%x, flag=%s", path, flags, OpenFlags.valueOf(flags).toString());
   }
 
   private int openInternal(String path, FuseFileInfo fi, boolean overwrite) {
@@ -700,18 +700,7 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
   @Override
   public int truncate(String path, long size) {
     LOG.debug("truncate {} to {}", path, size);
-    if (size == 0) {
-      // truncate may be called in overwrite process:
-      // open(openflag=0b2) - truncate to size 0 - write - flush - release
-      if (!mCreateFileEntries.contains(PATH_INDEX, path)) {
-        LOG.error("Cannot truncate {} to {}. The file is not opened for overwrite", path, size);
-        return -ErrorCodes.EOPNOTSUPP();
-      }
-      return 0;
-    } else {
-      LOG.error("Truncate {} to {} is not supported by alluxio", path, size);
-      return -ErrorCodes.EOPNOTSUPP();
-    }
+    return 0;
   }
 
   @Override

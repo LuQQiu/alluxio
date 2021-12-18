@@ -13,6 +13,7 @@ package alluxio.jnifuse.struct;
 
 import static org.junit.Assert.assertEquals;
 
+import jnr.constants.platform.OpenFlags;
 import jnr.ffi.Pointer;
 import jnr.ffi.Runtime;
 import org.junit.Test;
@@ -27,5 +28,14 @@ public class FuseFileInfoTest {
         ru.serce.jnrfuse.struct.FuseFileInfo.of(Pointer.wrap(Runtime.getSystemRuntime(), 0x0));
     assertEquals(jnrfi.flags.offset(), jnifi.flags.offset());
     assertEquals(jnrfi.fh.offset(), jnifi.fh.offset());
+  }
+
+  @Test
+  public void tryMe() {
+    for (OpenFlags flag : OpenFlags.values()) {
+      System.out.println(String.format("%s", flag.toString()));
+      System.out.println(String.format("flags=0x%s", flag.intValue()));
+      System.out.println(String.format("flags=0x%x", flag.intValue()));
+    }
   }
 }
