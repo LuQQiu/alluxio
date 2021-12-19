@@ -249,6 +249,7 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
         status = mFileSystem.getStatus(uri);
       }
       long size = status.getLength();
+      LOG.info("get status of size {}", size);
       stat.st_size.set(size);
 
       // Sets block number to fulfill du command needs
