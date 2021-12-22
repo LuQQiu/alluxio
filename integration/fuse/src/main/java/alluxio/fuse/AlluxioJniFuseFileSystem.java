@@ -748,8 +748,6 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
   @Override
   public int setxattrCallback(String path, String name, ByteBuffer value, long size, int flags) {
     LOG.info("setxattr of path " + path + " name " + name);
-    String s = StandardCharsets.UTF_8.decode(value).toString();
-    LOG.info("value is " + s);
     LOG.info("size is " + size + " flags " + flags);
     return 0;
   }
