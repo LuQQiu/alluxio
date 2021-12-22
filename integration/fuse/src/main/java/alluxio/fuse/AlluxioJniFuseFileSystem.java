@@ -51,6 +51,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -425,6 +426,7 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
   }
 
   private int writeInternal(String path, ByteBuffer buf, long size, long offset, FuseFileInfo fi) {
+    MetricsSystem.counter("Fuse.BytesToWrite").inc(size);
     if (size > Integer.MAX_VALUE) {
       LOG.error("Cannot write more than Integer.MAX_VALUE");
       return ErrorCodes.EIO();
@@ -439,7 +441,11 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
     FileOutStream os = ce.getOut();
     if (offset < os.getBytesWritten()) {
       // no op
-      return sz;
+      // TODO(lu) is it correct
+      LOG.error("offset {} smaller than bytes written {}, return {}", offset, os.getBytesWritten(), 0);
+      return 0;
+    } else if (offset > os.getBytesWritten()) {
+      LOG.error("offset {} is but bytes written is {}", offset, os.getBytesWritten())
     }
 
     try {
@@ -450,6 +456,7 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
       LOG.error("IOException while writing to {}.", path, e);
       return -ErrorCodes.EIO();
     }
+    MetricsSystem.counter("Fuse.BytesWritten").inc(sz);
     return sz;
   }
 
@@ -755,7 +762,7 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
   @Override
   public int getxattrCallback(String path, String name, ByteBuffer value) {
     LOG.info("getxattr of path " + path + " name "+ name);
-    return ErrorCodes.EIO();
+    return 0;
   }
 
   @Override

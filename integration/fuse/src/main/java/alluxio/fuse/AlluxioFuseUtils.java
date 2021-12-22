@@ -278,7 +278,7 @@ public final class AlluxioFuseUtils {
     long startMs = System.currentTimeMillis();
     int ret = callable.call();
     long durationMs = System.currentTimeMillis() - startMs;
-    logger.debug("Exit ({}): {}({}) in {} ms", ret, methodName, debugDesc, durationMs);
+    logger.debug("Exit ({}): {}({}) in {} ms, ret is {}", ret, methodName, debugDesc, durationMs, ret);
     MetricsSystem.timer(methodName).update(durationMs, TimeUnit.MILLISECONDS);
     MetricsSystem.timer(MetricKey.FUSE_TOTAL_CALLS.getName())
         .update(durationMs, TimeUnit.MILLISECONDS);
