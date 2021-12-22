@@ -445,7 +445,7 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
       LOG.error("offset {} smaller than bytes written {}, return {}", offset, os.getBytesWritten(), 0);
       return 0;
     } else if (offset > os.getBytesWritten()) {
-      LOG.error("offset {} is but bytes written is {}", offset, os.getBytesWritten())
+      LOG.error("offset {} is but bytes written is {}", offset, os.getBytesWritten());
     }
 
     try {
