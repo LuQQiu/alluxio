@@ -746,6 +746,40 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
   }
 
   @Override
+  public int setxattrCallback(String path, String name, ByteBuffer value, long size, int flags) {
+    LOG.info("setxattr of path " + path + " name " + name);
+    String s = StandardCharsets.UTF_8.decode(value).toString();
+    LOG.info("value is " + s);
+    LOG.info("size is " + size + " flags " + flags);
+    return 0;
+  }
+
+  @Override
+  public int getxattrCallback(String path, String name, ByteBuffer value) {
+    LOG.info("getxattr of path " + path + " name "+ name);
+    return ErrorCodes.EIO();
+  }
+
+  @Override
+  public int listxattrCallback(String path, ByteBuffer list) {
+    LOG.info("listxattr of path " + path);
+    return 0;
+  }
+
+  @Override
+  public int removexattrCallback(String path, String name) {
+    LOG.info("removexttr of path " + path + " name "+ name)
+    return 0;
+  }
+
+  @Override
+  public int utimensCallback(String path, long aSec, long aNsec, long mSec, long mNsec) {
+    // TODO(maobaolong): implements this logic for alluxio.
+    LOG.debug("utimens for {}, but do nothing for this filesystem", path);
+    return 0;
+  }
+  
+  @Override
   public void umount(boolean force) throws FuseException {
     // Release operation is async, we will try our best efforts to
     // close all opened file in/out stream before umounting the fuse
