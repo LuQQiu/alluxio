@@ -439,13 +439,12 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
       return -ErrorCodes.EBADFD();
     }
     FileOutStream os = ce.getOut();
+    LOG.info("Offset is {}, os.getBytesWritten is {}", offset, os.getBytesWritten());
     if (offset < os.getBytesWritten()) {
       // no op
       // TODO(lu) is it correct
-      LOG.error("offset {} smaller than bytes written {}, return {}", offset, os.getBytesWritten(), 0);
+      LOG.error("offset smaller, return 0");
       return 0;
-    } else if (offset > os.getBytesWritten()) {
-      LOG.error("offset {} is but bytes written is {}", offset, os.getBytesWritten());
     }
 
     try {
