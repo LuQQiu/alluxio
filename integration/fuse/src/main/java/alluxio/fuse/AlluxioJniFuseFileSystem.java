@@ -771,13 +771,6 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
     LOG.info("removexttr of path " + path + " name "+ name);
     return 0;
   }
-
-  @Override
-  public int utimensCallback(String path, long aSec, long aNsec, long mSec, long mNsec) {
-    // TODO(maobaolong): implements this logic for alluxio.
-    LOG.debug("utimens for {}, but do nothing for this filesystem", path);
-    return 0;
-  }
   
   @Override
   public void umount(boolean force) throws FuseException {
