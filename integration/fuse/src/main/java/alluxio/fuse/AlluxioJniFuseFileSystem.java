@@ -768,7 +768,7 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
 
   @Override
   public int removexattrCallback(String path, String name) {
-    LOG.info("removexttr of path " + path + " name "+ name)
+    LOG.info("removexttr of path " + path + " name "+ name);
     return 0;
   }
 
