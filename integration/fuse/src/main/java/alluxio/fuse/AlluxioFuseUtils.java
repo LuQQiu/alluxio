@@ -58,6 +58,8 @@ public final class AlluxioFuseUtils {
   // TODO(lu) improve open flag handling https://github.com/mafintosh/fuse-bindings/issues/25
   // 0x8001 stand for 'w' which means open file for writing
   private static final int OPEN_WRITE = 32769;
+  // 0x8401 open file for appending
+  private static final int OPEN_APPEND = 33793;
   // 0x8002 stand for 'r+' which means Open file for reading and writing
   private static final int OPEN_READ_WRITE = 32770;
 
@@ -71,7 +73,7 @@ public final class AlluxioFuseUtils {
    */
   public static boolean isOpenOverwrite(int flags) {
     boolean overwrite = OpenFlags.valueOf(flags) == OpenFlags.O_WRONLY
-        || flags == OPEN_WRITE;
+        || flags == OPEN_WRITE || flags == OPEN_APPEND;
     return overwrite;
   }
 
