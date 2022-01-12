@@ -101,14 +101,15 @@ public class RpcBenchPreparationUtils {
             new BlockMasterClient(MasterClientContext
                 .newBuilder(ClientContext.create(sConf))
                 .build());
-        for (Long blockId : job) {
-          try {
-            client.commitBlockInUfs(blockId, blockSize);
-          } catch (IOException e) {
-            LOG.error("Failed to commitBlockInUfs in batch {}, blockId={} total={}",
-                batchIndex, blockId, totalBlocksFinal, e);
-          }
-        }
+        // TODO(lu,bowen) why commit block in ufs
+        // for (Long blockId : job) {
+        //  try {
+        //    client.commitBlockInUfs(blockId, blockSize);
+        //   } catch (IOException e) {
+        //    LOG.error("Failed to commitBlockInUfs in batch {}, blockId={} total={}",
+        //        batchIndex, blockId, totalBlocksFinal, e);
+        //  }
+        // }
         long finishedCount = progress.addAndGet(batchSize);
         LOG.info("Generated {}th batch of {} blocks, {}% completed",
             batchIndex, batchSize, String.format("%.2f", 100.0 * finishedCount / totalBlocksFinal));
