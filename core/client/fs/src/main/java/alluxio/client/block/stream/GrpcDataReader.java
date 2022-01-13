@@ -35,6 +35,8 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.concurrent.TimeUnit;
+
 import javax.annotation.concurrent.NotThreadSafe;
 
 /**
@@ -68,6 +70,8 @@ public final class GrpcDataReader implements DataReader {
 
   /** The next pos to read. */
   private long mPosToRead;
+  
+  private long preRead = -1;
 
   /**
    * Creates an instance of {@link GrpcDataReader}.
@@ -115,6 +119,7 @@ public final class GrpcDataReader implements DataReader {
             desc);
       }
       mStream.send(mReadRequest, mDataTimeoutMs);
+      preRead = System.currentTimeMillis();
     } catch (Exception e) {
       mClient.close();
       throw e;
@@ -128,13 +133,13 @@ public final class GrpcDataReader implements DataReader {
 
   @Override
   public DataBuffer readChunk() throws IOException {
-    if (mDetailedMetricsEnabled) {
-      try (Timer.Context ctx = MetricsSystem
-          .timer(MetricKey.CLIENT_BLOCK_READ_CHUNK_REMOTE.getName()).time()) {
-        return readChunkInternal();
-      }
-    }
-    return readChunkInternal();
+    long start = System.currentTimeMillis();
+    MetricsSystem.timer("ReadGapTime").update(start - preRead, TimeUnit.MILLISECONDS);
+    DataBuffer buff = readChunkInternal();
+    long end = System.currentTimeMillis();
+    MetricsSystem.timer(MetricKey.CLIENT_BLOCK_READ_CHUNK_REMOTE.getName()).update(end - start, TimeUnit.MILLISECONDS);
+    preRead = end;
+    return buff;
   }
 
   private DataBuffer readChunkInternal() throws IOException {
@@ -235,6 +240,7 @@ public final class GrpcDataReader implements DataReader {
 
     @Override
     public DataReader create(long offset, long len) throws IOException {
+      LOG.info("Creating gRPCDataReader with offset {} len {}", offset, len);
       return new GrpcDataReader(mContext, mAddress,
           mReadRequestBuilder.setOffset(offset).setLength(len).build());
     }
