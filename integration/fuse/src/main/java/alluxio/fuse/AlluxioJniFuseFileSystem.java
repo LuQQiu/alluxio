@@ -478,17 +478,18 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
     final long fd = fi.fh.get();
     final int flags = fi.flags.get();
     CreateFileEntry<FileOutStream> ce = mCreateFileEntries.getFirstByField(ID_INDEX, fd);
-    if (ce == null && AlluxioFuseOpenUtils.getOpenAction(flags) != OpenAction.READ_WRITE) {
-      LOG.error("Cannot find fd for {} in table", path);
-      return -ErrorCodes.EBADFD();
-    }
-    FileInStream is = mOpenFileEntries.get(fd);
-    if (is != null) {
-      LOG.error(String.format("Cannot open file %s with flags 0x%x "
-          + "for reading and writing concurrently", path, flags));
-      return -ErrorCodes.EIO();
-    }
     if (ce == null) {
+      if (AlluxioFuseOpenUtils.getOpenAction(flags) != OpenAction.READ_WRITE
+          || offset != 0) {
+        LOG.error("Cannot write to file {} with flag {} and offset {}", path, flags, offset);
+        return -ErrorCodes.EIO();
+      }
+      FileInStream is = mOpenFileEntries.get(fd);
+      if (is != null) {
+        LOG.error(String.format("Cannot open file %s with flags 0x%x "
+            + "for reading and writing concurrently", path, flags));
+        return -ErrorCodes.EIO();
+      }
       try {
         final AlluxioURI uri = mPathResolverCache.getUnchecked(path);
         if (mFileSystem.exists(uri)) {
