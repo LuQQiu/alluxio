@@ -26,9 +26,14 @@ import org.junit.Assert;
 import org.junit.Test;
 
 import java.io.Closeable;
+import java.io.File;
+import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+
+import static org.junit.Assert.assertEquals;
 
 /**
  * Integration tests for JNR-FUSE based {@link AlluxioJniFuseFileSystem}.
@@ -207,21 +212,33 @@ public class JNIFuseIntegrationTest extends AbstractFuseIntegrationTest {
     }
   }
 
-  @Test(timeout=600000)
+  @Test
   public void overwrite() throws Exception {
     String testFile = mMountPoint + "/overwriteTestFile";
-    // Why no such file or directory
-    CommandReturn res = ShellUtils.execCommandWithOutput(
-        "bash", "-c", "echo \"oldcontent\" > " + testFile);
-    Assert.assertEquals(0, res.getExitCode());
-    // open(O_WRONLY) - truncate - write
-    res = ShellUtils.execCommandWithOutput("bash", "-c", "echo \"newcontent\" > " + testFile);
-    System.out.println(res.getOutput());
-    Thread.sleep(600000);
-    Assert.assertEquals(0, res.getExitCode());
-    // check test results
-    String result = ShellUtils.execCommand("cat", testFile);
-    Assert.assertEquals("newcontent\n", result);
+    String content = "old content";
+    int length = content.length();
+    try (FileWriter writer = new FileWriter(testFile)) {
+      writer.write(content);
+    }
+    File file = new File(testFile);
+    Assert.assertTrue(file.exists());
+    try (FileReader reader = new FileReader(testFile)) {
+      char[] res = new char[length];
+      Assert.assertEquals(length, reader.read(res));
+      assertEquals(content, new String(res));
+    }
+    content = "new content";
+    length = content.length();
+    try (FileWriter writer = new FileWriter(testFile)) {
+      writer.write(content);
+    }
+    file = new File(testFile);
+    Assert.assertTrue(file.exists());
+    try (FileReader reader = new FileReader(testFile)) {
+      char[] res = new char[length];
+      Assert.assertEquals(length, reader.read(res));
+      assertEquals(content, new String(res));
+    }
   }
 
   private void createTestFile(String testFile, FuseFileInfo info, int fileLen) {
