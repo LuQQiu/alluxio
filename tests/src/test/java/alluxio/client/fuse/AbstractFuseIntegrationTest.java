@@ -91,7 +91,7 @@ public abstract class AbstractFuseIntegrationTest {
 
   @BeforeClass
   public static void beforeClass() {
-    assumeTrue("This test only runs when libfuse is installed", AlluxioFuseUtils.isFuseInstalled());
+    // assumeTrue("This test only runs when libfuse is installed", AlluxioFuseUtils.isFuseInstalled());
   }
 
   @Before
@@ -184,7 +184,7 @@ public abstract class AbstractFuseIntegrationTest {
   public void cp() throws Exception {
     String testFile = "/cpTestFile";
     String content = "Alluxio Cp Test File Content";
-    File localFile = generateFileContent("/TestFileOnLocalPath", content.getBytes());
+    File localFile = generateFileContent("/CpTestFileOnLocalPath", content.getBytes());
 
     ShellUtils.execCommand("cp", localFile.getPath(), mMountPoint + testFile);
     assertTrue(mFileSystem.exists(new AlluxioURI(testFile)));
@@ -260,6 +260,17 @@ public abstract class AbstractFuseIntegrationTest {
     ShellUtils.execCommand("mv", mMountPoint + testFile, mMountPoint + testFolder + testFile);
     assertFalse(mFileSystem.exists(new AlluxioURI(testFile)));
     assertTrue(mFileSystem.exists(new AlluxioURI(testFolder + testFile)));
+  }
+
+  @Test
+  public void mvToFuse() throws Exception {
+    String testFile = "/mvToFuseTestFile";
+    String content = "Alluxio Move to Fuse Test File Content";
+    File localFile = generateFileContent("/MvToFuseTestFileOnLocalPath", content.getBytes());
+    ShellUtils.execCommand("cp", localFile.getPath(), mMountPoint + testFile);
+    assertTrue(mFileSystem.exists(new AlluxioURI(testFile)));
+    String result = ShellUtils.execCommand("cat", mMountPoint + testFile);
+    assertEquals(content + "\n", result);
   }
 
   @Test
