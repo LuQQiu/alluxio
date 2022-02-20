@@ -76,6 +76,7 @@ public class AlluxioFileOutStream extends FileOutStream {
   private boolean mCanceled;
   private boolean mClosed;
   private boolean mShouldCacheCurrentBlock;
+  private boolean mUpdateModifiedTime;
   private BlockOutStream mCurrentBlockOutStream;
   private final List<BlockOutStream> mPreviousBlockOutStreams;
 
@@ -108,6 +109,8 @@ public class AlluxioFileOutStream extends FileOutStream {
       mCanceled = false;
       mShouldCacheCurrentBlock = mAlluxioStorageType.isStore();
       mBytesWritten = 0;
+      mModifiedTime = -1;
+      mUpdateModifiedTime = mContext.getClusterConf().getBoolean(PropertyKey.USER_BLOCK_WRITE_UPDATE_MTIME_ENABLED);
 
       if (!mUnderStorageType.isSyncPersist()) {
         mUnderStorageOutputStream = null;
@@ -166,6 +169,9 @@ public class AlluxioFileOutStream extends FileOutStream {
           mUnderStorageOutputStream.close();
           optionsBuilder.setUfsLength(mBytesWritten);
         }
+      }
+      if (mUpdateModifiedTime) {
+        optionsBuilder.setModifiedTimeMs(mModifiedTime);
       }
 
       if (mAlluxioStorageType.isStore()) {
@@ -251,6 +257,9 @@ public class AlluxioFileOutStream extends FileOutStream {
       Metrics.BYTES_WRITTEN_UFS.inc();
     }
     mBytesWritten++;
+    if (mUpdateModifiedTime) {
+      mModifiedTime = System.currentTimeMillis();
+    }
   }
 
   private void writeInternal(byte[] b, int off, int len) throws IOException {
@@ -286,6 +295,9 @@ public class AlluxioFileOutStream extends FileOutStream {
       Metrics.BYTES_WRITTEN_UFS.inc(len);
     }
     mBytesWritten += len;
+    if (mUpdateModifiedTime) {
+      mModifiedTime = System.currentTimeMillis();
+    }
   }
 
   private void getNextBlock() throws IOException {

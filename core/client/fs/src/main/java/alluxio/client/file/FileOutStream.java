@@ -29,12 +29,21 @@ import javax.annotation.concurrent.NotThreadSafe;
 public abstract class FileOutStream extends OutputStream implements Cancelable {
   /** The number of bytes written. */
   protected long mBytesWritten = 0;
+  protected long mModifiedTimeMs = 0;
 
   /**
    * @return the number of bytes written to this stream
    */
   public long getBytesWritten() {
     return mBytesWritten;
+  }
+
+  /**
+   * @return the number of bytes written to this stream
+   */
+  // TODO Fuse.getattr() returns this modified time
+  public long getModifiedTimeMs() {
+    return mModifiedTimeMs;
   }
 
   /**

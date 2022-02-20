@@ -1519,7 +1519,7 @@ public final class DefaultFileSystemMaster extends CoreMaster
     // If the file is persisted, its length is determined by UFS. Otherwise, its length is
     // determined by its size in Alluxio.
     long length = fileInode.isPersisted() ? context.getOptions().getUfsLength() : inAlluxioLength;
-
+    long modifiedTime = context.getOptions().hasModifiedTimeMs() ? context.getOptions().getModifiedTimeMs() : context.getOperationTimeMs();
     String ufsFingerprint = Constants.INVALID_UFS_FINGERPRINT;
     if (fileInode.isPersisted()) {
       UfsStatus ufsStatus = context.getUfsStatus();
@@ -1536,7 +1536,7 @@ public final class DefaultFileSystemMaster extends CoreMaster
       }
     }
 
-    completeFileInternal(rpcContext, inodePath, length, context.getOperationTimeMs(),
+    completeFileInternal(rpcContext, inodePath, length, modifiedTime,
         ufsFingerprint);
   }
 
