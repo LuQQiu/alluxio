@@ -47,6 +47,7 @@ import alluxio.security.authorization.Mode;
 import alluxio.util.CommonUtils;
 import alluxio.util.LogUtils;
 import alluxio.util.WaitForOptions;
+import alluxio.util.io.BufferUtils;
 import alluxio.wire.BlockMasterInfo;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -158,6 +159,8 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
   @VisibleForTesting
   public static final int MAX_NAME_LENGTH = 255;
 
+  public final int mFileStatSize;
+
   /**
    * Creates a new instance of {@link AlluxioJniFuseFileSystem}.
    *
@@ -212,6 +215,7 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
         LOG.error("Failed to set AlluxioJniFuseFileSystem log to debug level", e);
       }
     }
+    mFileStatSize = getFileStatSize();
     Pattern pattern = null;
     if (conf.isSet(PropertyKey.FUSE_WRITE_THROUGH_FILE_PATTERN)) {
       try {
@@ -405,7 +409,14 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
       FuseFillDir.apply(filter, buff, "..", null, 0);
 
       mFileSystem.iterateStatus(uri, file -> {
-        FuseFillDir.apply(filter, buff, file.getName(), null, 0);
+        ByteBuffer buffer = ByteBuffer.allocateDirect(mFileStatSize);
+        try {
+          FileStat stat = FileStat.of(buffer);
+          AlluxioFuseUtils.setStat(file, stat);
+          FuseFillDir.apply(filter, buff, file.getName(), stat, 0);
+        } finally {
+          BufferUtils.cleanDirectBuffer(buffer);
+        }
       });
     } catch (Throwable e) {
       LOG.error("Failed to readdir {}", path, e);
