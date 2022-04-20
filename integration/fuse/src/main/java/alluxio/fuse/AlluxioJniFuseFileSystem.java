@@ -333,10 +333,14 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
       FuseFillDir.apply(filter, buff, ".", null, 0);
       FuseFillDir.apply(filter, buff, "..", null, 0);
 
+      ByteBuffer buffer = ByteBuffer.allocateDirect(mFileStatSize);
+      byte[] emptyByteArray = new byte[mFileStatSize];
+      FileStat stat = FileStat.of(buffer);
       mFileSystem.iterateStatus(uri, file -> {
-        ByteBuffer buffer = ByteBuffer.allocateDirect(mFileStatSize);
         try {
-          FileStat stat = FileStat.of(buffer);
+          // Clean the bytebuffer
+          buffer.put(emptyByteArray);
+          buffer.clear();
           AlluxioFuseUtils.setStat(file, stat);
           FuseFillDir.apply(filter, buff, file.getName(), stat, 0);
         } finally {

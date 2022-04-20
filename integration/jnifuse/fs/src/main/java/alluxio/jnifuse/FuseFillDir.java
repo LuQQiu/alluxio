@@ -21,8 +21,10 @@ public class FuseFillDir {
   public static int apply(long fillerAddr, long bufaddr, String name, FileStat stbuf, long off) {
     if (stbuf != null) {
       ByteBuffer buffer = stbuf.getBuffer();
-      buffer.position(0);
-      buffer.limit(buffer.capacity());
+      buffer.clear(); 
+      // set limit=capacity, position=0, mark=-1 equal to the following two lines?
+      // buffer.position(0);
+      //buffer.limit(buffer.capacity());
       return fill(fillerAddr, bufaddr, name, buffer, off);
     } else {
       return fill(fillerAddr, bufaddr, name, null, off);
