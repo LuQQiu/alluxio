@@ -93,8 +93,6 @@ public final class MetricsSystem {
    * An enum of supported instance type.
    */
   public enum InstanceType {
-    HUB_AGENT("HubAgent"),
-    HUB_MANAGER("HubManager"),
     CLUSTER("Cluster"),
     SERVER("Server"),
     MASTER("Master"),
@@ -207,7 +205,7 @@ public final class MetricsSystem {
     }
     AlluxioConfiguration conf = new InstancedConfiguration(ConfigurationUtils.defaults());
     if (sourceKey != null && conf.isSet(sourceKey)) {
-      return conf.get(sourceKey);
+      return conf.getString(sourceKey);
     }
     String hostName;
     // Avoid throwing RuntimeException when hostname
@@ -290,8 +288,7 @@ public final class MetricsSystem {
    * @return metrics string
    */
   public static String getResourcePoolMetricName(Object obj) {
-    return MetricsSystem.getMetricName("ResourcePool." + obj.getClass().getName() + "."
-        + Integer.toHexString(System.identityHashCode(obj)));
+    return MetricsSystem.getMetricName("ResourcePool." + obj.getClass().getSimpleName());
   }
 
   /**
@@ -317,10 +314,6 @@ public final class MetricsSystem {
         return getJobMasterMetricName(name);
       case JOB_WORKER:
         return getJobWorkerMetricName(name);
-      case HUB_AGENT:
-        return getHubAgentMetricName(name);
-      case HUB_MANAGER:
-        return getHubManagerMetricName(name);
       default:
         throw new IllegalStateException("Unknown process type");
     }
@@ -415,34 +408,6 @@ public final class MetricsSystem {
    */
   public static String getJobWorkerMetricName(String name) {
     return getMetricNameWithUniqueId(InstanceType.JOB_WORKER, name);
-  }
-
-  /**
-   * Builds metric registry name for hub agent instance. The pattern is
-   * instance.uniqueId.metricName.
-   *
-   * @param name the metric name
-   * @return the metric registry name
-   */
-  public static String getHubAgentMetricName(String name) {
-    if (name.startsWith(InstanceType.HUB_AGENT.toString())) {
-      return name;
-    }
-    return Joiner.on(".").join(InstanceType.HUB_AGENT, name);
-  }
-
-  /**
-   * Builds metric registry name for hub manager instance. The pattern is
-   * instance.uniqueId.metricName.
-   *
-   * @param name the metric name
-   * @return the metric registry name
-   */
-  public static String getHubManagerMetricName(String name) {
-    if (name.startsWith(InstanceType.HUB_MANAGER.toString())) {
-      return name;
-    }
-    return Joiner.on(".").join(InstanceType.HUB_MANAGER, name);
   }
 
   /**

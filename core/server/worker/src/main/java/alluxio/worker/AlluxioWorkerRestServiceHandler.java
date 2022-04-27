@@ -15,7 +15,6 @@ import alluxio.AlluxioURI;
 import alluxio.Constants;
 import alluxio.RestUtils;
 import alluxio.RuntimeConstants;
-import alluxio.WorkerStorageTierAssoc;
 import alluxio.client.file.FileSystem;
 import alluxio.client.file.URIStatus;
 import alluxio.collections.Pair;
@@ -207,7 +206,7 @@ public final class AlluxioWorkerRestServiceHandler {
 
       response.setWorkerInfo(new UIWorkerInfo(mWorkerProcess.getRpcAddress().toString(),
           mWorkerProcess.getStartTimeMs(),
-          ServerConfiguration.get(PropertyKey.USER_DATE_FORMAT_PATTERN)));
+          ServerConfiguration.getString(PropertyKey.USER_DATE_FORMAT_PATTERN)));
       BlockStoreMeta storeMeta = mBlockWorker.getStoreMetaFull();
       long capacityBytes = 0L;
       long usedBytes = 0L;
@@ -269,7 +268,7 @@ public final class AlluxioWorkerRestServiceHandler {
         try {
           URIStatus status = mFsClient.getStatus(new AlluxioURI(requestPath));
           UIFileInfo uiFileInfo = new UIFileInfo(status, ServerConfiguration.global(),
-              new WorkerStorageTierAssoc().getOrderedStorageAliases());
+              mStoreMeta.getStorageTierAssoc().getOrderedStorageAliases());
           for (long blockId : status.getBlockIds()) {
             if (mBlockWorker.hasBlockMeta(blockId)) {
               BlockMeta blockMeta = mBlockWorker.getVolatileBlockMeta(blockId);
@@ -310,7 +309,7 @@ public final class AlluxioWorkerRestServiceHandler {
       List<Long> fileIds = new ArrayList<>(unsortedFileIds);
       Collections.sort(fileIds);
       response.setNTotalFile(unsortedFileIds.size())
-          .setOrderedTierAliases(new WorkerStorageTierAssoc().getOrderedStorageAliases());
+          .setOrderedTierAliases(mStoreMeta.getStorageTierAssoc().getOrderedStorageAliases());
 
       try {
         int offset = Integer.parseInt(requestOffset);
@@ -326,7 +325,7 @@ public final class AlluxioWorkerRestServiceHandler {
           try {
             URIStatus status = new URIStatus(mBlockWorker.getFileInfo(fileId));
             UIFileInfo uiFileInfo = new UIFileInfo(status, ServerConfiguration.global(),
-                new WorkerStorageTierAssoc().getOrderedStorageAliases());
+                mStoreMeta.getStorageTierAssoc().getOrderedStorageAliases());
             for (long blockId : status.getBlockIds()) {
               if (mBlockWorker.hasBlockMeta(blockId)) {
                 BlockMeta blockMeta = mBlockWorker.getVolatileBlockMeta(blockId);
@@ -425,7 +424,7 @@ public final class AlluxioWorkerRestServiceHandler {
       //response.setBaseUrl("./browseLogs");
       //response.setShowPermissions(false);
 
-      String logsPath = ServerConfiguration.get(PropertyKey.LOGS_DIR);
+      String logsPath = ServerConfiguration.getString(PropertyKey.LOGS_DIR);
       File logsDir = new File(logsPath);
       String requestFile = requestPath;
 
@@ -441,7 +440,7 @@ public final class AlluxioWorkerRestServiceHandler {
                 new UIFileInfo.LocalFileInfo(logFileName, logFileName, logFile.length(),
                     UIFileInfo.LocalFileInfo.EMPTY_CREATION_TIME, logFile.lastModified(),
                     logFile.isDirectory()), ServerConfiguration.global(),
-                new WorkerStorageTierAssoc().getOrderedStorageAliases()));
+                mStoreMeta.getStorageTierAssoc().getOrderedStorageAliases()));
           }
         }
         Collections.sort(fileInfos, UIFileInfo.PATH_STRING_COMPARE);
@@ -571,7 +570,7 @@ public final class AlluxioWorkerRestServiceHandler {
         .setUsed(mStoreMeta.getUsedBytes());
   }
 
-  private Map<String, String> getConfigurationInternal(boolean raw) {
+  private Map<String, Object> getConfigurationInternal(boolean raw) {
     return new TreeMap<>(ServerConfiguration
         .toMap(ConfigurationValueOptions.defaults().useDisplayValue(true).useRawValue(raw)));
   }
@@ -601,12 +600,11 @@ public final class AlluxioWorkerRestServiceHandler {
 
   private Comparator<String> getTierAliasComparator() {
     return new Comparator<String>() {
-      private WorkerStorageTierAssoc mTierAssoc = new WorkerStorageTierAssoc();
 
       @Override
       public int compare(String tier1, String tier2) {
-        int ordinal1 = mTierAssoc.getOrdinal(tier1);
-        int ordinal2 = mTierAssoc.getOrdinal(tier2);
+        int ordinal1 = mStoreMeta.getStorageTierAssoc().getOrdinal(tier1);
+        int ordinal2 = mStoreMeta.getStorageTierAssoc().getOrdinal(tier2);
         return Integer.compare(ordinal1, ordinal2);
       }
     };

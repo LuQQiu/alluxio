@@ -16,14 +16,17 @@ import static org.junit.Assert.assertTrue;
 
 import alluxio.AlluxioURI;
 import alluxio.client.file.FileSystem;
+import alluxio.client.file.FileSystemContext;
+import alluxio.conf.InstancedConfiguration;
 import alluxio.conf.PropertyKey;
 import alluxio.conf.ServerConfiguration;
 import alluxio.fuse.AlluxioJniFuseFileSystem;
-import alluxio.fuse.FuseMountOptions;
+import alluxio.fuse.FuseMountConfig;
 import alluxio.jnifuse.struct.FuseFileInfo;
 import alluxio.util.ShellUtils;
 import alluxio.util.io.BufferUtils;
 
+import com.google.common.collect.ImmutableList;
 import jnr.constants.platform.OpenFlags;
 import org.junit.Assert;
 import org.junit.Test;
@@ -33,7 +36,6 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 
 /**
  * Integration tests for JNR-FUSE based {@link AlluxioJniFuseFileSystem}.
@@ -49,11 +51,13 @@ public class JNIFuseIntegrationTest extends AbstractFuseIntegrationTest {
   }
 
   @Override
-  public void mountFuse(FileSystem fileSystem, String mountPoint, String alluxioRoot) {
-    FuseMountOptions options =
-        new FuseMountOptions(mountPoint, alluxioRoot, false, new ArrayList<>());
+  public void mountFuse(FileSystemContext context,
+      FileSystem fileSystem, String mountPoint, String alluxioRoot) {
+    InstancedConfiguration conf = ServerConfiguration.global();
+    FuseMountConfig options =
+        FuseMountConfig.create(mountPoint, alluxioRoot, ImmutableList.of(), conf);
     mFuseFileSystem =
-        new AlluxioJniFuseFileSystem(fileSystem, options, ServerConfiguration.global());
+        new AlluxioJniFuseFileSystem(context, fileSystem, options, conf);
     mFuseFileSystem.mount(false, false, new String[] {});
   }
 

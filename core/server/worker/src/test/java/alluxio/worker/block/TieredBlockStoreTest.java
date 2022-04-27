@@ -227,24 +227,8 @@ public final class TieredBlockStoreTest {
     // Move block from the specific Dir
     TieredBlockStoreTestUtils.cache2(SESSION_ID2, BLOCK_ID2, BLOCK_SIZE, mTestDir1, mMetaManager,
         mBlockIterator);
-    // Move block from wrong Dir
-    mThrown.expect(BlockDoesNotExistException.class);
-    mThrown.expectMessage(ExceptionMessage.BLOCK_NOT_FOUND_AT_LOCATION.getMessage(BLOCK_ID2,
-        mTestDir2.toBlockStoreLocation()));
-    mBlockStore.moveBlock(SESSION_ID2, BLOCK_ID2, mTestDir2.toBlockStoreLocation(),
-        AllocateOptions.forMove(mTestDir3.toBlockStoreLocation()));
     // Move block from right Dir
-    mBlockStore.moveBlock(SESSION_ID2, BLOCK_ID2, mTestDir1.toBlockStoreLocation(),
-        AllocateOptions.forMove(mTestDir3.toBlockStoreLocation()));
-    assertFalse(mTestDir1.hasBlockMeta(BLOCK_ID2));
-    assertTrue(mTestDir3.hasBlockMeta(BLOCK_ID2));
-    assertTrue(mBlockStore.hasBlockMeta(BLOCK_ID2));
-    assertFalse(FileUtils.exists(DefaultBlockMeta.commitPath(mTestDir1, BLOCK_ID2)));
-    assertTrue(FileUtils.exists(DefaultBlockMeta.commitPath(mTestDir3, BLOCK_ID2)));
-
-    // Move block from the specific tier
     mBlockStore.moveBlock(SESSION_ID2, BLOCK_ID2,
-        BlockStoreLocation.anyDirInTier(mTestDir1.getParentTier().getTierAlias()),
         AllocateOptions.forMove(mTestDir3.toBlockStoreLocation()));
     assertFalse(mTestDir1.hasBlockMeta(BLOCK_ID2));
     assertTrue(mTestDir3.hasBlockMeta(BLOCK_ID2));
@@ -309,13 +293,8 @@ public final class TieredBlockStoreTest {
     // Remove block from specific Dir
     TieredBlockStoreTestUtils.cache2(SESSION_ID2, BLOCK_ID2, BLOCK_SIZE, mTestDir1, mMetaManager,
         mBlockIterator);
-    // Remove block from wrong Dir
-    mThrown.expect(BlockDoesNotExistException.class);
-    mThrown.expectMessage(ExceptionMessage.BLOCK_NOT_FOUND_AT_LOCATION.getMessage(BLOCK_ID2,
-        mTestDir2.toBlockStoreLocation()));
-    mBlockStore.removeBlock(SESSION_ID2, BLOCK_ID2, mTestDir2.toBlockStoreLocation());
     // Remove block from right Dir
-    mBlockStore.removeBlock(SESSION_ID2, BLOCK_ID2, mTestDir1.toBlockStoreLocation());
+    mBlockStore.removeBlock(SESSION_ID2, BLOCK_ID2);
     assertFalse(mTestDir1.hasBlockMeta(BLOCK_ID2));
     assertFalse(mBlockStore.hasBlockMeta(BLOCK_ID2));
     assertFalse(FileUtils.exists(DefaultBlockMeta.commitPath(mTestDir1, BLOCK_ID2)));
@@ -323,8 +302,7 @@ public final class TieredBlockStoreTest {
     // Remove block from the specific tier
     TieredBlockStoreTestUtils.cache2(SESSION_ID2, BLOCK_ID2, BLOCK_SIZE, mTestDir1, mMetaManager,
         mBlockIterator);
-    mBlockStore.removeBlock(SESSION_ID2, BLOCK_ID2,
-        BlockStoreLocation.anyDirInTier(mTestDir1.getParentTier().getTierAlias()));
+    mBlockStore.removeBlock(SESSION_ID2, BLOCK_ID2);
     assertFalse(mTestDir1.hasBlockMeta(BLOCK_ID2));
     assertFalse(mBlockStore.hasBlockMeta(BLOCK_ID2));
     assertFalse(FileUtils.exists(DefaultBlockMeta.commitPath(mTestDir1, BLOCK_ID2)));
@@ -382,7 +360,7 @@ public final class TieredBlockStoreTest {
       runnables.add(() -> {
         try {
           mBlockStore.freeSpace(SESSION_ID1, 0, 0,
-              new BlockStoreLocation(Constants.MEDIUM_MEM, 0, BlockStoreLocation.ANY_MEDIUM));
+              new BlockStoreLocation(Constants.MEDIUM_MEM, 0));
         } catch (Exception e) {
           fail();
         }
@@ -781,8 +759,7 @@ public final class TieredBlockStoreTest {
         mBlockIterator);
     BlockStoreMeta oldMeta = mBlockStore.getBlockStoreMeta();
     FileUtils.deletePathRecursively(mTestDir2.getDirPath());
-    assertTrue("check storage should fail if one of the directory is not accessible",
-        mBlockStore.checkStorage());
+    mBlockStore.removeInaccessibleStorage();
     BlockStoreMeta meta = mBlockStore.getBlockStoreMetaFull();
     long usedByteInDir = mTestDir2.getCapacityBytes() - mTestDir2.getAvailableBytes();
     assertFalse("failed storage path should be removed",
