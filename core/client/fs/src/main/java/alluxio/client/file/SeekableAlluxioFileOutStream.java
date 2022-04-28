@@ -80,7 +80,7 @@ public class SeekableAlluxioFileOutStream extends FileOutStream implements Seeka
     } catch (Exception e) {
       throw new IOException("Failed to update " + path, e);
     }
-    return new SeekableAlluxioFileOutStream(path, ufsPath, fs, localFile);
+    return new SeekableAlluxioFileOutStream(path, ufsPath, fs, localFile, localFile.length());
   }
 
   /**
@@ -97,11 +97,11 @@ public class SeekableAlluxioFileOutStream extends FileOutStream implements Seeka
       throw new IOException(String.format("Can not find file %s", ufsPath));
     }
     RandomAccessFile localFile =  new RandomAccessFile(ufsPath, "rw");
-    return new SeekableAlluxioFileOutStream(path, ufsPath, fs, localFile);
+    return new SeekableAlluxioFileOutStream(path, ufsPath, fs, localFile, localFile.length());
   }
 
   private SeekableAlluxioFileOutStream(AlluxioURI path, String ufsPath, FileSystem fs,
-      RandomAccessFile localFile) {
+      RandomAccessFile localFile, long localFileLength) {
     mAlluxioPath = path;
     mFileSystem = fs;
     mUfsPath = ufsPath;
@@ -109,7 +109,7 @@ public class SeekableAlluxioFileOutStream extends FileOutStream implements Seeka
     mPos = 0;
     mCanceled = false;
     mClosed = false;
-    mBytesWritten = 0;
+    mBytesWritten = localFileLength;
   }
 
   @Override

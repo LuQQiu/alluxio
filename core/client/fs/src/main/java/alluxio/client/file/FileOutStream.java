@@ -28,7 +28,7 @@ import javax.annotation.concurrent.NotThreadSafe;
 @NotThreadSafe
 public abstract class FileOutStream extends OutputStream implements Cancelable {
   /** The number of bytes written. */
-  protected long mBytesWritten = 0;
+  protected volatile long mBytesWritten = 0;
 
   /**
    * @return the number of bytes written to this stream

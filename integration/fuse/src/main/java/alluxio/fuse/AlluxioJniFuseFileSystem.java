@@ -303,10 +303,6 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
   private int getattrInternal(String path, FileStat stat) {
     final AlluxioURI uri = mPathResolverCache.getUnchecked(path);
     try {
-      if (mWriteThroughFilePattern != null
-          && mWriteThroughFilePattern.matcher(path).matches()) {
-        return AlluxioFuseUtils.getLocalFileStatus(Paths.get(mUfsRootPath, path), stat);
-      }
       URIStatus status;
       // Handle special metadata cache operation
       if (mConf.getBoolean(PropertyKey.FUSE_SPECIAL_COMMAND_ENABLED)
@@ -316,36 +312,6 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
       } else {
         status = mFileSystem.getStatus(uri);
       }
-      long size = status.getLength();
-      // Regardless if file is complete, as long as it is in CreateFileEntries, consulting the
-      // OutputStream for file length
-      if (mCreateFileEntries.contains(PATH_INDEX, path)) {
-        // Alluxio master will not update file length until file is completed
-        // get file length from the current output stream
-        CreateFileEntry<FileOutStream> ce = mCreateFileEntries.getFirstByField(PATH_INDEX, path);
-        if (ce != null) {
-          FileOutStream os = ce.getOut();
-          size = os.getBytesWritten();
-        }
-      } else if (!status.isCompleted()) {
-        if (!AlluxioFuseUtils.waitForFileCompleted(mFileSystem, uri)) {
-          // Always block waiting for file to be completed except when the file is writing
-          // We do not want to block the writing process
-          LOG.error("File {} is not completed", path);
-        } else {
-          // Update the file status after waiting
-          status = mFileSystem.getStatus(uri);
-          size = status.getLength();
-        }
-      }
-      stat.st_size.set(size);
-
-      // Sets block number to fulfill du command needs
-      // `st_blksize` is ignored in `getattr` according to
-      // https://github.com/libfuse/libfuse/blob/d4a7ba44b022e3b63fc215374d87ed9e930d9974/include/fuse.h#L302
-      // According to http://man7.org/linux/man-pages/man2/stat.2.html,
-      // `st_blocks` is the number of 512B blocks allocated
-      stat.st_blocks.set((int) Math.ceil((double) size / 512));
 
       final long ctime_sec = status.getLastModificationTimeMs() / 1000;
       final long atime_sec = status.getLastAccessTimeMs() / 1000;
@@ -379,6 +345,44 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
       }
       stat.st_mode.set(mode);
       stat.st_nlink.set(1);
+      // Regardless if file is complete, as long as it is in CreateFileEntries, consulting the
+      // OutputStream for file length
+      CreateFileEntry<FileOutStream> ce = mCreateFileEntries.getFirstByField(PATH_INDEX, path);
+      if (ce != null) {
+        FileOutStream os = ce.getOut();
+        long size = os.getBytesWritten();
+        stat.st_size.set(size);
+        stat.st_blocks.set((int) Math.ceil((double) size / 512));
+        return 0;
+      }
+      
+      ReadWriteOpenFileEntry oe = mReadWriteOpenFileEntries.getFirstByField(OPEN_PATH_INDEX, path);
+      if (oe != null) {
+        long size = oe.getOut().getBytesWritten();
+        stat.st_size.set(size);
+        stat.st_blocks.set((int) Math.ceil((double) size / 512));
+        return 0;
+      }
+      
+      long size = status.getLength();
+      if (!status.isCompleted()) {
+        if (!AlluxioFuseUtils.waitForFileCompleted(mFileSystem, uri)) {
+          // Always block waiting for file to be completed except when the file is writing
+          // We do not want to block the writing process
+          LOG.error("File {} is not completed", path);
+        } else {
+          // Update the file status after waiting
+          status = mFileSystem.getStatus(uri);
+          size = status.getLength();
+        }
+      }
+      stat.st_size.set(size);
+      // Sets block number to fulfill du command needs
+      // `st_blksize` is ignored in `getattr` according to
+      // https://github.com/libfuse/libfuse/blob/d4a7ba44b022e3b63fc215374d87ed9e930d9974/include/fuse.h#L302
+      // According to http://man7.org/linux/man-pages/man2/stat.2.html,
+      // `st_blocks` is the number of 512B blocks allocated
+      stat.st_blocks.set((int) Math.ceil((double) size / 512));
     } catch (FileDoesNotExistException | InvalidPathException e) {
       LOG.debug("Failed to getattr {}: path does not exist or is invalid", path);
       return -ErrorCodes.ENOENT();
@@ -676,33 +680,35 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
       }
     }
 
-    FileOutStream os = ce.getOut();
-    long bytesWritten = os.getBytesWritten();
-    if (os instanceof SeekableAlluxioFileOutStream) {
+    synchronized (ce) {
+      FileOutStream os = ce.getOut();
+      long bytesWritten = os.getBytesWritten();
+      if (os instanceof SeekableAlluxioFileOutStream) {
+        try {
+          ((SeekableAlluxioFileOutStream) os).seek(offset);
+        } catch (IOException e) {
+          LOG.error("Failed to seek to offset {} for file {}.", offset, path, e);
+          return -ErrorCodes.EIO();
+        }
+      } else if (offset != bytesWritten && offset + sz > bytesWritten) {
+        LOG.error("Only sequential write is supported. Cannot write bytes of size {} to offset {} "
+            + "when {} bytes have written to path {}", size, offset, bytesWritten, path);
+        return -ErrorCodes.EIO();
+      } else if (offset + sz <= bytesWritten) {
+        LOG.warn("Skip writting to file {} offset={} size={} when {} bytes has written to file",
+            path, offset, sz, bytesWritten);
+        // To fulfill vim :wq
+        return sz;
+      }
+
       try {
-        ((SeekableAlluxioFileOutStream) os).seek(offset);
+        final byte[] dest = new byte[sz];
+        buf.get(dest, 0, sz);
+        os.write(dest);
       } catch (IOException e) {
-        LOG.error("Failed to seek to offset {} for file {}.", offset, path, e);
+        LOG.error("IOException while writing to {}.", path, e);
         return -ErrorCodes.EIO();
       }
-    } else if (offset != bytesWritten && offset + sz > bytesWritten) {
-      LOG.error("Only sequential write is supported. Cannot write bytes of size {} to offset {} "
-          + "when {} bytes have written to path {}", size, offset, bytesWritten, path);
-      return -ErrorCodes.EIO();
-    } else if (offset + sz <= bytesWritten) {
-      LOG.warn("Skip writting to file {} offset={} size={} when {} bytes has written to file",
-          path, offset, sz, bytesWritten);
-      // To fulfill vim :wq
-      return sz;
-    }
-
-    try {
-      final byte[] dest = new byte[sz];
-      buf.get(dest, 0, sz);
-      os.write(dest);
-    } catch (IOException e) {
-      LOG.error("IOException while writing to {}.", path, e);
-      return -ErrorCodes.EIO();
     }
     return sz;
   }
@@ -762,13 +768,16 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
     try {
       ReadWriteOpenFileEntry oe = mReadWriteOpenFileEntries.getFirstByField(OPEN_ID_INDEX, fd);
       if (oe != null) {
-        mReadWriteOpenFileEntries.remove(oe);
-        synchronized (oe) {
-          oe.getOut().close();
+        try {
+          synchronized (oe) {
+            oe.getOut().close();
+          }
+        } finally {
+          mReadWriteOpenFileEntries.remove(oe);
         }
         return 0;
       }
-      FileInStream is = mOpenFileEntries.remove(fd);
+      FileInStream is = mOpenFileEntries.get(fd);
       CreateFileEntry<FileOutStream> ce = mCreateFileEntries.getFirstByField(ID_INDEX, fd);
       if (is == null && ce == null) {
         LOG.error("Failed to release {}: Cannot find fd {}", path, fd);
@@ -777,14 +786,21 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
       if (ce != null) {
         // Remove earlier to try best effort to avoid write() - async release() - getAttr()
         // without waiting for file completed and return 0 bytes file size error
-        mCreateFileEntries.remove(ce);
-        synchronized (ce) {
-          ce.close();
+        try {
+          synchronized (ce) {
+            ce.close();
+          }
+        } finally {
+          mCreateFileEntries.remove(ce);
         }
       }
       if (is != null) {
-        synchronized (is) {
-          is.close();
+        try {
+          synchronized (is) {
+            is.close();
+          }
+        } finally {
+          mOpenFileEntries.remove(fd);
         }
       }
     } catch (Throwable e) {
@@ -794,6 +810,7 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
       if (semaphore != null) {
         semaphore.release();
         if (!semaphore.hasQueuedThreads() && semaphore.availablePermits() == 1) {
+          // TODO(lu) Change to CacheBuilder with max size & expiration
           mPathLocks.remove(path);
         }
       }
