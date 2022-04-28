@@ -64,14 +64,8 @@ public abstract class AbstractFuseIntegrationTest {
   private static final int WAIT_TIMEOUT_MS = 60 * Constants.SECOND_MS;
 
   private final LocalAlluxioCluster mAlluxioCluster = new LocalAlluxioCluster();
-<<<<<<< HEAD
   protected FileSystem mFileSystem;
-||||||| aa4190d72a
-  private FileSystem mFileSystem;
-=======
-  private FileSystem mFileSystem;
   private FileSystemContext mFileSystemContext;
->>>>>>> f283775b269ec5c4d137e47d27a16a3558555c7b
   protected String mMountPoint;
 
   @Rule

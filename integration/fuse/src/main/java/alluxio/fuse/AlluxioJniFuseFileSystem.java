@@ -18,12 +18,8 @@ import alluxio.client.block.BlockMasterClient;
 import alluxio.client.file.FileInStream;
 import alluxio.client.file.FileOutStream;
 import alluxio.client.file.FileSystem;
-<<<<<<< HEAD
-import alluxio.client.file.SeekableAlluxioFileOutStream;
-||||||| aa4190d72a
-=======
 import alluxio.client.file.FileSystemContext;
->>>>>>> f283775b269ec5c4d137e47d27a16a3558555c7b
+import alluxio.client.file.SeekableAlluxioFileOutStream;
 import alluxio.client.file.URIStatus;
 import alluxio.collections.IndexDefinition;
 import alluxio.collections.IndexedSet;
@@ -72,22 +68,13 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-<<<<<<< HEAD
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
-||||||| aa4190d72a
-=======
-import java.util.concurrent.TimeUnit;
->>>>>>> f283775b269ec5c4d137e47d27a16a3558555c7b
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
-<<<<<<< HEAD
 import java.util.regex.Pattern;
-||||||| aa4190d72a
-=======
 import java.util.function.Supplier;
 import javax.annotation.Nullable;
->>>>>>> f283775b269ec5c4d137e47d27a16a3558555c7b
 import javax.annotation.concurrent.ThreadSafe;
 
 /**
@@ -165,25 +152,7 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
   private final Pattern mWriteThroughFilePattern;
   private final long mWriteThroughOpenTimeoutMs;
 
-<<<<<<< HEAD
-  // Map for holding the async releasing entries for proper umount
-  private final Map<Long, FileInStream> mReleasingReadEntries = new ConcurrentHashMap<>();
-  private final Map<Long, CreateFileEntry<FileOutStream>> mReleasingWriteEntries =
-      new ConcurrentHashMap<>();
-
   /** df command will treat -1 as an unknown value. */
-||||||| aa4190d72a
-  // Map for holding the async releasing entries for proper umount
-  private final Map<Long, FileInStream> mReleasingReadEntries = new ConcurrentHashMap<>();
-  private final Map<Long, CreateFileEntry<FileOutStream>> mReleasingWriteEntries =
-      new ConcurrentHashMap<>();
-
-  /**
-   * df command will treat -1 as an unknown value.
-   */
-=======
-  /** df command will treat -1 as an unknown value. */
->>>>>>> f283775b269ec5c4d137e47d27a16a3558555c7b
   @VisibleForTesting
   public static final int UNKNOWN_INODES = -1;
   /** Most FileSystems on linux limit the length of file name beyond 255 characters. */
@@ -254,7 +223,7 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
     if (conf.isSet(PropertyKey.FUSE_WRITE_THROUGH_FILE_PATTERN)) {
       try {
         pattern =
-            Pattern.compile(conf.get(PropertyKey.FUSE_WRITE_THROUGH_FILE_PATTERN));
+            Pattern.compile(conf.getString(PropertyKey.FUSE_WRITE_THROUGH_FILE_PATTERN));
       } catch (Exception e) {
         LOG.error("Failed to parse property {} (={}). This property will be ignored",
             PropertyKey.FUSE_WRITE_THROUGH_FILE_PATTERN,
@@ -265,7 +234,7 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
     URIStatus status = null;
     if (mWriteThroughFilePattern != null) {
       try {
-        status = mFileSystem.getStatus(new AlluxioURI(opts.getAlluxioRoot()));
+        status = mFileSystem.getStatus(new AlluxioURI(opts.getMountAlluxioPath()));
       } catch (Exception e) {
         // ignore
       }
@@ -318,19 +287,8 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
       mCreateFileEntries.add(new CreateFileEntry<>(fid, path, os));
       fi.fh.set(fid);
       mAuthPolicy.setUserGroupIfNeeded(uri);
-<<<<<<< HEAD
-    } catch (InterruptedException ie) {
-      LOG.error("Fail to create {}: interrupted", path);
-      Thread.currentThread().interrupt();
     } catch (Throwable t) {
       LOG.error("Failed to create {}", path, t);
-||||||| aa4190d72a
-    } catch (Throwable e) {
-      LOG.error("Failed to create {}: ", path, e);
-=======
-    } catch (Throwable t) {
-      LOG.error("Failed to create {}", path, t);
->>>>>>> f283775b269ec5c4d137e47d27a16a3558555c7b
       return -ErrorCodes.EIO();
     }
     return 0;
@@ -345,17 +303,11 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
   private int getattrInternal(String path, FileStat stat) {
     final AlluxioURI uri = mPathResolverCache.getUnchecked(path);
     try {
-<<<<<<< HEAD
       if (mWriteThroughFilePattern != null
           && mWriteThroughFilePattern.matcher(path).matches()) {
         return AlluxioFuseUtils.getLocalFileStatus(Paths.get(mUfsRootPath, path), stat);
       }
       URIStatus status;
-||||||| aa4190d72a
-      URIStatus status = null;
-=======
-      URIStatus status;
->>>>>>> f283775b269ec5c4d137e47d27a16a3558555c7b
       // Handle special metadata cache operation
       if (mConf.getBoolean(PropertyKey.FUSE_SPECIAL_COMMAND_ENABLED)
           && mFuseShell.isSpecialCommand(uri)) {
@@ -576,41 +528,17 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
 
   @Override
   public int read(String path, ByteBuffer buf, long size, long offset, FuseFileInfo fi) {
-<<<<<<< HEAD
-    final long fd = fi.fh.get();
-//    return AlluxioFuseUtils.call(LOG, () -> readInternal(path, buf, size, offset, fi, fd),
-//        "Fuse.Read", "path=%s,fd=%d,size=%d,offset=%d",
-//        path, fd, size, offset);
-//  }
-//
-//  private int readInternal(
-//      String path, ByteBuffer buf, long size, long offset, FuseFileInfo fi, long fd) {
-||||||| aa4190d72a
     return AlluxioFuseUtils.call(LOG, () -> readInternal(path, buf, size, offset, fi),
         "Fuse.Read", "path=%s,buf=%s,size=%d,offset=%d", path, buf, size, offset);
   }
 
   private int readInternal(String path, ByteBuffer buf, long size, long offset, FuseFileInfo fi) {
-=======
     final long fd = fi.fh.get();
-    return AlluxioFuseUtils.call(LOG, () -> readInternal(path, buf, size, offset, fi, fd),
-        "Fuse.Read", "path=%s,fd=%d,size=%d,offset=%d",
-        path, fd, size, offset);
-  }
-
-  private int readInternal(
-      String path, ByteBuffer buf, long size, long offset, FuseFileInfo fi, long fd) {
->>>>>>> f283775b269ec5c4d137e47d27a16a3558555c7b
+    final int flags = fi.flags.get();
     MetricsSystem.counter(MetricKey.FUSE_BYTES_TO_READ.getName()).inc(size);
     final int sz = (int) size;
     int nread = 0;
     int rd = 0;
-<<<<<<< HEAD
-    final int flags = fi.flags.get();
-||||||| aa4190d72a
-    final long fd = fi.fh.get();
-=======
->>>>>>> f283775b269ec5c4d137e47d27a16a3558555c7b
     try {
       ReadWriteOpenFileEntry oe = mReadWriteOpenFileEntries.getFirstByField(OPEN_ID_INDEX, fd);
       if (oe != null) {
@@ -672,37 +600,17 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
 
   @Override
   public int write(String path, ByteBuffer buf, long size, long offset, FuseFileInfo fi) {
-<<<<<<< HEAD
-    final long fd = fi.fh.get();
-//    return AlluxioFuseUtils.call(LOG, () -> writeInternal(path, buf, size, offset, fi, fd),
-//        "Fuse.Write", "path=%s,fd=%d,size=%d,offset=%d",
-//        path, fd, size, offset);
-//  }
-//
-//  private int writeInternal(
-//      String path, ByteBuffer buf, long size, long offset, FuseFileInfo fi, long fd) {
-||||||| aa4190d72a
     return AlluxioFuseUtils.call(LOG, () -> writeInternal(path, buf, size, offset, fi),
         "Fuse.Write", "path=%s,buf=%s,size=%d,offset=%d", path, buf, size, offset);
   }
 
   private int writeInternal(String path, ByteBuffer buf, long size, long offset, FuseFileInfo fi) {
-=======
-    final long fd = fi.fh.get();
-    return AlluxioFuseUtils.call(LOG, () -> writeInternal(path, buf, size, offset, fi, fd),
-        "Fuse.Write", "path=%s,fd=%d,size=%d,offset=%d",
-        path, fd, size, offset);
-  }
-
-  private int writeInternal(
-      String path, ByteBuffer buf, long size, long offset, FuseFileInfo fi, long fd) {
->>>>>>> f283775b269ec5c4d137e47d27a16a3558555c7b
     if (size > Integer.MAX_VALUE) {
       LOG.error("Failed to write {}: Cannot write more than {}", path, Integer.MAX_VALUE);
       return ErrorCodes.EIO();
     }
     final int sz = (int) size;
-<<<<<<< HEAD
+    final long fd = fi.fh.get();
     ReadWriteOpenFileEntry oe = mReadWriteOpenFileEntries.getFirstByField(OPEN_ID_INDEX, fd);
     if (oe != null) {
       try {
@@ -716,10 +624,6 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
         return -ErrorCodes.EIO();
       }
     }
-||||||| aa4190d72a
-    final long fd = fi.fh.get();
-=======
->>>>>>> f283775b269ec5c4d137e47d27a16a3558555c7b
     CreateFileEntry<FileOutStream> ce = mCreateFileEntries.getFirstByField(ID_INDEX, fd);
     if (ce == null) {
       if (offset != 0) {
@@ -805,7 +709,6 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
 
   @Override
   public int flush(String path, FuseFileInfo fi) {
-<<<<<<< HEAD
     final long fd = fi.fh.get();
     return AlluxioFuseUtils.call(LOG, () -> flushInternal(path, fd), "Fuse.Flush", "path=%s,fd=%s",
         path, fd);
@@ -824,20 +727,6 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
         return -ErrorCodes.EIO();
       }
     }
-||||||| aa4190d72a
-    return AlluxioFuseUtils.call(LOG, () -> flushInternal(path, fi), "Fuse.Flush", "path=%s", path);
-  }
-
-  private int flushInternal(String path, FuseFileInfo fi) {
-    final long fd = fi.fh.get();
-=======
-    final long fd = fi.fh.get();
-    return AlluxioFuseUtils.call(LOG, () -> flushInternal(path, fd), "Fuse.Flush", "path=%s,fd=%s",
-        path, fd);
-  }
->>>>>>> f283775b269ec5c4d137e47d27a16a3558555c7b
-
-  private int flushInternal(String path, long fd) {
     FileInStream is = mOpenFileEntries.get(fd);
     CreateFileEntry<FileOutStream> ce = mCreateFileEntries.getFirstByField(ID_INDEX, fd);
     if (ce == null && is == null) {
@@ -868,15 +757,8 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
         "Fuse.Release", "path=%s,fd=%s", path, fd);
   }
 
-<<<<<<< HEAD
   private int releaseInternal(String path, long fd) {
     Semaphore semaphore = mPathLocks.get(path);
-||||||| aa4190d72a
-  private int releaseInternal(String path, FuseFileInfo fi) {
-    long fd = fi.fh.get();
-=======
-  private int releaseInternal(String path, long fd) {
->>>>>>> f283775b269ec5c4d137e47d27a16a3558555c7b
     try {
       ReadWriteOpenFileEntry oe = mReadWriteOpenFileEntries.getFirstByField(OPEN_ID_INDEX, fd);
       if (oe != null) {
@@ -1292,64 +1174,10 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
               BlockMasterInfo.BlockMasterInfoField.CAPACITY_BYTES,
               BlockMasterInfo.BlockMasterInfoField.FREE_BYTES,
               BlockMasterInfo.BlockMasterInfoField.USED_BYTES));
-<<<<<<< HEAD
-      BlockMasterInfo blockMasterInfo = blockClient.getBlockMasterInfo(blockMasterInfoFilter);
-
-      // although user may set different block size for different files,
-      // small block size can result more accurate compute.
-      long blockSize = 4L * Constants.KB;
-      // fs block size
-      // The size in bytes of the minimum unit of allocation on this file system
-      stbuf.f_bsize.set(blockSize);
-      // The preferred length of I/O requests for files on this file system.
-      stbuf.f_frsize.set(blockSize);
-      // total data blocks in fs
-      stbuf.f_blocks.set(blockMasterInfo.getCapacityBytes() / blockSize);
-      // free blocks in fs
-      long freeBlocks = blockMasterInfo.getFreeBytes() / blockSize;
-      stbuf.f_bfree.set(freeBlocks);
-      stbuf.f_bavail.set(freeBlocks);
-      // inode info in fs
-      stbuf.f_files.set(UNKNOWN_INODES);
-      stbuf.f_ffree.set(UNKNOWN_INODES);
-      stbuf.f_favail.set(UNKNOWN_INODES);
-      // max file name length
-      stbuf.f_namemax.set(MAX_NAME_LENGTH);
-    } catch (IOException e) {
-      LOG.error("Failed to statfs {}", path, e);
-      return -ErrorCodes.EIO();
-||||||| aa4190d72a
-      BlockMasterInfo blockMasterInfo = blockClient.getBlockMasterInfo(blockMasterInfoFilter);
-
-      // although user may set different block size for different files,
-      // small block size can result more accurate compute.
-      long blockSize = 4L * Constants.KB;
-      // fs block size
-      // The size in bytes of the minimum unit of allocation on this file system
-      stbuf.f_bsize.set(blockSize);
-      // The preferred length of I/O requests for files on this file system.
-      stbuf.f_frsize.set(blockSize);
-      // total data blocks in fs
-      stbuf.f_blocks.set(blockMasterInfo.getCapacityBytes() / blockSize);
-      // free blocks in fs
-      long freeBlocks = blockMasterInfo.getFreeBytes() / blockSize;
-      stbuf.f_bfree.set(freeBlocks);
-      stbuf.f_bavail.set(freeBlocks);
-      // inode info in fs
-      stbuf.f_files.set(UNKNOWN_INODES);
-      stbuf.f_ffree.set(UNKNOWN_INODES);
-      stbuf.f_favail.set(UNKNOWN_INODES);
-      // max file name length
-      stbuf.f_namemax.set(MAX_NAME_LENGTH);
-    } catch (IOException e) {
-      LOG.error("statfs({}) failed:", path, e);
-      return -ErrorCodes.EIO();
-=======
       return masterClientResource.get().getBlockMasterInfo(blockMasterInfoFilter);
     } catch (Throwable t) {
       LOG.error("Failed to acquire block master information", t);
       return null;
->>>>>>> f283775b269ec5c4d137e47d27a16a3558555c7b
     }
   }
 

@@ -5726,7 +5726,7 @@ public final class PropertyKey implements Comparable<PropertyKey> {
           .setScope(Scope.CLIENT)
           .build();
   public static final PropertyKey FUSE_WRITE_THROUGH_FILE_PATTERN =
-      new Builder(Name.FUSE_WRITE_THROUGH_FILE_PATTERN)
+      stringBuilder(Name.FUSE_WRITE_THROUGH_FILE_PATTERN)
           .setDescription("[Experimental] When specified, file with names matching this regexp "
               + "will be directly saved in UFS while skipping caching content in Alluxio. "
               + "Note that, currently it requires UFS to be a local path (like a NFS mount).")
@@ -5734,7 +5734,7 @@ public final class PropertyKey implements Comparable<PropertyKey> {
           .setScope(Scope.CLIENT)
           .build();
   public static final PropertyKey FUSE_WRITE_THROUGH_OPEN_TIMEOUT =
-      new Builder(Name.FUSE_WRITE_THROUGH_OPEN_TIMEOUT)
+      durationBuilder(Name.FUSE_WRITE_THROUGH_OPEN_TIMEOUT)
           .setDefaultValue("5min")
           .setDescription("Fuse open will wait for the async fuse release "
               + "before opening the file for reading or writing up to given timeout")
