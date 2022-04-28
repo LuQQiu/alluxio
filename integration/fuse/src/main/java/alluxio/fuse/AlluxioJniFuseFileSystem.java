@@ -19,6 +19,7 @@ import alluxio.client.file.FileInStream;
 import alluxio.client.file.FileOutStream;
 import alluxio.client.file.FileSystem;
 import alluxio.client.file.FileSystemContext;
+import alluxio.client.file.SeekableAlluxioFileOutStream;
 import alluxio.client.file.URIStatus;
 import alluxio.collections.IndexDefinition;
 import alluxio.collections.IndexedSet;
@@ -67,9 +68,11 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.regex.Pattern;
 import java.util.function.Supplier;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.ThreadSafe;
@@ -91,6 +94,7 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
   // is /users/foo, then an operation on /mnt/alluxio/bar will be translated on
   // an action on the URI alluxio://<master>:<port>/users/foo/bar
   private final Path mAlluxioRootPath;
+  private final String mUfsRootPath;
   private final String mMountPoint;
   private final String mFsName;
   // Caches the filesystem statistics for Fuse.statfs
@@ -103,6 +107,7 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
   private final int mMaxUmountWaitTime;
   private final AtomicLong mNextOpenFileId = new AtomicLong(0);
   private final Map<Long, FileInStream> mOpenFileEntries = new ConcurrentHashMap<>();
+  private final Map<String, Semaphore> mPathLocks = new ConcurrentHashMap<>();
   private final FuseShell mFuseShell;
   private static final IndexDefinition<CreateFileEntry<FileOutStream>, Long>
       ID_INDEX =
@@ -124,8 +129,28 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
       };
   private final IndexedSet<CreateFileEntry<FileOutStream>> mCreateFileEntries
       = new IndexedSet<>(ID_INDEX, PATH_INDEX);
+  private static final IndexDefinition<ReadWriteOpenFileEntry, Long>
+      OPEN_ID_INDEX =
+      new IndexDefinition<ReadWriteOpenFileEntry, Long>(true) {
+        @Override
+        public Long getFieldValue(ReadWriteOpenFileEntry o) {
+          return o.getId();
+        }
+      };
+  private static final IndexDefinition<ReadWriteOpenFileEntry, String>
+      OPEN_PATH_INDEX =
+      new IndexDefinition<ReadWriteOpenFileEntry, String>(true) {
+        @Override
+        public String getFieldValue(ReadWriteOpenFileEntry o) {
+          return o.getPath();
+        }
+      };
+  private final IndexedSet<ReadWriteOpenFileEntry> mReadWriteOpenFileEntries =
+      new IndexedSet<>(OPEN_ID_INDEX, OPEN_PATH_INDEX);
   private final boolean mIsUserGroupTranslation;
   private final AuthPolicy mAuthPolicy;
+  private final Pattern mWriteThroughFilePattern;
+  private final long mWriteThroughOpenTimeoutMs;
 
   /** df command will treat -1 as an unknown value. */
   @VisibleForTesting
@@ -194,6 +219,28 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
         LOG.error("Failed to set AlluxioJniFuseFileSystem log to debug level", e);
       }
     }
+    Pattern pattern = null;
+    if (conf.isSet(PropertyKey.FUSE_WRITE_THROUGH_FILE_PATTERN)) {
+      try {
+        pattern =
+            Pattern.compile(conf.getString(PropertyKey.FUSE_WRITE_THROUGH_FILE_PATTERN));
+      } catch (Exception e) {
+        LOG.error("Failed to parse property {} (={}). This property will be ignored",
+            PropertyKey.FUSE_WRITE_THROUGH_FILE_PATTERN,
+            conf.get(PropertyKey.FUSE_WRITE_THROUGH_FILE_PATTERN), e);
+      }
+    }
+    mWriteThroughFilePattern = pattern;
+    URIStatus status = null;
+    if (mWriteThroughFilePattern != null) {
+      try {
+        status = mFileSystem.getStatus(new AlluxioURI(opts.getMountAlluxioPath()));
+      } catch (Exception e) {
+        // ignore
+      }
+    }
+    mWriteThroughOpenTimeoutMs = conf.getMs(PropertyKey.FUSE_WRITE_THROUGH_OPEN_TIMEOUT);
+    mUfsRootPath = status != null ? status.getUfsPath() : null;
     MetricsSystem.registerGaugeIfAbsent(
         MetricsSystem.getMetricName(MetricKey.FUSE_READING_FILE_COUNT.getName()),
         mOpenFileEntries::size);
@@ -207,8 +254,10 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
 
   @Override
   public int create(String path, long mode, FuseFileInfo fi) {
+    final int flags = fi.flags.get();
+    OpenAction openAction = AlluxioFuseOpenUtils.getOpenAction(flags);
     return AlluxioFuseUtils.call(LOG, () -> createInternal(path, mode, fi),
-        "Fuse.Create", "path=%s,mode=%o", path, mode);
+        "Fuse.Create", "path=%s,mode=%o,flags=0x%x(%s)", path, mode, flags, openAction.name());
   }
 
   private int createInternal(String path, long mode, FuseFileInfo fi) {
@@ -219,10 +268,21 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
       return -ErrorCodes.ENAMETOOLONG();
     }
     try {
-      FileOutStream os = mFileSystem.createFile(uri,
-          CreateFilePOptions.newBuilder()
-              .setMode(new Mode((short) mode).toProto())
-              .build());
+      FileOutStream os;
+      if (mWriteThroughFilePattern != null
+          && mWriteThroughFilePattern.matcher(path).matches()) {
+        mPathLocks.putIfAbsent(path, new Semaphore(1));
+        if (!mPathLocks.get(path).tryAcquire(mWriteThroughOpenTimeoutMs, TimeUnit.MILLISECONDS)) {
+          LOG.error("Failed to create {}: failed to acquire write lock after {} ms",
+              path, mWriteThroughOpenTimeoutMs);
+          return -ErrorCodes.EIO();
+        }
+        os = SeekableAlluxioFileOutStream.create(
+            uri, Paths.get(mUfsRootPath, path).toAbsolutePath().toString(), mFileSystem);
+      } else {
+        os = mFileSystem.createFile(uri,
+            CreateFilePOptions.newBuilder().setMode(new Mode((short) mode).toProto()).build());
+      }
       long fid = mNextOpenFileId.getAndIncrement();
       mCreateFileEntries.add(new CreateFileEntry<>(fid, path, os));
       fi.fh.set(fid);
@@ -243,6 +303,10 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
   private int getattrInternal(String path, FileStat stat) {
     final AlluxioURI uri = mPathResolverCache.getUnchecked(path);
     try {
+      if (mWriteThroughFilePattern != null
+          && mWriteThroughFilePattern.matcher(path).matches()) {
+        return AlluxioFuseUtils.getLocalFileStatus(Paths.get(mUfsRootPath, path), stat);
+      }
       URIStatus status;
       // Handle special metadata cache operation
       if (mConf.getBoolean(PropertyKey.FUSE_SPECIAL_COMMAND_ENABLED)
@@ -253,16 +317,18 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
         status = mFileSystem.getStatus(uri);
       }
       long size = status.getLength();
-      if (!status.isCompleted()) {
-        if (mCreateFileEntries.contains(PATH_INDEX, path)) {
-          // Alluxio master will not update file length until file is completed
-          // get file length from the current output stream
-          CreateFileEntry<FileOutStream> ce = mCreateFileEntries.getFirstByField(PATH_INDEX, path);
-          if (ce != null) {
-            FileOutStream os = ce.getOut();
-            size = os.getBytesWritten();
-          }
-        } else if (!AlluxioFuseUtils.waitForFileCompleted(mFileSystem, uri)) {
+      // Regardless if file is complete, as long as it is in CreateFileEntries, consulting the
+      // OutputStream for file length
+      if (mCreateFileEntries.contains(PATH_INDEX, path)) {
+        // Alluxio master will not update file length until file is completed
+        // get file length from the current output stream
+        CreateFileEntry<FileOutStream> ce = mCreateFileEntries.getFirstByField(PATH_INDEX, path);
+        if (ce != null) {
+          FileOutStream os = ce.getOut();
+          size = os.getBytesWritten();
+        }
+      } else if (!status.isCompleted()) {
+        if (!AlluxioFuseUtils.waitForFileCompleted(mFileSystem, uri)) {
           // Always block waiting for file to be completed except when the file is writing
           // We do not want to block the writing process
           LOG.error("File {} is not completed", path);
@@ -343,6 +409,7 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
       FuseFillDir.apply(filter, buff, "..", null, 0);
 
       mFileSystem.iterateStatus(uri, file -> {
+        LOG.debug("Get file name \"{}\" in readdir", file.getName());
         FuseFillDir.apply(filter, buff, file.getName(), null, 0);
       });
     } catch (Throwable e) {
@@ -369,6 +436,31 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
           + "Cannot open directory in fuse.open().",
           path, flags));
       return -ErrorCodes.EOPNOTSUPP();
+    }
+
+    if (mWriteThroughFilePattern != null
+        && mWriteThroughFilePattern.matcher(path).matches()
+        && openAction == OpenAction.READ_WRITE) {
+      try {
+        mPathLocks.putIfAbsent(path, new Semaphore(1));
+        if (!mPathLocks.get(path).tryAcquire(mWriteThroughOpenTimeoutMs, TimeUnit.MILLISECONDS)) {
+          LOG.error("Failed to open {}: failed to acquire write lock after {} ms",
+              path, mWriteThroughOpenTimeoutMs);
+          return -ErrorCodes.EIO();
+        }
+        SeekableAlluxioFileOutStream stream = SeekableAlluxioFileOutStream.open(
+            uri, Paths.get(mUfsRootPath, path).toAbsolutePath().toString(), mFileSystem);
+        long fd = mNextOpenFileId.getAndIncrement();
+        fi.fh.set(fd);
+        mReadWriteOpenFileEntries.add(new ReadWriteOpenFileEntry(fd, path, stream));
+        return 0;
+      } catch (InterruptedException ie) {
+        LOG.error("Fail to open {}: interrupted", path);
+        Thread.currentThread().interrupt();
+      } catch (Throwable e) {
+        LOG.error("Failed to open {}", path, e);
+        return -ErrorCodes.EIO();
+      }
     }
 
     boolean truncate = AlluxioFuseOpenUtils.containsTruncate(flags);
@@ -436,28 +528,45 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
 
   @Override
   public int read(String path, ByteBuffer buf, long size, long offset, FuseFileInfo fi) {
-    final long fd = fi.fh.get();
-    return AlluxioFuseUtils.call(LOG, () -> readInternal(path, buf, size, offset, fi, fd),
-        "Fuse.Read", "path=%s,fd=%d,size=%d,offset=%d",
-        path, fd, size, offset);
+    return AlluxioFuseUtils.call(LOG, () -> readInternal(path, buf, size, offset, fi),
+        "Fuse.Read", "path=%s,buf=%s,size=%d,offset=%d", path, buf, size, offset);
   }
 
-  private int readInternal(
-      String path, ByteBuffer buf, long size, long offset, FuseFileInfo fi, long fd) {
+  private int readInternal(String path, ByteBuffer buf, long size, long offset, FuseFileInfo fi) {
+    final long fd = fi.fh.get();
+    final int flags = fi.flags.get();
     MetricsSystem.counter(MetricKey.FUSE_BYTES_TO_READ.getName()).inc(size);
     final int sz = (int) size;
     int nread = 0;
     int rd = 0;
     try {
+      ReadWriteOpenFileEntry oe = mReadWriteOpenFileEntries.getFirstByField(OPEN_ID_INDEX, fd);
+      if (oe != null) {
+        synchronized (oe) {
+          oe.getOut().seek(offset);
+          return oe.getOut().read(buf, size);
+        }
+      }
+      CreateFileEntry<FileOutStream> ce = mCreateFileEntries.getFirstByField(ID_INDEX, fd);
+      if (ce != null) {
+        FileOutStream out = ce.getOut();
+        if (out instanceof SeekableAlluxioFileOutStream) {
+          SeekableAlluxioFileOutStream stream = (SeekableAlluxioFileOutStream) out;
+          synchronized (ce) {
+            stream.seek(offset);
+            return stream.read(buf, size);
+          }
+        }
+      }
+
       FileInStream is = mOpenFileEntries.get(fd);
       if (is == null) {
-        final int flags = fi.flags.get();
         if (AlluxioFuseOpenUtils.getOpenAction(flags) == OpenAction.READ_WRITE) {
           LOG.error(String.format("Alluxio only supports read-only or write-only. "
-              + "Path %s is opened with flag 0x%x for reading and writing concurrently. "
+              + "Path %s (fd %d) is opened with flag 0x%x for reading and writing concurrently. "
               + "Cannot find stream for reading may because "
               + "open with O_RDWR is treated as write-only. ",
-              path, flags));
+              path, fd, flags));
         } else {
           LOG.error("Failed to read {}: Cannot find fd {}", path, fd);
         }
@@ -491,19 +600,30 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
 
   @Override
   public int write(String path, ByteBuffer buf, long size, long offset, FuseFileInfo fi) {
-    final long fd = fi.fh.get();
-    return AlluxioFuseUtils.call(LOG, () -> writeInternal(path, buf, size, offset, fi, fd),
-        "Fuse.Write", "path=%s,fd=%d,size=%d,offset=%d",
-        path, fd, size, offset);
+    return AlluxioFuseUtils.call(LOG, () -> writeInternal(path, buf, size, offset, fi),
+        "Fuse.Write", "path=%s,buf=%s,size=%d,offset=%d", path, buf, size, offset);
   }
 
-  private int writeInternal(
-      String path, ByteBuffer buf, long size, long offset, FuseFileInfo fi, long fd) {
+  private int writeInternal(String path, ByteBuffer buf, long size, long offset, FuseFileInfo fi) {
     if (size > Integer.MAX_VALUE) {
       LOG.error("Failed to write {}: Cannot write more than {}", path, Integer.MAX_VALUE);
       return ErrorCodes.EIO();
     }
     final int sz = (int) size;
+    final long fd = fi.fh.get();
+    ReadWriteOpenFileEntry oe = mReadWriteOpenFileEntries.getFirstByField(OPEN_ID_INDEX, fd);
+    if (oe != null) {
+      try {
+        synchronized (oe) {
+          oe.getOut().seek(offset);
+          oe.getOut().write(buf, size);
+        }
+        return sz;
+      } catch (IOException e) {
+        LOG.error("Failed to write {}", path, e);
+        return -ErrorCodes.EIO();
+      }
+    }
     CreateFileEntry<FileOutStream> ce = mCreateFileEntries.getFirstByField(ID_INDEX, fd);
     if (ce == null) {
       if (offset != 0) {
@@ -558,12 +678,18 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
 
     FileOutStream os = ce.getOut();
     long bytesWritten = os.getBytesWritten();
-    if (offset != bytesWritten && offset + sz > bytesWritten) {
+    if (os instanceof SeekableAlluxioFileOutStream) {
+      try {
+        ((SeekableAlluxioFileOutStream) os).seek(offset);
+      } catch (IOException e) {
+        LOG.error("Failed to seek to offset {} for file {}.", offset, path, e);
+        return -ErrorCodes.EIO();
+      }
+    } else if (offset != bytesWritten && offset + sz > bytesWritten) {
       LOG.error("Only sequential write is supported. Cannot write bytes of size {} to offset {} "
           + "when {} bytes have written to path {}", size, offset, bytesWritten, path);
       return -ErrorCodes.EIO();
-    }
-    if (offset + sz <= bytesWritten) {
+    } else if (offset + sz <= bytesWritten) {
       LOG.warn("Skip writting to file {} offset={} size={} when {} bytes has written to file",
           path, offset, sz, bytesWritten);
       // To fulfill vim :wq
@@ -589,6 +715,18 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
   }
 
   private int flushInternal(String path, long fd) {
+    ReadWriteOpenFileEntry oe = mReadWriteOpenFileEntries.getFirstByField(OPEN_ID_INDEX, fd);
+    if (oe != null) {
+      try {
+        synchronized (oe) {
+          oe.getOut().flush();
+        }
+        return 0;
+      } catch (Throwable t) {
+        LOG.error("Failed to flush {}", path, t);
+        return -ErrorCodes.EIO();
+      }
+    }
     FileInStream is = mOpenFileEntries.get(fd);
     CreateFileEntry<FileOutStream> ce = mCreateFileEntries.getFirstByField(ID_INDEX, fd);
     if (ce == null && is == null) {
@@ -620,7 +758,16 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
   }
 
   private int releaseInternal(String path, long fd) {
+    Semaphore semaphore = mPathLocks.get(path);
     try {
+      ReadWriteOpenFileEntry oe = mReadWriteOpenFileEntries.getFirstByField(OPEN_ID_INDEX, fd);
+      if (oe != null) {
+        mReadWriteOpenFileEntries.remove(oe);
+        synchronized (oe) {
+          oe.getOut().close();
+        }
+        return 0;
+      }
       FileInStream is = mOpenFileEntries.remove(fd);
       CreateFileEntry<FileOutStream> ce = mCreateFileEntries.getFirstByField(ID_INDEX, fd);
       if (is == null && ce == null) {
@@ -643,6 +790,13 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
     } catch (Throwable e) {
       LOG.error("Failed to release {}", path, e);
       return -ErrorCodes.EIO();
+    } finally {
+      if (semaphore != null) {
+        semaphore.release();
+        if (!semaphore.hasQueuedThreads() && semaphore.availablePermits() == 1) {
+          mPathLocks.remove(path);
+        }
+      }
     }
     return 0;
   }
@@ -915,6 +1069,26 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
     if (status.isCompleted()) {
       if (size == status.getLength()) {
         return 0;
+      }
+      try {
+        if (ce != null && ce.getOut() instanceof SeekableAlluxioFileOutStream) {
+          SeekableAlluxioFileOutStream stream = (SeekableAlluxioFileOutStream) ce.getOut();
+          synchronized (ce) {
+            stream.setLength(size);
+          }
+          return 0;
+        }
+        ReadWriteOpenFileEntry oe = mReadWriteOpenFileEntries
+            .getFirstByField(OPEN_PATH_INDEX, path);
+        if (oe != null) {
+          synchronized (oe) {
+            oe.getOut().setLength(size);
+          }
+          return 0;
+        }
+      } catch (IOException e) {
+        LOG.error("Failed to truncate {} to non-zero size {}", path, size, e);
+        return -ErrorCodes.EIO();
       }
       LOG.error("Cannot truncate file {} to non-zero size {}", path, size);
       return -ErrorCodes.EOPNOTSUPP();

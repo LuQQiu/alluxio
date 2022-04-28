@@ -5725,6 +5725,23 @@ public final class PropertyKey implements Comparable<PropertyKey> {
               + "will drop the metadata cache of path '/mnt/alluxio-fuse/path/to/be/cleaned/'")
           .setScope(Scope.CLIENT)
           .build();
+  public static final PropertyKey FUSE_WRITE_THROUGH_FILE_PATTERN =
+      stringBuilder(Name.FUSE_WRITE_THROUGH_FILE_PATTERN)
+          .setDescription("[Experimental] When specified, file with names matching this regexp "
+              + "will be directly saved in UFS while skipping caching content in Alluxio. "
+              + "Note that, currently it requires UFS to be a local path (like a NFS mount).")
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.IGNORE)
+          .setScope(Scope.CLIENT)
+          .build();
+  public static final PropertyKey FUSE_WRITE_THROUGH_OPEN_TIMEOUT =
+      durationBuilder(Name.FUSE_WRITE_THROUGH_OPEN_TIMEOUT)
+          .setDefaultValue("5min")
+          .setDescription("Fuse open will wait for the async fuse release "
+              + "before opening the file for reading or writing up to given timeout")
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.IGNORE)
+          .setScope(Scope.CLIENT)
+          .build();
+
   //
   // Standalone FUSE process related properties
   //
@@ -7358,6 +7375,11 @@ public final class PropertyKey implements Comparable<PropertyKey> {
         "alluxio.fuse.user.group.translation.enabled";
     public static final String FUSE_SPECIAL_COMMAND_ENABLED =
         "alluxio.fuse.special.command.enabled";
+    public static final String FUSE_WRITE_THROUGH_FILE_PATTERN =
+        "alluxio.fuse.write.through.file.pattern";
+    public static final String FUSE_WRITE_THROUGH_OPEN_TIMEOUT =
+        "alluxio.fuse.write.through.open.timeout";
+
     //
     // Standalone FUSE process related properties
     //

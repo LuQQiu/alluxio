@@ -11,6 +11,10 @@
 
 package alluxio.client.fuse;
 
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertTrue;
+
+import alluxio.AlluxioURI;
 import alluxio.client.file.FileSystem;
 import alluxio.client.file.FileSystemContext;
 import alluxio.conf.InstancedConfiguration;
@@ -19,6 +23,7 @@ import alluxio.conf.ServerConfiguration;
 import alluxio.fuse.AlluxioJniFuseFileSystem;
 import alluxio.fuse.FuseMountConfig;
 import alluxio.jnifuse.struct.FuseFileInfo;
+import alluxio.util.ShellUtils;
 import alluxio.util.io.BufferUtils;
 
 import com.google.common.collect.ImmutableList;
@@ -27,7 +32,9 @@ import org.junit.Assert;
 import org.junit.Test;
 
 import java.io.Closeable;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 
 /**
@@ -40,6 +47,7 @@ public class JNIFuseIntegrationTest extends AbstractFuseIntegrationTest {
   @Override
   public void configure() {
     ServerConfiguration.set(PropertyKey.FUSE_JNIFUSE_ENABLED, true);
+    ServerConfiguration.set(PropertyKey.FUSE_WRITE_THROUGH_FILE_PATTERN, ".*\\.through");
   }
 
   @Override
@@ -277,6 +285,89 @@ public class JNIFuseIntegrationTest extends AbstractFuseIntegrationTest {
         Assert.assertEquals(0, mFuseFileSystem.release(testFile, info));
       }
       readAndValidateTestFile(testFile, info, FILE_LEN);
+    }
+  }
+
+  @Test
+  public void readWriteOpen() throws Exception {
+    String testFile = "/test.through";
+    String fuseFsFile = mMountPoint + testFile;
+    String content = "Alluxio Test File Content";
+    String newContent = "Alluxio New Test File Content";
+    try (FileOutputStream stream = new FileOutputStream(fuseFsFile)) {
+      stream.write(content.getBytes());
+    }
+    assertTrue(mFileSystem.exists(new AlluxioURI(testFile)));
+    try (RandomAccessFile file = new RandomAccessFile(fuseFsFile, "rw")) {
+      byte[] data = new byte[content.getBytes().length];
+      file.seek(0);
+      file.read(data);
+      assertArrayEquals(content.getBytes(), data);
+      // rewrite data
+      file.seek(0);
+      file.write(newContent.getBytes());
+      // check data written
+      byte[] data2 = new byte[newContent.getBytes().length];
+      file.seek(0);
+      file.read(data2);
+      assertArrayEquals(newContent.getBytes(), data2);
+    }
+  }
+
+  @Test
+  public void readWriteOpenLs() throws Exception {
+    String testFile = "/readWriteOpenLs.through";
+    String fuseFsFile = mMountPoint + testFile;
+    String content = "Alluxio Test File Content";
+    String newContent = "Alluxio New Test File Content";
+    try (java.io.FileOutputStream stream = new java.io.FileOutputStream(fuseFsFile)) {
+      stream.write(content.getBytes());
+    }
+    Assert.assertTrue(mFileSystem.exists(new alluxio.AlluxioURI(testFile)));
+    try (java.io.RandomAccessFile file = new java.io.RandomAccessFile(fuseFsFile, "rw")) {
+      byte[] data = new byte[content.getBytes().length];
+      file.seek(0);
+      file.read(data);
+      Assert.assertArrayEquals(content.getBytes(), data);
+      String out = ShellUtils.execCommand("ls", "-al", mMountPoint + testFile);
+      Assert.assertTrue(out.contains(String.valueOf(content.length())));
+      // rewrite data
+      file.seek(0);
+      file.write(newContent.getBytes());
+      // check data written
+      byte[] data2 = new byte[newContent.getBytes().length];
+      file.seek(0);
+      file.read(data2);
+      Assert.assertArrayEquals(newContent.getBytes(), data2);
+      out = ShellUtils.execCommand("ls", "-al", mMountPoint + testFile);
+      Assert.assertTrue(out.contains(String.valueOf(newContent.length())));
+    }
+  }
+
+  @Test
+  public void readWriteOpenTruncate() throws Exception {
+    String testFile = "/readWriteOpenTruncate.through";
+    String fuseFsFile = mMountPoint + testFile;
+    String content = "Alluxio Test File Content";
+    String newContent = "Alluxio New Test File Content";
+    try (java.io.FileOutputStream stream = new java.io.FileOutputStream(fuseFsFile)) {
+      stream.write(content.getBytes());
+    }
+    Assert.assertTrue(mFileSystem.exists(new alluxio.AlluxioURI(testFile)));
+    try (java.io.RandomAccessFile file = new java.io.RandomAccessFile(fuseFsFile, "rw")) {
+      long oldFileLen = content.getBytes().length;
+      long truncateFileLen = oldFileLen / 2;
+      file.setLength(truncateFileLen);
+      Assert.assertEquals(truncateFileLen, file.length());
+      // rewrite data
+      file.seek(0);
+      file.write(newContent.getBytes());
+      // check data written
+      long newFileLen = newContent.getBytes().length;
+      Assert.assertEquals(newFileLen, file.length());
+      truncateFileLen = newFileLen / 2;
+      file.setLength(truncateFileLen);
+      Assert.assertEquals(truncateFileLen, file.length());
     }
   }
 
