@@ -19,37 +19,20 @@ import com.google.common.base.Objects;
 import javax.annotation.concurrent.NotThreadSafe;
 
 /**
- * Method options for deleting a directory in UnderFileSystem.
+ * Method options for deleting a file in UnderFileSystem.
  */
 @PublicApi
 @NotThreadSafe
-public final class DeleteDirectoryOptions {
-  // Whether to delete a directory with children
-  private boolean mRecursive;
+public final class DeleteFileOptions {
   // Ensure consistency. When true, eventual consistency issues
   // in workloads like delete-then-create will be taken care of
   private boolean mEnsureConsistency;
 
   /**
-   * @return the default {@link DeleteDirectoryOptions}
+   * @return the default {@link DeleteFileOptions}
    */
-  public static DeleteDirectoryOptions defaults() {
-    return new DeleteDirectoryOptions();
-  }
-
-  /**
-   * Constructs a default {@link DeleteDirectoryOptions}.
-   */
-  private DeleteDirectoryOptions() {
-    mRecursive = false;
-    mEnsureConsistency = false;
-  }
-
-  /**
-   * @return whether to delete a non-empty directory
-   */
-  public boolean isRecursive() {
-    return mRecursive;
+  public static DeleteFileOptions defaults() {
+    return new DeleteFileOptions();
   }
 
   /**
@@ -60,24 +43,13 @@ public final class DeleteDirectoryOptions {
   }
 
   /**
-   * Sets recursive delete.
-   *
-   * @param recursive whether to delete recursively
-   * @return the updated option object
-   */
-  public DeleteDirectoryOptions setRecursive(boolean recursive) {
-    mRecursive = recursive;
-    return this;
-  }
-
-  /**
    * Sets consistency guarantees. When true, eventual consistency issues
    * in workloads like create-them-delete will be taken care of.
    *
    * @param ensureConsistency whether to ensure the data consistency
    * @return the updated object
    */
-  public DeleteDirectoryOptions setEnsureConsistency(boolean ensureConsistency) {
+  public DeleteFileOptions setEnsureConsistency(boolean ensureConsistency) {
     mEnsureConsistency = ensureConsistency;
     return this;
   }
@@ -87,23 +59,21 @@ public final class DeleteDirectoryOptions {
     if (this == o) {
       return true;
     }
-    if (!(o instanceof DeleteDirectoryOptions)) {
+    if (!(o instanceof DeleteFileOptions)) {
       return false;
     }
-    DeleteDirectoryOptions that = (DeleteDirectoryOptions) o;
-    return Objects.equal(mRecursive, that.mRecursive)
-        && (mEnsureConsistency == that.mEnsureConsistency);
+    DeleteFileOptions that = (DeleteFileOptions) o;
+    return mEnsureConsistency == that.mEnsureConsistency;
   }
 
   @Override
   public int hashCode() {
-    return Objects.hashCode(mRecursive, mEnsureConsistency);
+    return Objects.hashCode(mEnsureConsistency);
   }
 
   @Override
   public String toString() {
     return MoreObjects.toStringHelper(this)
-        .add("recursive", mRecursive)
         .add("ensureConsistency", mEnsureConsistency)
         .toString();
   }

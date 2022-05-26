@@ -23,6 +23,7 @@ import alluxio.security.authorization.AclEntry;
 import alluxio.security.authorization.DefaultAccessControlList;
 import alluxio.underfs.options.CreateOptions;
 import alluxio.underfs.options.DeleteDirectoryOptions;
+import alluxio.underfs.options.DeleteFileOptions;
 import alluxio.underfs.options.FileLocationOptions;
 import alluxio.underfs.options.ListOptions;
 import alluxio.underfs.options.MkdirsOptions;
@@ -252,13 +253,11 @@ public interface UnderFileSystem extends Closeable {
   /**
    * Deletes a file from the under file system with the indicated name.
    *
-   * Similar to {@link #deleteFile(String)} but
-   * deals with the create-then-delete eventual consistency issue.
-   *
    * @param path of the file to delete
+   * @param options the options for delete
    * @return true if file was found and deleted, false otherwise
    */
-  boolean deleteExistingFile(String path) throws IOException;
+  boolean deleteFile(String path, DeleteFileOptions options) throws IOException;
 
   /**
    * Checks if a file or directory exists in under file system.

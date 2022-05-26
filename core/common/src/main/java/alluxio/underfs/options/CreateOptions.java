@@ -109,6 +109,13 @@ public final class CreateOptions {
   }
 
   /**
+   * @return true, if consistency is guaranteed
+   */
+  public boolean isEnsureConsistency() {
+    return mEnsureConsistency;
+  }
+
+  /**
    * Sets an initial acl for the newly created file.
    *
    * @param acl option to set the ACL after creation
@@ -203,7 +210,8 @@ public final class CreateOptions {
 
   @Override
   public int hashCode() {
-    return Objects.hashCode(mAcl, mCreateParent, mEnsureAtomic, mOwner, mGroup, mMode);
+    return Objects.hashCode(mAcl, mCreateParent, mEnsureAtomic, mEnsureConsistency,
+        mOwner, mGroup, mMode);
   }
 
   @Override

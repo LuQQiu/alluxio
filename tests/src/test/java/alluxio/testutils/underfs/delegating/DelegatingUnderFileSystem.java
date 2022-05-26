@@ -26,6 +26,7 @@ import alluxio.underfs.UfsStatus;
 import alluxio.underfs.UnderFileSystem;
 import alluxio.underfs.options.CreateOptions;
 import alluxio.underfs.options.DeleteDirectoryOptions;
+import alluxio.underfs.options.DeleteFileOptions;
 import alluxio.underfs.options.FileLocationOptions;
 import alluxio.underfs.options.ListOptions;
 import alluxio.underfs.options.MkdirsOptions;
@@ -96,8 +97,8 @@ public class DelegatingUnderFileSystem implements UnderFileSystem {
   }
 
   @Override
-  public boolean deleteExistingFile(String path) throws IOException {
-    return mUfs.deleteExistingFile(path);
+  public boolean deleteFile(String path, DeleteFileOptions options) throws IOException {
+    return mUfs.deleteFile(path, options);
   }
 
   @Override

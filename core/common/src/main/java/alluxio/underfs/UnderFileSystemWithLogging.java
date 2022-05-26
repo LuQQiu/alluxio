@@ -27,6 +27,7 @@ import alluxio.security.authorization.AclEntry;
 import alluxio.security.authorization.DefaultAccessControlList;
 import alluxio.underfs.options.CreateOptions;
 import alluxio.underfs.options.DeleteDirectoryOptions;
+import alluxio.underfs.options.DeleteFileOptions;
 import alluxio.underfs.options.FileLocationOptions;
 import alluxio.underfs.options.ListOptions;
 import alluxio.underfs.options.MkdirsOptions;
@@ -256,21 +257,22 @@ public class UnderFileSystemWithLogging implements UnderFileSystem {
   }
 
   @Override
-  public boolean deleteExistingFile(final String path) throws IOException {
+  public boolean deleteFile(final String path, final DeleteFileOptions options)
+      throws IOException {
     return call(new UfsCallable<Boolean>() {
       @Override
       public Boolean call() throws IOException {
-        return mUnderFileSystem.deleteExistingFile(path);
+        return mUnderFileSystem.deleteFile(path, options);
       }
 
       @Override
       public String methodName() {
-        return "DeleteExistingFile";
+        return "DeleteFile";
       }
 
       @Override
       public String toString() {
-        return String.format("path=%s", path);
+        return String.format("path=%s, options=%s", path, options);
       }
     });
   }

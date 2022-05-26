@@ -34,11 +34,6 @@ public abstract class ConsistentUnderFileSystem extends BaseUnderFileSystem {
   }
 
   @Override
-  public boolean deleteExistingFile(String path) throws IOException {
-    return deleteFile(path);
-  }
-
-  @Override
   public  UfsDirectoryStatus getExistingDirectoryStatus(String path) throws IOException {
     return getDirectoryStatus(path);
   }

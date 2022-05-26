@@ -25,6 +25,7 @@ import alluxio.underfs.UnderFileSystem;
 import alluxio.underfs.UnderFileSystemConfiguration;
 import alluxio.underfs.options.CreateOptions;
 import alluxio.underfs.options.DeleteDirectoryOptions;
+import alluxio.underfs.options.DeleteFileOptions;
 import alluxio.underfs.options.FileLocationOptions;
 import alluxio.underfs.options.MkdirsOptions;
 import alluxio.underfs.options.OpenOptions;
@@ -153,7 +154,7 @@ public class LocalUnderFileSystem extends ConsistentUnderFileSystem
   }
 
   @Override
-  public boolean deleteFile(String path) throws IOException {
+  public boolean deleteFile(String path, DeleteFileOptions options) throws IOException {
     path = stripPath(path);
     File file = new File(path);
     return file.isFile() && file.delete();

@@ -21,6 +21,7 @@ import alluxio.retry.ExponentialBackoffRetry;
 import alluxio.retry.RetryPolicy;
 import alluxio.underfs.options.CreateOptions;
 import alluxio.underfs.options.DeleteDirectoryOptions;
+import alluxio.underfs.options.DeleteFileOptions;
 import alluxio.underfs.options.FileLocationOptions;
 import alluxio.underfs.options.ListOptions;
 import alluxio.underfs.options.MkdirsOptions;
@@ -383,24 +384,9 @@ public abstract class ObjectUnderFileSystem extends BaseUnderFileSystem {
   }
 
   @Override
-  public OutputStream createNonexistingFile(String path) throws IOException {
-    return retryOnException(() -> create(path), () -> "create file " + path);
-  }
-
-  @Override
-  public OutputStream createNonexistingFile(String path, CreateOptions options) throws IOException {
-    return retryOnException(() -> create(path, options),
-        () -> "create file " + path + " with options " + options);
-  }
-
-  @Override
-  public boolean deleteFile(String path) throws IOException {
+  public boolean deleteFile(String path, DeleteFileOptions options) throws IOException {
+    // TODO(lu) update the retry logic based on options
     return deleteObject(stripPrefixIfPresent(path));
-  }
-
-  @Override
-  public boolean deleteExistingFile(String path) throws IOException {
-    return retryOnFalse(() -> deleteFile(path), () -> "delete existing file " + path);
   }
 
   @Override

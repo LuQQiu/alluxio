@@ -19,6 +19,7 @@ import alluxio.underfs.UfsStatus;
 import alluxio.underfs.UnderFileSystem;
 import alluxio.underfs.options.CreateOptions;
 import alluxio.underfs.options.DeleteDirectoryOptions;
+import alluxio.underfs.options.DeleteFileOptions;
 import alluxio.underfs.options.ListOptions;
 import alluxio.underfs.options.MkdirsOptions;
 import alluxio.underfs.options.OpenOptions;
@@ -388,7 +389,7 @@ public final class UnderFileSystemCommonOperations {
       throw new IOException(IS_FAIL_CHECK_SHOULD_SUCCEED);
     }
 
-    mUfs.deleteExistingFile(testFile);
+    mUfs.deleteFile(testFile, DeleteFileOptions.defaults().setEnsureConsistency(true));
     if (mUfs.exists(testFile)) {
       throw new IOException(FILE_EXISTS_CHECK_SHOULD_FAILED);
     }

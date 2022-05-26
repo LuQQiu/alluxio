@@ -27,6 +27,7 @@ import alluxio.underfs.UfsStatus;
 import alluxio.underfs.UnderFileSystem;
 import alluxio.underfs.options.CreateOptions;
 import alluxio.underfs.options.DeleteDirectoryOptions;
+import alluxio.underfs.options.DeleteFileOptions;
 import alluxio.underfs.options.FileLocationOptions;
 import alluxio.underfs.options.ListOptions;
 import alluxio.underfs.options.MkdirsOptions;
@@ -97,26 +98,6 @@ public class ManagedBlockingUfsForwarder implements UnderFileSystem {
   }
 
   @Override
-  public OutputStream createNonexistingFile(String path) throws IOException {
-    return new ManagedBlockingUfsMethod<OutputStream>() {
-      @Override
-      public OutputStream execute() throws IOException {
-        return mUfs.createNonexistingFile(path);
-      }
-    }.get();
-  }
-
-  @Override
-  public OutputStream createNonexistingFile(String path, CreateOptions options) throws IOException {
-    return new ManagedBlockingUfsMethod<OutputStream>() {
-      @Override
-      public OutputStream execute() throws IOException {
-        return mUfs.createNonexistingFile(path, options);
-      }
-    }.get();
-  }
-
-  @Override
   public boolean deleteDirectory(String path) throws IOException {
     return new ManagedBlockingUfsMethod<Boolean>() {
       @Override
@@ -147,11 +128,11 @@ public class ManagedBlockingUfsForwarder implements UnderFileSystem {
   }
 
   @Override
-  public boolean deleteExistingFile(String path) throws IOException {
+  public boolean deleteFile(String path, DeleteFileOptions options) throws IOException {
     return new ManagedBlockingUfsMethod<Boolean>() {
       @Override
       public Boolean execute() throws IOException {
-        return mUfs.deleteExistingFile(path);
+        return mUfs.deleteFile(path);
       }
     }.get();
   }
