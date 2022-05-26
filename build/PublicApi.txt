@@ -22,7 +22,7 @@ core/common/src/main/java/alluxio/underfs/UnderFileSystem.java
 core/common/src/main/java/alluxio/underfs/UnderFileSystemConfiguration.java
 core/common/src/main/java/alluxio/underfs/UnderFileSystemFactory.java
 core/common/src/main/java/alluxio/underfs/options/CreateOptions.java
-core/common/src/main/java/alluxio/underfs/options/DeleteOptions.java
+core/common/src/main/java/alluxio/underfs/options/DeleteDirectoryOptions.java
 core/common/src/main/java/alluxio/underfs/options/FileLocationOptions.java
 core/common/src/main/java/alluxio/underfs/options/ListOptions.java
 core/common/src/main/java/alluxio/underfs/options/MkdirsOptions.java

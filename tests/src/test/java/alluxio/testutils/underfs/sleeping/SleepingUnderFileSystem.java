@@ -19,7 +19,7 @@ import alluxio.underfs.UfsStatus;
 import alluxio.underfs.UnderFileSystemConfiguration;
 import alluxio.underfs.local.LocalUnderFileSystem;
 import alluxio.underfs.options.CreateOptions;
-import alluxio.underfs.options.DeleteOptions;
+import alluxio.underfs.options.DeleteDirectoryOptions;
 import alluxio.underfs.options.FileLocationOptions;
 import alluxio.underfs.options.ListOptions;
 import alluxio.underfs.options.MkdirsOptions;
@@ -89,7 +89,7 @@ public class SleepingUnderFileSystem extends LocalUnderFileSystem {
   }
 
   @Override
-  public boolean deleteDirectory(String path, DeleteOptions options) throws IOException {
+  public boolean deleteDirectory(String path, DeleteDirectoryOptions options) throws IOException {
     sleepIfNecessary(mOptions.getDeleteDirectoryMs());
     return super.deleteDirectory(cleanPath(path), options);
   }

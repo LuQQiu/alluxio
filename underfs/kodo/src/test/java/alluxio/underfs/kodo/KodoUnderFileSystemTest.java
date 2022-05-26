@@ -15,7 +15,7 @@ import alluxio.AlluxioURI;
 import alluxio.ConfigurationTestUtils;
 import alluxio.conf.InstancedConfiguration;
 import alluxio.underfs.UnderFileSystemConfiguration;
-import alluxio.underfs.options.DeleteOptions;
+import alluxio.underfs.options.DeleteDirectoryOptions;
 
 import com.qiniu.common.QiniuException;
 import org.junit.Assert;
@@ -52,7 +52,7 @@ public class KodoUnderFileSystemTest {
   }
 
   /**
-   * Test case for {@link KodoUnderFileSystem#deleteDirectory(String, DeleteOptions)}.
+   * Test case for {@link KodoUnderFileSystem#deleteDirectory(String, DeleteDirectoryOptions)}.
    */
   @Test
   public void deleteNonRecursiveOnServiceException() throws IOException {
@@ -61,7 +61,8 @@ public class KodoUnderFileSystemTest {
         .thenThrow(QiniuException.class);
 
     boolean result =
-        mKodoUnderFileSystem.deleteDirectory(PATH, DeleteOptions.defaults().setRecursive(false));
+        mKodoUnderFileSystem.deleteDirectory(PATH,
+            DeleteDirectoryOptions.defaults().setRecursive(false));
 
     Assert.assertFalse(result);
   }
@@ -72,7 +73,8 @@ public class KodoUnderFileSystemTest {
         ArgumentMatchers.anyInt(), ArgumentMatchers.eq(null)))
         .thenThrow(QiniuException.class);
     boolean result =
-        mKodoUnderFileSystem.deleteDirectory(PATH, DeleteOptions.defaults().setRecursive(true));
+        mKodoUnderFileSystem.deleteDirectory(PATH,
+            DeleteDirectoryOptions.defaults().setRecursive(true));
     Assert.assertFalse(result);
   }
 

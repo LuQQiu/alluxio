@@ -14,7 +14,7 @@ package alluxio.underfs.oss;
 import alluxio.AlluxioURI;
 import alluxio.ConfigurationTestUtils;
 import alluxio.underfs.UnderFileSystemConfiguration;
-import alluxio.underfs.options.DeleteOptions;
+import alluxio.underfs.options.DeleteDirectoryOptions;
 
 import com.aliyun.oss.OSSClient;
 import com.aliyun.oss.ServiceException;
@@ -53,7 +53,7 @@ public class OSSUnderFileSystemTest {
   }
 
   /**
-   * Test case for {@link OSSUnderFileSystem#deleteDirectory(String, DeleteOptions)}.
+   * Test case for {@link OSSUnderFileSystem#deleteDirectory(String, DeleteDirectoryOptions)}.
    */
   @Test
   public void deleteNonRecursiveOnServiceException() throws IOException {
@@ -61,12 +61,12 @@ public class OSSUnderFileSystemTest {
         .thenThrow(ServiceException.class);
 
     boolean result = mOSSUnderFileSystem.deleteDirectory(PATH,
-        DeleteOptions.defaults().setRecursive(false));
+        DeleteDirectoryOptions.defaults().setRecursive(false));
     Assert.assertFalse(result);
   }
 
   /**
-   * Test case for {@link OSSUnderFileSystem#deleteDirectory(String, DeleteOptions)}.
+   * Test case for {@link OSSUnderFileSystem#deleteDirectory(String, DeleteDirectoryOptions)}.
    */
   @Test
   public void deleteRecursiveOnServiceException() throws IOException {
@@ -74,7 +74,7 @@ public class OSSUnderFileSystemTest {
         .thenThrow(ServiceException.class);
 
     boolean result = mOSSUnderFileSystem.deleteDirectory(PATH,
-        DeleteOptions.defaults().setRecursive(true));
+        DeleteDirectoryOptions.defaults().setRecursive(true));
     Assert.assertFalse(result);
   }
 

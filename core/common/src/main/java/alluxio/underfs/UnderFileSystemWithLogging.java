@@ -26,7 +26,7 @@ import alluxio.security.authorization.AccessControlList;
 import alluxio.security.authorization.AclEntry;
 import alluxio.security.authorization.DefaultAccessControlList;
 import alluxio.underfs.options.CreateOptions;
-import alluxio.underfs.options.DeleteOptions;
+import alluxio.underfs.options.DeleteDirectoryOptions;
 import alluxio.underfs.options.FileLocationOptions;
 import alluxio.underfs.options.ListOptions;
 import alluxio.underfs.options.MkdirsOptions;
@@ -195,47 +195,6 @@ public class UnderFileSystemWithLogging implements UnderFileSystem {
   }
 
   @Override
-  public OutputStream createNonexistingFile(final String path) throws IOException {
-    return call(new UfsCallable<OutputStream>() {
-      @Override
-      public OutputStream call() throws IOException {
-        return mUnderFileSystem.createNonexistingFile(path);
-      }
-
-      @Override
-      public String methodName() {
-        return "CreateNonexistingFile";
-      }
-
-      @Override
-      public String toString() {
-        return String.format("path=%s", path);
-      }
-    });
-  }
-
-  @Override
-  public OutputStream createNonexistingFile(final String path,
-      final CreateOptions options) throws IOException {
-    return call(new UfsCallable<OutputStream>() {
-      @Override
-      public OutputStream call() throws IOException {
-        return mUnderFileSystem.createNonexistingFile(path, options);
-      }
-
-      @Override
-      public String methodName() {
-        return "CreateNonexistingFile";
-      }
-
-      @Override
-      public String toString() {
-        return String.format("path=%s, options=%s", path, options);
-      }
-    });
-  }
-
-  @Override
   public boolean deleteDirectory(final String path) throws IOException {
     return call(new UfsCallable<Boolean>() {
       @Override
@@ -256,7 +215,7 @@ public class UnderFileSystemWithLogging implements UnderFileSystem {
   }
 
   @Override
-  public boolean deleteDirectory(final String path, final DeleteOptions options)
+  public boolean deleteDirectory(final String path, final DeleteDirectoryOptions options)
       throws IOException {
     return call(new UfsCallable<Boolean>() {
       @Override
@@ -267,47 +226,6 @@ public class UnderFileSystemWithLogging implements UnderFileSystem {
       @Override
       public String methodName() {
         return "DeleteDirectory";
-      }
-
-      @Override
-      public String toString() {
-        return String.format("path=%s, options=%s", path, options);
-      }
-    });
-  }
-
-  @Override
-  public boolean deleteExistingDirectory(final String path) throws IOException {
-    return call(new UfsCallable<Boolean>() {
-      @Override
-      public Boolean call() throws IOException {
-        return mUnderFileSystem.deleteExistingDirectory(path);
-      }
-
-      @Override
-      public String methodName() {
-        return "DeleteExistingDirectory";
-      }
-
-      @Override
-      public String toString() {
-        return String.format("path=%s", path);
-      }
-    });
-  }
-
-  @Override
-  public boolean deleteExistingDirectory(final String path, final DeleteOptions options)
-      throws IOException {
-    return call(new UfsCallable<Boolean>() {
-      @Override
-      public Boolean call() throws IOException {
-        return mUnderFileSystem.deleteExistingDirectory(path, options);
-      }
-
-      @Override
-      public String methodName() {
-        return "DeleteExistingDirectory";
       }
 
       @Override

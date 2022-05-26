@@ -22,7 +22,7 @@ import alluxio.security.authorization.AccessControlList;
 import alluxio.security.authorization.AclEntry;
 import alluxio.security.authorization.DefaultAccessControlList;
 import alluxio.underfs.options.CreateOptions;
-import alluxio.underfs.options.DeleteOptions;
+import alluxio.underfs.options.DeleteDirectoryOptions;
 import alluxio.underfs.options.FileLocationOptions;
 import alluxio.underfs.options.ListOptions;
 import alluxio.underfs.options.MkdirsOptions;
@@ -224,29 +224,6 @@ public interface UnderFileSystem extends Closeable {
   OutputStream create(String path, CreateOptions options) throws IOException;
 
   /**
-   * Creates a file in the under file system with the indicated name.
-   *
-   * Similar to {@link #create(String)} but
-   * deals with the delete-then-create eventual consistency issue.
-   *
-   * @param path the file name
-   * @return A {@code OutputStream} object
-   */
-  OutputStream createNonexistingFile(String path) throws IOException;
-
-  /**
-   * Creates a file in the under file system with the specified {@link CreateOptions}.
-   *
-   * Similar to {@link #create(String, CreateOptions)} but
-   * deals with the delete-then-create eventual consistency issue.
-   *
-   * @param path the file name
-   * @param options the options for create
-   * @return A {@code OutputStream} object
-   */
-  OutputStream createNonexistingFile(String path, CreateOptions options) throws IOException;
-
-  /**
    * Deletes a directory from the under file system with the indicated name non-recursively. A
    * non-recursive delete is successful only if the directory is empty.
    *
@@ -262,30 +239,7 @@ public interface UnderFileSystem extends Closeable {
    * @param options for directory delete semantics
    * @return true if directory was found and deleted, false otherwise
    */
-  boolean deleteDirectory(String path, DeleteOptions options) throws IOException;
-
-  /**
-   * Deletes a directory from the under file system.
-   *
-   * Similar to {@link #deleteDirectory(String)} but
-   * deals with the create-delete eventual consistency issue.
-   *
-   * @param path of the directory to delete
-   * @return true if directory was found and deleted, false otherwise
-   */
-  boolean deleteExistingDirectory(String path) throws IOException;
-
-  /**
-   * Deletes a directory from the under file system with the indicated name.
-   *
-   * Similar to {@link #deleteDirectory(String, DeleteOptions)} but
-   * deals with the create-then-delete eventual consistency issue.
-   *
-   * @param path of the directory to delete
-   * @param options for directory delete semantics
-   * @return true if directory was found and deleted, false otherwise
-   */
-  boolean deleteExistingDirectory(String path, DeleteOptions options) throws IOException;
+  boolean deleteDirectory(String path, DeleteDirectoryOptions options) throws IOException;
 
   /**
    * Deletes a file from the under file system with the indicated name.

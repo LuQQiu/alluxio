@@ -35,6 +35,9 @@ public final class CreateOptions {
 
   // Ensure writes are not readable till close.
   private boolean mEnsureAtomic;
+  // Ensure consistency. When true, eventual consistency issues
+  // in workloads like delete-then-create will be taken care of
+  private boolean mEnsureConsistency;
 
   private String mOwner;
   private String mGroup;
@@ -56,6 +59,7 @@ public final class CreateOptions {
     mAcl = null;
     mCreateParent = false;
     mEnsureAtomic = false;
+    mEnsureConsistency = false;
     // default owner and group are null (unset)
     mOwner = null;
     mGroup = null;
@@ -141,6 +145,18 @@ public final class CreateOptions {
   }
 
   /**
+   * Sets consistency guarantees. When true, eventual consistency issues
+   * in workloads like delete-then-create will be taken care of.
+   *
+   * @param ensureConsistency whether to ensure the data consistency
+   * @return the updated object
+   */
+  public CreateOptions setEnsureConsistency(boolean ensureConsistency) {
+    mEnsureConsistency = ensureConsistency;
+    return this;
+  }
+
+  /**
    * @param owner the owner to set
    * @return the updated object
    */
@@ -179,6 +195,7 @@ public final class CreateOptions {
     return Objects.equal(mAcl, that.mAcl)
         && (mCreateParent == that.mCreateParent)
         && (mEnsureAtomic == that.mEnsureAtomic)
+        && (mEnsureConsistency == that.mEnsureConsistency)
         && Objects.equal(mOwner, that.mOwner)
         && Objects.equal(mGroup, that.mGroup)
         && Objects.equal(mMode, that.mMode);
@@ -195,6 +212,7 @@ public final class CreateOptions {
         .add("acl", mAcl)
         .add("createParent", mCreateParent)
         .add("ensureAtomic", mEnsureAtomic)
+        .add("ensureConsistency", mEnsureConsistency)
         .add("owner", mOwner)
         .add("group", mGroup)
         .add("mode", mMode)

@@ -31,7 +31,7 @@ import alluxio.underfs.UfsStatus;
 import alluxio.underfs.UnderFileSystem;
 import alluxio.underfs.UnderFileSystemConfiguration;
 import alluxio.underfs.options.CreateOptions;
-import alluxio.underfs.options.DeleteOptions;
+import alluxio.underfs.options.DeleteDirectoryOptions;
 import alluxio.underfs.options.FileLocationOptions;
 import alluxio.underfs.options.MkdirsOptions;
 import alluxio.underfs.options.OpenOptions;
@@ -322,7 +322,7 @@ public class HdfsUnderFileSystem extends ConsistentUnderFileSystem
   }
 
   @Override
-  public boolean deleteDirectory(String path, DeleteOptions options) throws IOException {
+  public boolean deleteDirectory(String path, DeleteDirectoryOptions options) throws IOException {
     return isDirectory(path) && delete(path, options.isRecursive());
   }
 

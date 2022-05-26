@@ -20,7 +20,7 @@ import alluxio.retry.CountingRetry;
 import alluxio.retry.ExponentialBackoffRetry;
 import alluxio.retry.RetryPolicy;
 import alluxio.underfs.options.CreateOptions;
-import alluxio.underfs.options.DeleteOptions;
+import alluxio.underfs.options.DeleteDirectoryOptions;
 import alluxio.underfs.options.FileLocationOptions;
 import alluxio.underfs.options.ListOptions;
 import alluxio.underfs.options.MkdirsOptions;
@@ -404,7 +404,7 @@ public abstract class ObjectUnderFileSystem extends BaseUnderFileSystem {
   }
 
   @Override
-  public boolean deleteDirectory(String path, DeleteOptions options) throws IOException {
+  public boolean deleteDirectory(String path, DeleteDirectoryOptions options) throws IOException {
     if (!options.isRecursive()) {
       UfsStatus[] children = listInternal(path, ListOptions.defaults());
       if (children == null) {
@@ -444,17 +444,6 @@ public abstract class ObjectUnderFileSystem extends BaseUnderFileSystem {
       return false;
     }
     return true;
-  }
-
-  @Override
-  public boolean deleteExistingDirectory(String path) throws IOException {
-    return retryOnFalse(() -> deleteDirectory(path), () -> "delete directory " + path);
-  }
-
-  @Override
-  public boolean deleteExistingDirectory(String path, DeleteOptions options) throws IOException {
-    return retryOnFalse(() -> deleteDirectory(path, options),
-        () -> "delete directory " + path + " with options " + options);
   }
 
   /**
@@ -700,7 +689,7 @@ public abstract class ObjectUnderFileSystem extends BaseUnderFileSystem {
       return false;
     }
     // Delete src and everything under src
-    return deleteDirectory(src, DeleteOptions.defaults().setRecursive(true));
+    return deleteDirectory(src, DeleteDirectoryOptions.defaults().setRecursive(true));
   }
 
   @Override

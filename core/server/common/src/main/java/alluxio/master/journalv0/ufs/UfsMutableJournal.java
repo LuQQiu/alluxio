@@ -18,7 +18,7 @@ import alluxio.master.journalv0.MutableJournal;
 import alluxio.underfs.UfsStatus;
 import alluxio.underfs.UnderFileSystem;
 import alluxio.underfs.UnderFileSystemConfiguration;
-import alluxio.underfs.options.DeleteOptions;
+import alluxio.underfs.options.DeleteDirectoryOptions;
 import alluxio.util.URIUtils;
 import alluxio.util.UnderFileSystemUtils;
 
@@ -60,7 +60,7 @@ public class UfsMutableJournal extends UfsJournal implements MutableJournal {
           boolean failedToDelete;
           if (p.isDirectory()) {
             failedToDelete = !ufs.deleteDirectory(childPath.toString(),
-                DeleteOptions.defaults().setRecursive(true));
+                DeleteDirectoryOptions.defaults().setRecursive(true));
           } else {
             failedToDelete = !ufs.deleteFile(childPath.toString());
           }

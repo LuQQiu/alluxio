@@ -18,7 +18,7 @@ import static org.mockito.Mockito.when;
 import alluxio.AlluxioURI;
 import alluxio.ConfigurationTestUtils;
 import alluxio.underfs.UnderFileSystemConfiguration;
-import alluxio.underfs.options.DeleteOptions;
+import alluxio.underfs.options.DeleteDirectoryOptions;
 
 import org.jets3t.service.ServiceException;
 import org.jets3t.service.impl.rest.httpclient.GoogleStorageService;
@@ -55,7 +55,7 @@ public class GCSUnderFileSystemTest {
   }
 
   /**
-   * Test case for {@link GCSUnderFileSystem#deleteDirectory(String, DeleteOptions)}.
+   * Test case for {@link GCSUnderFileSystem#deleteDirectory(String, DeleteDirectoryOptions)}.
    */
   @Test
   public void deleteNonRecursiveOnServiceException() throws IOException, ServiceException {
@@ -64,12 +64,12 @@ public class GCSUnderFileSystemTest {
         .thenThrow(ServiceException.class);
 
     boolean result = mGCSUnderFileSystem.deleteDirectory(PATH,
-        DeleteOptions.defaults().setRecursive(false));
+        DeleteDirectoryOptions.defaults().setRecursive(false));
     assertFalse(result);
   }
 
   /**
-   * Test case for {@link GCSUnderFileSystem#deleteDirectory(String, DeleteOptions)}.
+   * Test case for {@link GCSUnderFileSystem#deleteDirectory(String, DeleteDirectoryOptions)}.
    */
   @Test
   public void deleteRecursiveOnServiceException() throws IOException, ServiceException {
@@ -78,7 +78,7 @@ public class GCSUnderFileSystemTest {
         .thenThrow(ServiceException.class);
 
     boolean result = mGCSUnderFileSystem.deleteDirectory(PATH,
-        DeleteOptions.defaults().setRecursive(true));
+        DeleteDirectoryOptions.defaults().setRecursive(true));
     assertFalse(result);
   }
 

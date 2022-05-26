@@ -18,7 +18,7 @@ import alluxio.underfs.UfsFileStatus;
 import alluxio.underfs.UfsStatus;
 import alluxio.underfs.UnderFileSystem;
 import alluxio.underfs.options.CreateOptions;
-import alluxio.underfs.options.DeleteOptions;
+import alluxio.underfs.options.DeleteDirectoryOptions;
 import alluxio.underfs.options.ListOptions;
 import alluxio.underfs.options.MkdirsOptions;
 import alluxio.underfs.options.OpenOptions;
@@ -327,13 +327,13 @@ public final class UnderFileSystemCommonOperations {
         .setCreateParent(false));
     createEmptyFile(testDirNonEmptyChildFile);
     createEmptyFile(testDirNonEmptyChildDirFile);
-    mUfs.deleteDirectory(testDirEmpty, DeleteOptions.defaults().setRecursive(false));
+    mUfs.deleteDirectory(testDirEmpty, DeleteDirectoryOptions.defaults().setRecursive(false));
     if (mUfs.isDirectory(testDirEmpty)) {
       throw new IOException("Directory is deleted "
           + "but succeed in UnderFileSystem.isDirectory() check");
     }
     try {
-      mUfs.deleteDirectory(testDirNonEmpty, DeleteOptions.defaults().setRecursive(false));
+      mUfs.deleteDirectory(testDirNonEmpty, DeleteDirectoryOptions.defaults().setRecursive(false));
     } catch (IOException e) {
       // Some File systems may throw IOException
     }
@@ -341,7 +341,7 @@ public final class UnderFileSystemCommonOperations {
       throw new IOException("Created directory should succeed "
           + "in UnderFileSystem.isDirectory() check, but failed");
     }
-    mUfs.deleteDirectory(testDirNonEmpty, DeleteOptions.defaults().setRecursive(true));
+    mUfs.deleteDirectory(testDirNonEmpty, DeleteDirectoryOptions.defaults().setRecursive(true));
     if (mUfs.isDirectory(testDirNonEmpty) || mUfs.isDirectory(testDirNonEmptyChildDir)
         || mUfs.isFile(testDirNonEmptyChildFile) || mUfs.isFile(testDirNonEmptyChildDirFile)) {
       throw new IOException("Deleted file or directory still exist");
@@ -355,8 +355,8 @@ public final class UnderFileSystemCommonOperations {
       "listObjectsV2", "getObjectMetadata"})
   public void deleteLargeDirectoryTest() throws Exception {
     LargeDirectoryConfig config = prepareLargeDirectory();
-    mUfs.deleteExistingDirectory(config.getTopLevelDirectory(),
-        DeleteOptions.defaults().setRecursive(true));
+    mUfs.deleteDirectory(config.getTopLevelDirectory(),
+        DeleteDirectoryOptions.defaults().setRecursive(true).setEnsureConsistency(true));
 
     String[] children = config.getChildren();
     for (String child : children) {
@@ -393,7 +393,8 @@ public final class UnderFileSystemCommonOperations {
       throw new IOException(FILE_EXISTS_CHECK_SHOULD_FAILED);
     }
 
-    OutputStream o = mUfs.createNonexistingFile(testFile);
+    OutputStream o = mUfs.create(testFile,
+        CreateOptions.defaults(mConfiguration).setEnsureConsistency(true));
     o.write(TEST_BYTES);
     o.close();
     if (!mUfs.exists(testFile)) {
@@ -406,10 +407,10 @@ public final class UnderFileSystemCommonOperations {
    */
   @RelatedS3Operations(operations = {"putObject", "deleteObjects",
       "listObjectsV2", "getObjectMetadata"})
-  public void createThenDeleteExistingDirectoryTest() throws IOException {
+  public void createThenDeleteEventualConsistencyTest() throws IOException {
     LargeDirectoryConfig config = prepareLargeDirectory();
-    if (!mUfs.deleteExistingDirectory(config.getTopLevelDirectory(),
-        DeleteOptions.defaults().setRecursive(true))) {
+    if (!mUfs.deleteDirectory(config.getTopLevelDirectory(),
+        DeleteDirectoryOptions.defaults().setRecursive(true).setEnsureConsistency(true))) {
       throw new IOException("Failed to delete existing directory");
     }
   }

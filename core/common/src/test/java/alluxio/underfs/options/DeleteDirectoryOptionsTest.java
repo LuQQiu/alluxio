@@ -22,16 +22,16 @@ import org.powermock.modules.junit4.PowerMockRunner;
 import java.io.IOException;
 
 /**
- * Tests for the {@link DeleteOptions} class.
+ * Tests for the {@link DeleteDirectoryOptions} class.
  */
 @RunWith(PowerMockRunner.class)
-public final class DeleteOptionsTest {
+public final class DeleteDirectoryOptionsTest {
   /**
-   * Tests for default {@link DeleteOptions}.
+   * Tests for default {@link DeleteDirectoryOptions}.
    */
   @Test
   public void defaults() throws IOException {
-    DeleteOptions options = DeleteOptions.defaults();
+    DeleteDirectoryOptions options = DeleteDirectoryOptions.defaults();
 
     assertEquals(false, options.isRecursive());
   }
@@ -41,7 +41,7 @@ public final class DeleteOptionsTest {
    */
   @Test
   public void fields() {
-    DeleteOptions options = DeleteOptions.defaults();
+    DeleteDirectoryOptions options = DeleteDirectoryOptions.defaults();
 
     boolean recursive = false;
     options.setRecursive(recursive);
@@ -54,6 +54,6 @@ public final class DeleteOptionsTest {
 
   @Test
   public void equalsTest() throws Exception {
-    CommonUtils.testEquals(DeleteOptions.class);
+    CommonUtils.testEquals(DeleteDirectoryOptions.class);
   }
 }

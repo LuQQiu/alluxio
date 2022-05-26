@@ -22,7 +22,7 @@ import alluxio.underfs.UnderFileSystem;
 import alluxio.underfs.UnderFileSystemConfiguration;
 import alluxio.underfs.UnderFileSystemFactory;
 import alluxio.underfs.UnderFileSystemFactoryRegistry;
-import alluxio.underfs.options.DeleteOptions;
+import alluxio.underfs.options.DeleteDirectoryOptions;
 import alluxio.util.ConfigurationUtils;
 import alluxio.util.io.PathUtils;
 
@@ -264,7 +264,7 @@ public final class UnderFileSystemContractTest {
       }
       return failedTestCnt;
     } finally {
-      mUfs.deleteDirectory(testDir, DeleteOptions.defaults().setRecursive(true));
+      mUfs.deleteDirectory(testDir, DeleteDirectoryOptions.defaults().setRecursive(true));
       mUfs.close();
     }
   }
@@ -295,7 +295,7 @@ public final class UnderFileSystemContractTest {
         mUfs.deleteFile(PathUtils.concatPath(directory, status.getName()));
       } else {
         mUfs.deleteDirectory(PathUtils.concatPath(directory, status.getName()),
-            DeleteOptions.defaults().setRecursive(true));
+            DeleteDirectoryOptions.defaults().setRecursive(true));
       }
     }
   }

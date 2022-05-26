@@ -23,7 +23,7 @@ import alluxio.exception.AlluxioException;
 import alluxio.exception.status.AlluxioStatusException;
 import alluxio.master.journal.JournalType;
 import alluxio.underfs.UnderFileSystem;
-import alluxio.underfs.options.DeleteOptions;
+import alluxio.underfs.options.DeleteDirectoryOptions;
 import alluxio.util.CommonUtils;
 import alluxio.util.WaitForOptions;
 import alluxio.util.io.PathUtils;
@@ -257,7 +257,8 @@ public final class MultiMasterLocalAlluxioCluster extends AbstractLocalAlluxioCl
     UnderFileSystem ufs = UnderFileSystem.Factory.createForRoot(ServerConfiguration.global());
     String path = ServerConfiguration.getString(PropertyKey.MASTER_MOUNT_TABLE_ROOT_UFS);
     if (ufs.isDirectory(path)) {
-      ufs.deleteExistingDirectory(path, DeleteOptions.defaults().setRecursive(true));
+      ufs.deleteDirectory(path, DeleteDirectoryOptions.defaults()
+          .setRecursive(true).setEnsureConsistency(true));
     }
     if (!ufs.mkdirs(path)) {
       throw new IOException("Failed to make folder: " + path);

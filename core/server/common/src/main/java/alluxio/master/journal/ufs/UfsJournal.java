@@ -35,7 +35,7 @@ import alluxio.retry.RetryPolicy;
 import alluxio.underfs.UfsStatus;
 import alluxio.underfs.UnderFileSystem;
 import alluxio.underfs.UnderFileSystemConfiguration;
-import alluxio.underfs.options.DeleteOptions;
+import alluxio.underfs.options.DeleteDirectoryOptions;
 import alluxio.util.URIUtils;
 import alluxio.util.UnderFileSystemUtils;
 
@@ -463,7 +463,8 @@ public class UfsJournal implements Journal {
       for (UfsStatus status : mUfs.listStatus(location.toString())) {
         String childPath = URIUtils.appendPathOrDie(location, status.getName()).toString();
         if (status.isDirectory()
-            && !mUfs.deleteDirectory(childPath, DeleteOptions.defaults().setRecursive(true))
+            && !mUfs.deleteDirectory(childPath,
+            DeleteDirectoryOptions.defaults().setRecursive(true))
             || status.isFile() && !mUfs.deleteFile(childPath)) {
           throw new IOException(String.format("Failed to delete %s", childPath));
         }

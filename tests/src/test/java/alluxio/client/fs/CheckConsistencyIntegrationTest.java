@@ -24,7 +24,7 @@ import alluxio.master.file.contexts.CheckConsistencyContext;
 import alluxio.testutils.BaseIntegrationTest;
 import alluxio.testutils.LocalAlluxioClusterResource;
 import alluxio.underfs.UnderFileSystem;
-import alluxio.underfs.options.DeleteOptions;
+import alluxio.underfs.options.DeleteDirectoryOptions;
 
 import com.google.common.collect.Lists;
 import org.junit.Assert;
@@ -91,7 +91,7 @@ public class CheckConsistencyIntegrationTest extends BaseIntegrationTest {
     String ufsDirectory = mFileSystem.getStatus(DIRECTORY).getUfsPath();
     UnderFileSystem ufs = UnderFileSystem.Factory.create(ufsDirectory,
         ServerConfiguration.global());
-    ufs.deleteDirectory(ufsDirectory, DeleteOptions.defaults().setRecursive(true));
+    ufs.deleteDirectory(ufsDirectory, DeleteDirectoryOptions.defaults().setRecursive(true));
 
     List<AlluxioURI> expected = Lists.newArrayList(FILE, DIRECTORY);
     List<AlluxioURI> result = mFileSystemMaster.checkConsistency(new AlluxioURI("/"),
@@ -134,7 +134,7 @@ public class CheckConsistencyIntegrationTest extends BaseIntegrationTest {
     String ufsDirectory = mFileSystem.getStatus(nestedDir).getUfsPath();
     UnderFileSystem ufs = UnderFileSystem.Factory.create(ufsDirectory,
         ServerConfiguration.global());
-    ufs.deleteDirectory(ufsDirectory, DeleteOptions.defaults().setRecursive(true));
+    ufs.deleteDirectory(ufsDirectory, DeleteDirectoryOptions.defaults().setRecursive(true));
 
     List<AlluxioURI> expected = Lists.newArrayList(nestedDir, thirdLevelFile);
     List<AlluxioURI> result = mFileSystemMaster.checkConsistency(new AlluxioURI("/"),
@@ -170,7 +170,7 @@ public class CheckConsistencyIntegrationTest extends BaseIntegrationTest {
     String ufsDirectory = mFileSystem.getStatus(DIRECTORY).getUfsPath();
     UnderFileSystem ufs = UnderFileSystem.Factory.create(ufsDirectory,
         ServerConfiguration.global());
-    ufs.deleteDirectory(ufsDirectory, DeleteOptions.defaults().setRecursive(true));
+    ufs.deleteDirectory(ufsDirectory, DeleteDirectoryOptions.defaults().setRecursive(true));
     ufs.create(ufsDirectory).close();
     List<AlluxioURI> expected = Lists.newArrayList(DIRECTORY, FILE);
     List<AlluxioURI> result = mFileSystemMaster.checkConsistency(new AlluxioURI("/"),

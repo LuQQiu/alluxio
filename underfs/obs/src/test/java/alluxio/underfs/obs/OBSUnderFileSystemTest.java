@@ -14,7 +14,7 @@ package alluxio.underfs.obs;
 import alluxio.AlluxioURI;
 import alluxio.ConfigurationTestUtils;
 import alluxio.underfs.UnderFileSystemConfiguration;
-import alluxio.underfs.options.DeleteOptions;
+import alluxio.underfs.options.DeleteDirectoryOptions;
 
 import com.obs.services.ObsClient;
 import com.obs.services.exception.ObsException;
@@ -55,7 +55,7 @@ public class OBSUnderFileSystemTest {
   }
 
   /**
-   * Test case for {@link OBSUnderFileSystem#deleteDirectory(String, DeleteOptions)}.
+   * Test case for {@link OBSUnderFileSystem#deleteDirectory(String, DeleteDirectoryOptions)}.
    */
   @Test
   public void deleteNonRecursiveOnServiceException() throws IOException {
@@ -63,12 +63,12 @@ public class OBSUnderFileSystemTest {
         .thenThrow(ObsException.class);
 
     boolean result = mOBSUnderFileSystem.deleteDirectory(PATH,
-        DeleteOptions.defaults().setRecursive(false));
+        DeleteDirectoryOptions.defaults().setRecursive(false));
     Assert.assertFalse(result);
   }
 
   /**
-   * Test case for {@link OBSUnderFileSystem#deleteDirectory(String, DeleteOptions)}.
+   * Test case for {@link OBSUnderFileSystem#deleteDirectory(String, DeleteDirectoryOptions)}.
    */
   @Test
   public void deleteRecursiveOnServiceException() throws IOException {
@@ -76,7 +76,7 @@ public class OBSUnderFileSystemTest {
         .thenThrow(ObsException.class);
 
     boolean result = mOBSUnderFileSystem.deleteDirectory(PATH,
-        DeleteOptions.defaults().setRecursive(true));
+        DeleteDirectoryOptions.defaults().setRecursive(true));
     System.out.println(result);
     Assert.assertFalse(result);
   }

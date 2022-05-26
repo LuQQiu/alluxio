@@ -23,7 +23,7 @@ import alluxio.master.file.meta.MountTable;
 import alluxio.master.metastore.ReadOnlyInodeStore;
 import alluxio.resource.CloseableResource;
 import alluxio.underfs.UnderFileSystem;
-import alluxio.underfs.options.DeleteOptions;
+import alluxio.underfs.options.DeleteDirectoryOptions;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,15 +48,15 @@ public final class SafeUfsDeleter implements UfsDeleter {
    * @param mountTable the mount table
    * @param inodeStore the inode store
    * @param inodes sub-tree being deleted (any node should appear before descendants)
-   * @param deleteOptions delete options
+   * @param DeleteDirectoryOptions delete options
    */
   public SafeUfsDeleter(MountTable mountTable, ReadOnlyInodeStore inodeStore,
-      List<Pair<AlluxioURI, LockedInodePath>> inodes, DeletePOptions deleteOptions)
+      List<Pair<AlluxioURI, LockedInodePath>> inodes, DeletePOptions DeleteDirectoryOptions)
       throws IOException, FileDoesNotExistException, InvalidPathException {
     mMountTable = mountTable;
     // Root of sub-tree occurs before any of its descendants
     mRootPath = inodes.get(0).getFirst();
-    if (!deleteOptions.getUnchecked() && !deleteOptions.getAlluxioOnly()) {
+    if (!DeleteDirectoryOptions.getUnchecked() && !DeleteDirectoryOptions.getAlluxioOnly()) {
       mUfsSyncChecker = new UfsSyncChecker(mMountTable, inodeStore);
       for (Pair<AlluxioURI, LockedInodePath> inodePair : inodes) {
         AlluxioURI alluxioUri = inodePair.getFirst();
@@ -90,9 +90,9 @@ public final class SafeUfsDeleter implements UfsDeleter {
           }
         } else {
           if (isRecursiveDeleteSafe(alluxioUri)) {
-            DeleteOptions options =
-                DeleteOptions.defaults().setRecursive(true);
-            if (!ufs.deleteExistingDirectory(ufsUri, options)) {
+            DeleteDirectoryOptions options =
+                DeleteDirectoryOptions.defaults().setRecursive(true).setEnsureConsistency(true);
+            if (!ufs.deleteDirectory(ufsUri, options)) {
               // TODO(adit): handle partial failures of recursive deletes
               if (ufs.isDirectory(ufsUri)) {
                 throw new IOException(ExceptionMessage.DELETE_FAILED_UFS_DIR.getMessage());

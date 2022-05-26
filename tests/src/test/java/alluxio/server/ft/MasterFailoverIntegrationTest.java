@@ -26,7 +26,7 @@ import alluxio.testutils.IntegrationTestUtils;
 import alluxio.testutils.underfs.delegating.DelegatingUnderFileSystem;
 import alluxio.testutils.underfs.delegating.DelegatingUnderFileSystemFactory;
 import alluxio.underfs.UnderFileSystem;
-import alluxio.underfs.options.DeleteOptions;
+import alluxio.underfs.options.DeleteDirectoryOptions;
 import alluxio.util.CommonUtils;
 
 import com.google.common.io.Files;
@@ -62,7 +62,8 @@ public final class MasterFailoverIntegrationTest extends BaseIntegrationTest {
         }
 
         @Override
-        public boolean deleteDirectory(String path, DeleteOptions options) throws IOException {
+        public boolean deleteDirectory(String path, DeleteDirectoryOptions options)
+            throws IOException {
           CommonUtils.sleepMs(DELETE_DELAY);
           return mUfs.deleteDirectory(path, options);
         }

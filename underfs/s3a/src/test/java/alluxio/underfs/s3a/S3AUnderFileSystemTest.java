@@ -19,7 +19,7 @@ import alluxio.conf.PropertyKey;
 import alluxio.underfs.ObjectUnderFileSystem;
 import alluxio.underfs.UfsMode;
 import alluxio.underfs.UnderFileSystemConfiguration;
-import alluxio.underfs.options.DeleteOptions;
+import alluxio.underfs.options.DeleteDirectoryOptions;
 
 import com.amazonaws.AmazonClientException;
 import com.amazonaws.AmazonServiceException;
@@ -84,7 +84,7 @@ public class S3AUnderFileSystemTest {
         .thenThrow(AmazonClientException.class);
 
     mThrown.expect(IOException.class);
-    mS3UnderFileSystem.deleteDirectory(PATH, DeleteOptions.defaults().setRecursive(false));
+    mS3UnderFileSystem.deleteDirectory(PATH, DeleteDirectoryOptions.defaults().setRecursive(false));
   }
 
   @Test
@@ -93,7 +93,7 @@ public class S3AUnderFileSystemTest {
         .thenThrow(AmazonClientException.class);
 
     mThrown.expect(IOException.class);
-    mS3UnderFileSystem.deleteDirectory(PATH, DeleteOptions.defaults().setRecursive(true));
+    mS3UnderFileSystem.deleteDirectory(PATH, DeleteDirectoryOptions.defaults().setRecursive(true));
   }
 
   @Test

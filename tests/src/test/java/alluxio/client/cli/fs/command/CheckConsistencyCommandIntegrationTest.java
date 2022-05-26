@@ -24,7 +24,7 @@ import alluxio.grpc.ExistsPOptions;
 import alluxio.grpc.LoadMetadataPType;
 import alluxio.grpc.WritePType;
 import alluxio.underfs.UnderFileSystem;
-import alluxio.underfs.options.DeleteOptions;
+import alluxio.underfs.options.DeleteDirectoryOptions;
 
 import org.junit.Test;
 
@@ -65,7 +65,7 @@ public class CheckConsistencyCommandIntegrationTest extends AbstractFileSystemSh
             WritePType.CACHE_THROUGH, 20);
     String ufsPath = sFileSystem.getStatus(new AlluxioURI("/testRoot/testDir")).getUfsPath();
     UnderFileSystem ufs = UnderFileSystem.Factory.create(ufsPath, ServerConfiguration.global());
-    ufs.deleteDirectory(ufsPath, DeleteOptions.defaults().setRecursive(true));
+    ufs.deleteDirectory(ufsPath, DeleteDirectoryOptions.defaults().setRecursive(true));
     sFsShell.run("checkConsistency", "/testRoot");
     StringBuilder expected = new StringBuilder();
     expected.append("The following files are inconsistent:\n");
@@ -165,6 +165,6 @@ public class CheckConsistencyCommandIntegrationTest extends AbstractFileSystemSh
 
     String ufsPath = sFileSystem.getStatus(new AlluxioURI("/testRoot/testDir")).getUfsPath();
     UnderFileSystem ufs = UnderFileSystem.Factory.create(ufsPath, ServerConfiguration.global());
-    ufs.deleteDirectory(ufsPath, DeleteOptions.defaults().setRecursive(true));
+    ufs.deleteDirectory(ufsPath, DeleteDirectoryOptions.defaults().setRecursive(true));
   }
 }

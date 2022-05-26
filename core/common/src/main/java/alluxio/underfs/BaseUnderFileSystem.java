@@ -20,7 +20,7 @@ import alluxio.security.authorization.AccessControlList;
 import alluxio.security.authorization.AclEntry;
 import alluxio.security.authorization.DefaultAccessControlList;
 import alluxio.underfs.options.CreateOptions;
-import alluxio.underfs.options.DeleteOptions;
+import alluxio.underfs.options.DeleteDirectoryOptions;
 import alluxio.underfs.options.ListOptions;
 import alluxio.underfs.options.MkdirsOptions;
 import alluxio.underfs.options.OpenOptions;
@@ -75,7 +75,7 @@ public abstract class BaseUnderFileSystem implements UnderFileSystem {
 
   @Override
   public boolean deleteDirectory(String path) throws IOException {
-    return deleteDirectory(path, DeleteOptions.defaults());
+    return deleteDirectory(path, DeleteDirectoryOptions.defaults());
   }
 
   @Override

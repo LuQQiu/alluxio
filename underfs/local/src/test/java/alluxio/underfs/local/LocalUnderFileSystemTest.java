@@ -27,7 +27,7 @@ import alluxio.underfs.UfsMode;
 import alluxio.underfs.UfsStatus;
 import alluxio.underfs.UnderFileSystem;
 import alluxio.underfs.UnderFileSystemConfiguration;
-import alluxio.underfs.options.DeleteOptions;
+import alluxio.underfs.options.DeleteDirectoryOptions;
 import alluxio.underfs.options.MkdirsOptions;
 import alluxio.util.ConfigurationUtils;
 import alluxio.util.io.PathUtils;
@@ -117,7 +117,7 @@ public class LocalUnderFileSystemTest {
     mLocalUfs.mkdirs(dirpath);
     String filepath = PathUtils.concatPath(dirpath, getUniqueFileName());
     mLocalUfs.create(filepath).close();
-    mLocalUfs.deleteDirectory(dirpath, DeleteOptions.defaults().setRecursive(true));
+    mLocalUfs.deleteDirectory(dirpath, DeleteDirectoryOptions.defaults().setRecursive(true));
 
     assertFalse(mLocalUfs.isDirectory(dirpath));
 
@@ -131,7 +131,7 @@ public class LocalUnderFileSystemTest {
     mLocalUfs.mkdirs(dirpath);
     String filepath = PathUtils.concatPath(dirpath, getUniqueFileName());
     mLocalUfs.create(filepath).close();
-    mLocalUfs.deleteDirectory(dirpath, DeleteOptions.defaults().setRecursive(false));
+    mLocalUfs.deleteDirectory(dirpath, DeleteDirectoryOptions.defaults().setRecursive(false));
 
     assertTrue(mLocalUfs.isDirectory(dirpath));
 
