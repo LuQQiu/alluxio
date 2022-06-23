@@ -443,7 +443,7 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
    * @return 0 on success, a negative value on error
    */
   private int rmInternal(String path) {
-    AlluxioFuseUtils.deleteFile(mFileSystem, mPathResolverCache.getUnchecked(path));
+    AlluxioFuseUtils.deletePath(mFileSystem, mPathResolverCache.getUnchecked(path));
     return 0;
   }
 
@@ -579,7 +579,7 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
         return 0;
       }
       if (size == 0) {
-        AlluxioFuseUtils.deleteFile(mFileSystem, uri);
+        AlluxioFuseUtils.deletePath(mFileSystem, uri);
       }
       LOG.error("Failed to truncate file {}({} bytes) to {} bytes: not supported.",
           path, fileLen, size);
