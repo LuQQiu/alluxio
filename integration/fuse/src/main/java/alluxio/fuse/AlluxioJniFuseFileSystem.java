@@ -188,7 +188,7 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
   @Override
   public int create(String path, long mode, FuseFileInfo fi) {
     return AlluxioFuseUtils.call(LOG, () -> createOrOpenInternal(path, fi, mode),
-        "Fuse.Create", "path=%s,mode=%o", path, mode);
+        "Fuse.Create", "path=%s,flags=0x%x,mode=%o", path, fi.flags.get(), mode);
   }
 
   @Override
