@@ -104,6 +104,9 @@ public interface FuseFileStream extends AutoCloseable {
      */
     public FuseFileStream create(
         AlluxioURI uri, int flags, long mode, Optional<URIStatus> status) {
+      if (flags == 32960) {
+        return FuseFileOutStream.create(mFileSystem, mAuthPolicy, uri, flags, mode, status);
+      }
       switch (OpenFlags.valueOf(flags & O_ACCMODE.intValue())) {
         case O_RDONLY:
           return FuseFileInStream.create(mFileSystem, uri, flags, status);

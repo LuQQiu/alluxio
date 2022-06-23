@@ -198,6 +198,7 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
         "Fuse.Open", "path=%s,flags=0x%x", path, fi.flags.get());
   }
 
+  // create 0x80c0 flag should create a file, but create a read stream
   private int createOrOpenInternal(String path, FuseFileInfo fi, long mode) {
     final AlluxioURI uri = mPathResolverCache.getUnchecked(path);
     if (uri.getName().length() > MAX_NAME_LENGTH) {
