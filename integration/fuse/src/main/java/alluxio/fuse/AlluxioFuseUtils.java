@@ -112,7 +112,7 @@ public final class AlluxioFuseUtils {
    */
   public static void deletePath(FileSystem fileSystem, AlluxioURI uri) {
     try {
-      fileSystem.delete(uri, DeletePOptions.newBuilder().setRecursive(true).build());
+      fileSystem.delete(uri);
     } catch (IOException | AlluxioException e) {
       throw new RuntimeException(e);
     }
