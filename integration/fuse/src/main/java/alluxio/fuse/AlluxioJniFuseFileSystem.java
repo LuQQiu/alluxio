@@ -409,10 +409,6 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
 
   private int mkdirInternal(String path, long mode) {
     final AlluxioURI uri = mPathResolverCache.getUnchecked(path);
-    if (uri.getName().length() > MAX_NAME_LENGTH) {
-      LOG.error("Failed to mkdir {}: name longer than {} characters", path, MAX_NAME_LENGTH);
-      return -ErrorCodes.ENAMETOOLONG();
-    }
     try {
       mFileSystem.createDirectory(uri,
           CreateDirectoryPOptions.newBuilder()
