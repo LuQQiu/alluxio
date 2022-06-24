@@ -424,6 +424,7 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
           CreateDirectoryPOptions.newBuilder()
               .setMode(new Mode((short) mode).toProto())
               .build());
+      LOG.info("uid {} gid {} user name {}, group name {}", context.uid.intValue(), context.gid.intValue(), userName, groupName);
       mFileSystem.setAttribute(uri, SetAttributePOptions.newBuilder().setOwner(userName).setGroup(groupName).build());
       // mAuthPolicy.setUserGroupIfNeeded(uri);
     } catch (FileAlreadyExistsException e) {
