@@ -411,10 +411,6 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
 
   private int mkdirInternal(String path, long mode) {
     final AlluxioURI uri = mPathResolverCache.getUnchecked(path);
-    Optional<URIStatus> status = AlluxioFuseUtils.getPathStatus(mFileSystem, uri);
-    if (status.isPresent()) {
-      return -ErrorCodes.EEXIST();
-    }
     // when parent is a file, return ENOTDIR
     // when current is a file, return EEXIST
     try {
