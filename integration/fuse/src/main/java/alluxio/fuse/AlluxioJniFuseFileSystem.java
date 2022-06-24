@@ -23,6 +23,8 @@ import alluxio.collections.IndexedSet;
 import alluxio.conf.PropertyKey;
 import alluxio.exception.AccessControlException;
 import alluxio.exception.AlluxioException;
+import alluxio.exception.FileAlreadyCompletedException;
+import alluxio.exception.FileAlreadyExistsException;
 import alluxio.exception.FileDoesNotExistException;
 import alluxio.fuse.auth.AuthPolicy;
 import alluxio.fuse.auth.AuthPolicyFactory;
@@ -409,14 +411,23 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
 
   private int mkdirInternal(String path, long mode) {
     final AlluxioURI uri = mPathResolverCache.getUnchecked(path);
+    Optional<URIStatus> status = AlluxioFuseUtils.getPathStatus(mFileSystem, uri);
+    if (status.isPresent()) {
+      return -ErrorCodes.EEXIST();
+    }
+    // when parent is a file, return ENOTDIR
+    // when current is a file, return EEXIST
     try {
       mFileSystem.createDirectory(uri,
           CreateDirectoryPOptions.newBuilder()
               .setMode(new Mode((short) mode).toProto())
               .build());
       mAuthPolicy.setUserGroupIfNeeded(uri);
-    } catch (IOException | AlluxioException e) {
+    } catch (FileAlreadyExistsException e) {
       LOG.error("Failed to mkdir {}", path, e);
+      return -ErrorCodes.EEXIST();
+    } catch (IOException | AlluxioException ie) {
+      LOG.error("Failed to mkdir {}", path, ie);
       return -ErrorCodes.EIO();
     }
     return 0;
