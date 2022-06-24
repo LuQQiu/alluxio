@@ -37,6 +37,7 @@ import alluxio.jnifuse.ErrorCodes;
 import alluxio.jnifuse.FuseException;
 import alluxio.jnifuse.FuseFillDir;
 import alluxio.jnifuse.struct.FileStat;
+import alluxio.jnifuse.struct.FuseContext;
 import alluxio.jnifuse.struct.FuseFileInfo;
 import alluxio.jnifuse.struct.Statvfs;
 import alluxio.metrics.MetricKey;
@@ -411,19 +412,25 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
 
   private int mkdirInternal(String path, long mode) {
     final AlluxioURI uri = mPathResolverCache.getUnchecked(path);
-    // when parent is a file, return ENOTDIR
-    // when current is a file, return EEXIST
+    if (uri.getName().length() > MAX_NAME_LENGTH) {
+      LOG.error("Failed to mkdir {}: name longer than {} characters", path, MAX_NAME_LENGTH);
+      return -ErrorCodes.ENAMETOOLONG();
+    }
     try {
+      FuseContext context = getContext();
+      String userName = AlluxioFuseUtils.getUserName(context.uid.intValue());
+      String groupName = AlluxioFuseUtils.getGroupName(context.gid.intValue());
       mFileSystem.createDirectory(uri,
           CreateDirectoryPOptions.newBuilder()
               .setMode(new Mode((short) mode).toProto())
               .build());
-      mAuthPolicy.setUserGroupIfNeeded(uri);
+      mFileSystem.setAttribute(uri, SetAttributePOptions.newBuilder().setOwner(userName).setGroup(groupName).build());
+      // mAuthPolicy.setUserGroupIfNeeded(uri);
     } catch (FileAlreadyExistsException e) {
       LOG.error("Failed to mkdir {}", path, e);
       return -ErrorCodes.EEXIST();
-    } catch (IOException | AlluxioException ie) {
-      LOG.error("Failed to mkdir {}", path, ie);
+    } catch (IOException | AlluxioException e) {
+      LOG.error("Failed to mkdir {}", path, e);
       return -ErrorCodes.EIO();
     }
     return 0;
