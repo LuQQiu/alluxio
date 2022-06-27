@@ -276,20 +276,20 @@ public final class AlluxioFuseUtils {
    * @return group name
    */
   public static String getGroupName(long gid) {
+    String res = null;
     try {
       if (OSUtils.isLinux()) {
         String script = "getent group " + gid + " | cut -d: -f1";
-        return ShellUtils.execCommand("bash", "-c", script).trim();
+        res = ShellUtils.execCommand("bash", "-c", script).trim();
       } else if (OSUtils.isMacOS()) {
         String script =
             "dscl . list /Groups PrimaryGroupID | awk '($2 == \"" + gid + "\") { print $1 }'";
-        return ShellUtils.execCommand("bash", "-c", script).trim();
+        res = ShellUtils.execCommand("bash", "-c", script).trim();
       }
     } catch (IOException e) {
       LOG.error("Failed to get group name of gid {}", gid, e);
-      return String.valueOf(gid);
     }
-    return String.valueOf(gid);
+    return res == null || res.isEmpty() ? String.valueOf(gid) : res;
   }
 
   /**
