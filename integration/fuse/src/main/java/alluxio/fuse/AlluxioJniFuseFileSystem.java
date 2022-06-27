@@ -23,6 +23,7 @@ import alluxio.collections.IndexedSet;
 import alluxio.conf.PropertyKey;
 import alluxio.exception.AccessControlException;
 import alluxio.exception.AlluxioException;
+import alluxio.exception.FileAlreadyExistsException;
 import alluxio.exception.FileDoesNotExistException;
 import alluxio.fuse.auth.AuthPolicy;
 import alluxio.fuse.auth.AuthPolicyFactory;
@@ -418,6 +419,9 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
               .setMode(new Mode((short) mode).toProto())
               .build());
       mAuthPolicy.setUserGroupIfNeeded(uri);
+    } catch (FileAlreadyExistsException e) {
+      LOG.error("Failed to mkdir {}: path already exist", path, e);
+      return -ErrorCodes.EEXIST();
     } catch (IOException | AlluxioException e) {
       LOG.error("Failed to mkdir {}", path, e);
       return -ErrorCodes.EIO();
