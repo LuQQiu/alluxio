@@ -42,6 +42,7 @@ import alluxio.util.OSUtils;
 import alluxio.util.ShellUtils;
 import alluxio.util.WaitForOptions;
 
+import com.sun.org.apache.xpath.internal.operations.Number;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import ru.serce.jnrfuse.ErrorCodes;
@@ -221,9 +222,17 @@ public final class AlluxioFuseUtils {
         String result = ShellUtils.execCommand("bash", "-c", script).trim();
         return Long.parseLong(result);
       }
-      return ID_NOT_SET_VALUE;
+      return getLongOrDefault(groupName);
     } catch (NumberFormatException | IOException e) {
       LOG.error("Failed to get gid from group name {}.", groupName);
+      return getLongOrDefault(groupName);
+    }
+  }
+  
+  private static long getLongOrDefault(String name) {
+    try {
+      return Long.parseLong(name);
+    } catch (NumberFormatException e) {
       return ID_NOT_SET_VALUE;
     }
   }
@@ -232,14 +241,15 @@ public final class AlluxioFuseUtils {
    * Gets the user name from the user id.
    *
    * @param uid user id
-   * @return user name
+   * @return the resolved username or the original uid
    */
   public static String getUserName(long uid) {
     try {
       return ShellUtils.execCommand("bash", "-c", "id -nu " + uid).trim();
     } catch (IOException e) {
-      LOG.error("Failed to get user name of uid {}", uid, e);
-      return INVALID_USER_GROUP_NAME;
+      LOG.debug("Failed to get user name of uid {}", uid, e);
+      // Am i able to set nonexisting user/group
+      return String.valueOf(uid);
     }
   }
 
@@ -254,7 +264,7 @@ public final class AlluxioFuseUtils {
       List<String> groups = CommonUtils.getUnixGroups(userName);
       return groups.isEmpty() ? INVALID_USER_GROUP_NAME : groups.get(0);
     } catch (IOException e) {
-      LOG.error("Failed to get group name of user name {}", userName, e);
+      LOG.debug("Failed to get group name of user name {}", userName, e);
       return INVALID_USER_GROUP_NAME;
     }
   }
@@ -277,9 +287,9 @@ public final class AlluxioFuseUtils {
       }
     } catch (IOException e) {
       LOG.error("Failed to get group name of gid {}", gid, e);
-      return INVALID_USER_GROUP_NAME;
+      return String.valueOf(gid);
     }
-    return INVALID_USER_GROUP_NAME;
+    return String.valueOf(gid);
   }
 
   /**
@@ -316,7 +326,7 @@ public final class AlluxioFuseUtils {
       return Long.parseLong(output);
     } catch (IOException | NumberFormatException e) {
       LOG.error("Failed to get id from {} with option {}", username, option);
-      return ID_NOT_SET_VALUE;
+      return getLongOrDefault(username);
     }
   }
 

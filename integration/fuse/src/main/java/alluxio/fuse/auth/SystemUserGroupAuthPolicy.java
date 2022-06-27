@@ -36,11 +36,24 @@ public final class SystemUserGroupAuthPolicy implements AuthPolicy {
   private static final Logger LOG = LoggerFactory.getLogger(
       SystemUserGroupAuthPolicy.class);
 
+  private final LoadingCache<Long, String> mUsernameCache = CacheBuilder.newBuilder()
+      .maximumSize(100)
+      .build(new CacheLoader<Long, String>() {
+        @Override
+        public String load(Long uid) {
+          return AlluxioFuseUtils.getUserName(uid);
+        }
+      });
+  private final LoadingCache<Long, String> mGroupnameCache = CacheBuilder.newBuilder()
+      .maximumSize(100)
+      .build(new CacheLoader<Long, String>() {
+        @Override
+        public String load(Long gid) {
+          return AlluxioFuseUtils.getGroupName(gid);
+        }
+      });
   private final FileSystem mFileSystem;
   private final AbstractFuseFileSystem mFuseFileSystem;
-  private final boolean mIsUserGroupTranslation;
-  private final LoadingCache<Long, String> mUsernameCache;
-  private final LoadingCache<Long, String> mGroupnameCache;
 
   /**
    * @param fileSystem     the Alluxio file system
@@ -51,32 +64,11 @@ public final class SystemUserGroupAuthPolicy implements AuthPolicy {
       AbstractFuseFileSystem fuseFileSystem) {
     mFileSystem = fileSystem;
     mFuseFileSystem = fuseFileSystem;
-
-    mUsernameCache = CacheBuilder.newBuilder()
-        .maximumSize(100)
-        .build(new CacheLoader<Long, String>() {
-          @Override
-          public String load(Long uid) {
-            return AlluxioFuseUtils.getUserName(uid);
-          }
-        });
-    mGroupnameCache = CacheBuilder.newBuilder()
-        .maximumSize(100)
-        .build(new CacheLoader<Long, String>() {
-          @Override
-          public String load(Long gid) {
-            return AlluxioFuseUtils.getGroupName(gid);
-          }
-        });
-    mIsUserGroupTranslation = fuseFsOpts.isUserGroupTranslationEnabled();
   }
 
   @Override
   public void setUserGroupIfNeeded(AlluxioURI uri) {
     FuseContext fc = mFuseFileSystem.getContext();
-    if (!mIsUserGroupTranslation) {
-      return;
-    }
     long uid = fc.uid.get();
     long gid = fc.gid.get();
     if (uid == AlluxioFuseUtils.ID_NOT_SET_VALUE
@@ -91,20 +83,14 @@ public final class SystemUserGroupAuthPolicy implements AuthPolicy {
       return;
     }
     try {
-      String groupName = gid != AlluxioFuseUtils.DEFAULT_GID
-          ? mGroupnameCache.get(gid) : AlluxioFuseUtils.DEFAULT_GROUP_NAME;
-      String userName = uid != AlluxioFuseUtils.DEFAULT_UID
-          ? mUsernameCache.get(uid) : AlluxioFuseUtils.DEFAULT_USER_NAME;
-      if (userName.isEmpty() || groupName.isEmpty()) {
-        // cannot get valid user name and group name
-        return;
-      }
+      String userName = mUsernameCache.get(uid);
+      String groupName = mGroupnameCache.get(gid);
       SetAttributePOptions attributeOptions = SetAttributePOptions.newBuilder()
           .setGroup(groupName)
           .setOwner(userName)
           .build();
-      LOG.debug("Set attributes of path {} to {}", uri, attributeOptions);
       mFileSystem.setAttribute(uri, attributeOptions);
+      LOG.debug("Set attributes of path {} to {}", uri, attributeOptions);
     } catch (IOException | ExecutionException | AlluxioException e) {
       throw new RuntimeException(e);
     }

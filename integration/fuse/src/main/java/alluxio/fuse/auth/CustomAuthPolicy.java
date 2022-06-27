@@ -13,11 +13,13 @@ package alluxio.fuse.auth;
 
 import alluxio.AlluxioURI;
 import alluxio.client.file.FileSystem;
+import alluxio.conf.PropertyKey;
 import alluxio.exception.AlluxioException;
 import alluxio.fuse.AlluxioFuseFileSystemOpts;
 import alluxio.grpc.SetAttributePOptions;
 import alluxio.jnifuse.AbstractFuseFileSystem;
 
+import com.google.common.base.Preconditions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,8 +33,7 @@ public class CustomAuthPolicy implements AuthPolicy {
   private static final Logger LOG =
       LoggerFactory.getLogger(CustomAuthPolicy.class);
   private final FileSystem mFileSystem;
-  private final Optional<String> mUname;
-  private final Optional<String> mGname;
+  private final SetAttributePOptions mSetAttributeOptions;
 
   /**
    * @param fileSystem     the Alluxio file system
@@ -41,25 +42,28 @@ public class CustomAuthPolicy implements AuthPolicy {
    */
   public CustomAuthPolicy(FileSystem fileSystem, AlluxioFuseFileSystemOpts fuseFsOpts,
       AbstractFuseFileSystem fuseFileSystem) {
-    mFileSystem = fileSystem;
-    mUname = fuseFsOpts.getFuseAuthPolicyCustomUser();
-    mGname = fuseFsOpts.getFuseAuthPolicyCustomGroup();
+    mFileSystem = Preconditions.checkNotNull(fileSystem);
+    Preconditions.checkArgument(fuseFsOpts.getFuseAuthPolicyCustomUser().isPresent()
+        && !fuseFsOpts.getFuseAuthPolicyCustomUser().get().isEmpty(), 
+        String.format("%s should not be null or empty when using %s",
+            PropertyKey.FUSE_AUTH_POLICY_CUSTOM_USER.getName(), this.getClass().getName()));
+    Preconditions.checkArgument(fuseFsOpts.getFuseAuthPolicyCustomGroup().isPresent()
+        && !fuseFsOpts.getFuseAuthPolicyCustomGroup().get().isEmpty(),
+        String.format("%s should not be null or empty when using %s",
+            PropertyKey.FUSE_AUTH_POLICY_CUSTOM_GROUP.getName(), this.getClass().getName()));
+    String owner = fuseFsOpts.getFuseAuthPolicyCustomUser().get();
+    String group = fuseFsOpts.getFuseAuthPolicyCustomGroup().get();
+    mSetAttributeOptions = SetAttributePOptions.newBuilder()
+        .setOwner(owner).setGroup(group).build();
+    LOG.debug("Created {} with owner {} and group {}", this.getClass().getName(), owner, group);
   }
 
   @Override
   public void setUserGroupIfNeeded(AlluxioURI uri) {
-    if (!mUname.isPresent() || !mGname.isPresent()) {
-      return;
-    }
-    SetAttributePOptions attributeOptions = SetAttributePOptions.newBuilder()
-        .setGroup(mGname.get())
-        .setOwner(mUname.get())
-        .build();
     try {
-      mFileSystem.setAttribute(uri, attributeOptions);
+      mFileSystem.setAttribute(uri, mSetAttributeOptions);
     } catch (IOException | AlluxioException e) {
       throw new RuntimeException(e);
     }
-    LOG.debug("Set attributes of path {} to {}", uri, attributeOptions);
   }
 }

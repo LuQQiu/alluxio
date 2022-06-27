@@ -16,19 +16,26 @@ import alluxio.client.file.FileSystem;
 import alluxio.conf.AlluxioConfiguration;
 import alluxio.jnifuse.AbstractFuseFileSystem;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
- * A Fuse authentication policy that does nothing.
- * Mainly for testing purpose.
+ * A default Fuse authentication policy that does nothing.
+ * Alluxio Fuse does the authentication based on the user and group that launches the
+ * process whether Fuse applications runs inside.
  */
-public class NoopAuthPolicy implements AuthPolicy {
+public class DefaultAuthPolicy implements AuthPolicy {
+  private static final Logger LOG =
+      LoggerFactory.getLogger(CustomAuthPolicy.class);
 
   /**
    * @param fileSystem     the Alluxio file system
    * @param conf           alluxio configuration
    * @param fuseFileSystem the FuseFileSystem
    */
-  public NoopAuthPolicy(FileSystem fileSystem, AlluxioConfiguration conf,
+  public DefaultAuthPolicy(FileSystem fileSystem, AlluxioConfiguration conf,
       AbstractFuseFileSystem fuseFileSystem) {
+    // log the UID and GID
   }
 
   @Override
