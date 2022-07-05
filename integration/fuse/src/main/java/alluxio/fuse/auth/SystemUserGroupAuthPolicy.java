@@ -18,12 +18,17 @@ import alluxio.fuse.AlluxioFuseUtils;
 import alluxio.jnifuse.AbstractFuseFileSystem;
 import alluxio.jnifuse.struct.FuseContext;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * The system user group authentication policy that always set the user group
  * to the actual end user.
  * Note that this may downgrade the performance of creating file/directory.
  */
 public final class SystemUserGroupAuthPolicy extends FuseUserGroupAuthPolicy {
+  private static final Logger LOG = LoggerFactory.getLogger(SystemUserGroupAuthPolicy.class);
+
   /**
    * @param fileSystem     the Alluxio file system
    * @param fuseFsOpts     the options for AlluxioFuse filesystem
@@ -37,6 +42,7 @@ public final class SystemUserGroupAuthPolicy extends FuseUserGroupAuthPolicy {
   @Override
   public void setUserGroup(AlluxioURI uri) {
     FuseContext fc = mFuseFileSystem.getContext();
+    LOG.info("Setting uid {} and gid {} for path {}", fc.uid.get(), fc.gid.get(), uri);
     setUserGroup(uri, fc.uid.get(), fc.gid.get());
   }
 
