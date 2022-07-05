@@ -24,6 +24,7 @@ import com.google.common.base.Preconditions;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.file.AccessDeniedException;
 import java.util.Optional;
 import javax.annotation.concurrent.ThreadSafe;
 
@@ -46,11 +47,11 @@ public class FuseFileInStream implements FuseFileStream {
    * @return a {@link FuseFileInStream}
    */
   public static FuseFileInStream create(FileSystem fileSystem, AlluxioURI uri,
-      int flags, Optional<URIStatus> status) {
+      int flags, Optional<URIStatus> status) throws AccessDeniedException {
     Preconditions.checkNotNull(fileSystem);
     Preconditions.checkNotNull(uri);
     if (AlluxioFuseOpenUtils.containsTruncate(flags)) {
-      throw new UnsupportedOperationException(String.format(
+      throw new AccessDeniedException(String.format(
           "Failed to create read-only stream for path %s: flags 0x%x contains truncate",
           uri, flags));
     }

@@ -22,6 +22,7 @@ import alluxio.fuse.auth.AuthPolicy;
 import jnr.constants.platform.OpenFlags;
 
 import java.nio.ByteBuffer;
+import java.nio.file.AccessDeniedException;
 import java.util.Optional;
 import javax.annotation.concurrent.ThreadSafe;
 
@@ -103,7 +104,7 @@ public interface FuseFileStream extends AutoCloseable {
      * @return the created fuse file stream
      */
     public FuseFileStream create(
-        AlluxioURI uri, int flags, long mode) {
+        AlluxioURI uri, int flags, long mode) throws AccessDeniedException {
       Optional<URIStatus> status = AlluxioFuseUtils.getPathStatus(mFileSystem, uri);
       switch (OpenFlags.valueOf(flags & O_ACCMODE.intValue())) {
         case O_RDONLY:

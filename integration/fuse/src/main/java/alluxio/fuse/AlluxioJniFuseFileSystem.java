@@ -57,6 +57,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.file.AccessDeniedException;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -208,7 +209,13 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
           path, MAX_NAME_LENGTH);
       return -ErrorCodes.ENAMETOOLONG();
     }
-    FuseFileStream stream = mStreamFactory.create(uri, fi.flags.get(), mode);
+    FuseFileStream stream;
+    try {
+      stream = mStreamFactory.create(uri, fi.flags.get(), mode);
+    } catch (AccessDeniedException e) {
+      LOG.error("Failed to create/open {}: access denied", uri, e);
+      return -ErrorCodes.EACCES();
+    }
     long fd = mNextOpenFileId.getAndIncrement();
     mFileEntries.add(new FuseFileEntry<>(fd, path, stream));
     fi.fh.set(fd);
