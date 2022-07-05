@@ -67,6 +67,9 @@ public class FuseUserGroupAuthPolicy implements AuthPolicy {
     mFileSystem = fileSystem;
     mFuseFileSystem = fuseFileSystem;
     mFuseOptions = fuseFsOpts;
+    LOG.info("Default uid is {}, default user name {}, default gid {}, default group name {}", 
+        AlluxioFuseUtils.DEFAULT_UID, AlluxioFuseUtils.DEFAULT_USER_NAME,
+        AlluxioFuseUtils.DEFAULT_GID, AlluxioFuseUtils.DEFAULT_GROUP_NAME);
   }
 
   @Override
@@ -76,6 +79,7 @@ public class FuseUserGroupAuthPolicy implements AuthPolicy {
 
   @Override
   public void setUserGroup(AlluxioURI uri, long uid, long gid) {
+    LOG.info("Setting uid {} and gid {} for path {}", uid, gid, uri);
     if (uid == AlluxioFuseUtils.ID_NOT_SET_VALUE
         || uid == AlluxioFuseUtils.ID_NOT_SET_VALUE_UNSIGNED
         || gid == AlluxioFuseUtils.ID_NOT_SET_VALUE
@@ -92,6 +96,7 @@ public class FuseUserGroupAuthPolicy implements AuthPolicy {
           ? mUsernameCache.get(uid) : AlluxioFuseUtils.DEFAULT_USER_NAME;
       String groupName = gid != AlluxioFuseUtils.DEFAULT_GID
           ? mGroupnameCache.get(gid) : AlluxioFuseUtils.DEFAULT_GROUP_NAME;
+      LOG.info("path {}, user name {}, group name {}", uri, userName, groupName);
       if (userName.isEmpty() || groupName.isEmpty()) {
         // cannot get valid user name and group name
         return;
@@ -100,7 +105,7 @@ public class FuseUserGroupAuthPolicy implements AuthPolicy {
           .setGroup(groupName)
           .setOwner(userName)
           .build();
-      LOG.debug("Set attributes of path {} to {}", uri, attributeOptions);
+      LOG.info("Set attributes of path {} to {}", uri, attributeOptions);
       mFileSystem.setAttribute(uri, attributeOptions);
     } catch (IOException | ExecutionException | AlluxioException e) {
       throw new RuntimeException(e);
