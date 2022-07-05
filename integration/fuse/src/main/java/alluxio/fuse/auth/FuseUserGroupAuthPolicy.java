@@ -76,23 +76,22 @@ public class FuseUserGroupAuthPolicy implements AuthPolicy {
 
   @Override
   public void setUserGroup(AlluxioURI uri, long uid, long gid) {
-    if (uid == AlluxioFuseUtils.ID_NOT_SET_VALUE
-        || uid == AlluxioFuseUtils.ID_NOT_SET_VALUE_UNSIGNED
-        || gid == AlluxioFuseUtils.ID_NOT_SET_VALUE
-        || gid == AlluxioFuseUtils.ID_NOT_SET_VALUE_UNSIGNED) {
-      // cannot get valid uid or gid
-      return;
-    }
     if (uid == AlluxioFuseUtils.DEFAULT_UID && gid == AlluxioFuseUtils.DEFAULT_GID) {
       // no need to set attribute
       return;
     }
+    SetAttributePOptions.Builder attributeBuilder = SetAttributePOptions.newBuilder();
     try {
-      SetAttributePOptions attributeOptions = SetAttributePOptions.newBuilder()
-          .setGroup(mGroupnameCache.get(gid))
-          .setOwner(mUsernameCache.get(uid))
-          .build();
-      LOG.debug("Set attributes of path {} to {}", uri, attributeOptions);
+      if (uid != AlluxioFuseUtils.ID_NOT_SET_VALUE
+          && uid != AlluxioFuseUtils.ID_NOT_SET_VALUE_UNSIGNED) {
+        attributeBuilder.setOwner(mUsernameCache.get(uid));
+      }
+      if (gid != AlluxioFuseUtils.ID_NOT_SET_VALUE
+          && gid != AlluxioFuseUtils.ID_NOT_SET_VALUE_UNSIGNED) {
+        attributeBuilder.setGroup(mGroupnameCache.get(gid));
+      }
+      SetAttributePOptions attributeOptions = attributeBuilder.build();
+      LOG.debug("Setting attributes of path {} to {}", uri, attributeOptions);
       mFileSystem.setAttribute(uri, attributeOptions);
     } catch (IOException | ExecutionException | AlluxioException e) {
       throw new RuntimeException(e);
