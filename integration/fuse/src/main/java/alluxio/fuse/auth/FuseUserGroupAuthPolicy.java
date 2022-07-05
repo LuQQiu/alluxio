@@ -99,6 +99,7 @@ public class FuseUserGroupAuthPolicy implements AuthPolicy {
       LOG.info("path {}, user name {}, group name {}", uri, userName, groupName);
       if (userName.isEmpty() || groupName.isEmpty()) {
         // cannot get valid user name and group name
+        // Add logs
         return;
       }
       SetAttributePOptions attributeOptions = SetAttributePOptions.newBuilder()
