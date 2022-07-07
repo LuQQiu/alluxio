@@ -119,9 +119,6 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
   /** df command will treat -1 as an unknown value. */
   @VisibleForTesting
   public static final int UNKNOWN_INODES = -1;
-  /** Most FileSystems on linux limit the length of file name beyond 255 characters. */
-  @VisibleForTesting
-  public static final int MAX_NAME_LENGTH = 255;
 
   /**
    * Creates a new instance of {@link AlluxioJniFuseFileSystem}.
@@ -203,10 +200,9 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
 
   private int createOrOpenInternal(String path, FuseFileInfo fi, long mode) {
     final AlluxioURI uri = mPathResolverCache.getUnchecked(path);
-    if (uri.getName().length() > MAX_NAME_LENGTH) {
-      LOG.error("Failed to create/open {}: file name longer than {} characters",
-          path, MAX_NAME_LENGTH);
-      return -ErrorCodes.ENAMETOOLONG();
+    int res = AlluxioFuseUtils.checkFileLength(uri);
+    if (res != 0) {
+      return res;
     }
     FuseFileStream stream = mStreamFactory.create(uri, fi.flags.get(), mode);
     long fd = mNextOpenFileId.getAndIncrement();
@@ -223,10 +219,18 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
 
   private int getattrInternal(String path, FileStat stat) {
     final AlluxioURI uri = mPathResolverCache.getUnchecked(path);
+<<<<<<< HEAD
     if (uri.getName().length() > MAX_NAME_LENGTH) {
       LOG.error("Failed to getattr {}: name longer than {} characters", path, MAX_NAME_LENGTH);
       return -ErrorCodes.ENAMETOOLONG();
     }
+||||||| c09f742da6
+=======
+    int res = AlluxioFuseUtils.checkFileLength(uri);
+    if (res != 0) {
+      return res;
+    }
+>>>>>>> f4e1dde12f6b4afe746ea3d07e25fd183e71b5a2
     try {
       URIStatus status;
       // Handle special metadata cache operation
@@ -308,10 +312,18 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
   private int readdirInternal(String path, long buff, long filter, long offset,
       FuseFileInfo fi) {
     final AlluxioURI uri = mPathResolverCache.getUnchecked(path);
+<<<<<<< HEAD
     if (uri.getName().length() > MAX_NAME_LENGTH) {
       LOG.error("Failed to readdir {}: name longer than {} characters", path, MAX_NAME_LENGTH);
       return -ErrorCodes.ENAMETOOLONG();
     }
+||||||| c09f742da6
+=======
+    int res = AlluxioFuseUtils.checkFileLength(uri);
+    if (res != 0) {
+      return res;
+    }
+>>>>>>> f4e1dde12f6b4afe746ea3d07e25fd183e71b5a2
     try {
       // standard . and .. entries
       FuseFillDir.apply(filter, buff, ".", null, 0);
@@ -411,9 +423,9 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
 
   private int mkdirInternal(String path, long mode) {
     final AlluxioURI uri = mPathResolverCache.getUnchecked(path);
-    if (uri.getName().length() > MAX_NAME_LENGTH) {
-      LOG.error("Failed to mkdir {}: name longer than {} characters", path, MAX_NAME_LENGTH);
-      return -ErrorCodes.ENAMETOOLONG();
+    int res = AlluxioFuseUtils.checkFileLength(uri);
+    if (res != 0) {
+      return res;
     }
     try {
       mFileSystem.createDirectory(uri,
@@ -445,6 +457,7 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
    * @return 0 on success, a negative value on error
    */
   private int rmInternal(String path) {
+<<<<<<< HEAD
     final AlluxioURI uri = mPathResolverCache.getUnchecked(path);
     if (uri.getName().length() > MAX_NAME_LENGTH) {
       LOG.error("Failed to delete {}: name longer than {} characters", path, MAX_NAME_LENGTH);
@@ -462,6 +475,16 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
       LOG.error("Failed to remove {}: ", path, e);
       return -ErrorCodes.EIO();
     }
+||||||| c09f742da6
+    AlluxioFuseUtils.deleteFile(mFileSystem, mPathResolverCache.getUnchecked(path));
+=======
+    final AlluxioURI uri = mPathResolverCache.getUnchecked(path);
+    int res = AlluxioFuseUtils.checkFileLength(uri);
+    if (res != 0) {
+      return res;
+    }
+    AlluxioFuseUtils.deleteFile(mFileSystem, mPathResolverCache.getUnchecked(path));
+>>>>>>> f4e1dde12f6b4afe746ea3d07e25fd183e71b5a2
     return 0;
   }
 
@@ -474,11 +497,9 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
   private int renameInternal(String sourcePath, String destPath) {
     final AlluxioURI sourceUri = mPathResolverCache.getUnchecked(sourcePath);
     final AlluxioURI destUri = mPathResolverCache.getUnchecked(destPath);
-    final String name = destUri.getName();
-    if (name.length() > MAX_NAME_LENGTH) {
-      LOG.error("Failed to rename {} to {}: name {} is longer than {} characters",
-          sourcePath, destPath, name, MAX_NAME_LENGTH);
-      return -ErrorCodes.ENAMETOOLONG();
+    int res = AlluxioFuseUtils.checkFileLength(destUri);
+    if (res != 0) {
+      return res;
     }
     Optional<URIStatus> status = AlluxioFuseUtils.getPathStatus(mFileSystem, sourceUri);
     if (!status.isPresent()) {
@@ -507,11 +528,20 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
   }
 
   private int chmodInternal(String path, long mode) {
+<<<<<<< HEAD
     final AlluxioURI uri = mPathResolverCache.getUnchecked(path);
     if (uri.getName().length() > MAX_NAME_LENGTH) {
       LOG.error("Failed to chmod {}: name longer than {} characters", path, MAX_NAME_LENGTH);
       return -ErrorCodes.ENAMETOOLONG();
     }
+||||||| c09f742da6
+=======
+    final AlluxioURI uri = mPathResolverCache.getUnchecked(path);
+    int res = AlluxioFuseUtils.checkFileLength(uri);
+    if (res != 0) {
+      return res;
+    }
+>>>>>>> f4e1dde12f6b4afe746ea3d07e25fd183e71b5a2
     AlluxioFuseUtils.setAttribute(mFileSystem, mPathResolverCache.getUnchecked(path),
         SetAttributePOptions.newBuilder()
             .setMode(new Mode((short) mode).toProto()).build());
@@ -525,10 +555,85 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
   }
 
   private int chownInternal(String path, long uid, long gid) {
+<<<<<<< HEAD
     final AlluxioURI uri = mPathResolverCache.getUnchecked(path);
     if (uri.getName().length() > MAX_NAME_LENGTH) {
       LOG.error("Failed to chown {}: name longer than {} characters", path, MAX_NAME_LENGTH);
       return -ErrorCodes.ENAMETOOLONG();
+||||||| c09f742da6
+    if (!mFuseFsOpts.isUserGroupTranslationEnabled()) {
+      LOG.warn("Failed to chown {}: "
+          + "Please set {} to true to enable user group translation in Alluxio-FUSE.",
+          path, PropertyKey.FUSE_USER_GROUP_TRANSLATION_ENABLED);
+      return -ErrorCodes.EOPNOTSUPP();
+    }
+
+    SetAttributePOptions.Builder optionsBuilder = SetAttributePOptions.newBuilder();
+    String userName = "";
+    if (uid != AlluxioFuseUtils.ID_NOT_SET_VALUE
+        && uid != AlluxioFuseUtils.ID_NOT_SET_VALUE_UNSIGNED) {
+      userName = AlluxioFuseUtils.getUserName(uid);
+      if (userName.isEmpty()) {
+        // This should never be reached
+        LOG.error("Failed to chown {}: failed to get user name from uid {}", path, uid);
+        return -ErrorCodes.EINVAL();
+      }
+      optionsBuilder.setOwner(userName);
+    }
+
+    String groupName;
+    if (gid != AlluxioFuseUtils.ID_NOT_SET_VALUE
+        && gid != AlluxioFuseUtils.ID_NOT_SET_VALUE_UNSIGNED) {
+      groupName = AlluxioFuseUtils.getGroupName(gid);
+      if (groupName.isEmpty()) {
+        // This should never be reached
+        LOG.error("Failed to chown {}: failed to get group name from gid {}", path, gid);
+        return -ErrorCodes.EINVAL();
+      }
+      optionsBuilder.setGroup(groupName);
+    } else if (!userName.isEmpty()) {
+      groupName = AlluxioFuseUtils.getGroupName(userName);
+      optionsBuilder.setGroup(groupName);
+=======
+    final AlluxioURI uri = mPathResolverCache.getUnchecked(path);
+    int res = AlluxioFuseUtils.checkFileLength(uri);
+    if (res != 0) {
+      return res;
+    }
+    if (!mFuseFsOpts.isUserGroupTranslationEnabled()) {
+      LOG.warn("Failed to chown {}: "
+          + "Please set {} to true to enable user group translation in Alluxio-FUSE.",
+          path, PropertyKey.FUSE_USER_GROUP_TRANSLATION_ENABLED);
+      return -ErrorCodes.EOPNOTSUPP();
+    }
+
+    SetAttributePOptions.Builder optionsBuilder = SetAttributePOptions.newBuilder();
+    String userName = "";
+    if (uid != AlluxioFuseUtils.ID_NOT_SET_VALUE
+        && uid != AlluxioFuseUtils.ID_NOT_SET_VALUE_UNSIGNED) {
+      userName = AlluxioFuseUtils.getUserName(uid);
+      if (userName.isEmpty()) {
+        // This should never be reached
+        LOG.error("Failed to chown {}: failed to get user name from uid {}", path, uid);
+        return -ErrorCodes.EINVAL();
+      }
+      optionsBuilder.setOwner(userName);
+    }
+
+    String groupName;
+    if (gid != AlluxioFuseUtils.ID_NOT_SET_VALUE
+        && gid != AlluxioFuseUtils.ID_NOT_SET_VALUE_UNSIGNED) {
+      groupName = AlluxioFuseUtils.getGroupName(gid);
+      if (groupName.isEmpty()) {
+        // This should never be reached
+        LOG.error("Failed to chown {}: failed to get group name from gid {}", path, gid);
+        return -ErrorCodes.EINVAL();
+      }
+      optionsBuilder.setGroup(groupName);
+    } else if (!userName.isEmpty()) {
+      groupName = AlluxioFuseUtils.getGroupName(userName);
+      optionsBuilder.setGroup(groupName);
+>>>>>>> f4e1dde12f6b4afe746ea3d07e25fd183e71b5a2
     }
     mAuthPolicy.setUserGroup(uri, uid, gid);
     return 0;
@@ -551,11 +656,20 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
   }
 
   private int truncateInternal(String path, long size) {
+<<<<<<< HEAD
     final AlluxioURI uri = mPathResolverCache.getUnchecked(path);
     if (uri.getName().length() > MAX_NAME_LENGTH) {
       LOG.error("Failed to truncate {}: name longer than {} characters", path, MAX_NAME_LENGTH);
       return -ErrorCodes.ENAMETOOLONG();
     }
+||||||| c09f742da6
+=======
+    final AlluxioURI uri = mPathResolverCache.getUnchecked(path);
+    int res = AlluxioFuseUtils.checkFileLength(uri);
+    if (res != 0) {
+      return res;
+    }
+>>>>>>> f4e1dde12f6b4afe746ea3d07e25fd183e71b5a2
     FuseFileEntry<FuseFileStream> entry = mFileEntries.getFirstByField(PATH_INDEX, path);
     if (entry != null) {
       entry.getFileStream().truncate(size);
@@ -591,11 +705,20 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
 
   @Override
   public int utimens(String path, long aSec, long aNsec, long mSec, long mNsec) {
+<<<<<<< HEAD
     final AlluxioURI uri = mPathResolverCache.getUnchecked(path);
     if (uri.getName().length() > MAX_NAME_LENGTH) {
       LOG.error("Failed to utimens {}: name longer than {} characters", path, MAX_NAME_LENGTH);
       return -ErrorCodes.ENAMETOOLONG();
     }
+||||||| c09f742da6
+=======
+    final AlluxioURI uri = mPathResolverCache.getUnchecked(path);
+    int res = AlluxioFuseUtils.checkFileLength(uri);
+    if (res != 0) {
+      return res;
+    }
+>>>>>>> f4e1dde12f6b4afe746ea3d07e25fd183e71b5a2
     // TODO(maobaolong): implements this logic for alluxio.
     LOG.debug("utimens for {}, but do nothing for this filesystem", path);
     return 0;
@@ -603,11 +726,20 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
 
   @Override
   public int symlink(String linkname, String path) {
+<<<<<<< HEAD
     final AlluxioURI uri = mPathResolverCache.getUnchecked(path);
     if (uri.getName().length() > MAX_NAME_LENGTH) {
       LOG.error("Failed to symlink {}: name longer than {} characters", path, MAX_NAME_LENGTH);
       return -ErrorCodes.ENAMETOOLONG();
     }
+||||||| c09f742da6
+=======
+    final AlluxioURI uri = mPathResolverCache.getUnchecked(path);
+    int res = AlluxioFuseUtils.checkFileLength(uri);
+    if (res != 0) {
+      return res;
+    }
+>>>>>>> f4e1dde12f6b4afe746ea3d07e25fd183e71b5a2
     LOG.warn("Not supported symlink operation, linkname {}, path{}", linkname, path);
     return -ErrorCodes.ENOTSUP();
   }
@@ -626,11 +758,20 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
   }
 
   private int statfsInternal(String path, Statvfs stbuf) {
+<<<<<<< HEAD
     final AlluxioURI uri = mPathResolverCache.getUnchecked(path);
     if (uri.getName().length() > MAX_NAME_LENGTH) {
       LOG.error("Failed to statfs {}: name longer than {} characters", path, MAX_NAME_LENGTH);
       return -ErrorCodes.ENAMETOOLONG();
     }
+||||||| c09f742da6
+=======
+    final AlluxioURI uri = mPathResolverCache.getUnchecked(path);
+    int res = AlluxioFuseUtils.checkFileLength(uri);
+    if (res != 0) {
+      return res;
+    }
+>>>>>>> f4e1dde12f6b4afe746ea3d07e25fd183e71b5a2
     BlockMasterInfo info = mFsStatCache.get();
     if (info == null) {
       LOG.error("Failed to statfs {}: cannot get block master info", path);
@@ -653,7 +794,7 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
     stbuf.f_ffree.set(UNKNOWN_INODES);
     stbuf.f_favail.set(UNKNOWN_INODES);
     // max file name length
-    stbuf.f_namemax.set(MAX_NAME_LENGTH);
+    stbuf.f_namemax.set(AlluxioFuseUtils.MAX_NAME_LENGTH);
     return 0;
   }
 
