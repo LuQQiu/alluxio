@@ -57,6 +57,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -467,7 +468,16 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
       return -ErrorCodes.EIO();
     }
     try {
-      mFileSystem.rename(sourceUri, destUri);
+      try {
+        mFileSystem.rename(sourceUri, destUri);
+      } catch (FileAlreadyExistsException e) {
+        try {
+          mFileSystem.delete(destUri);
+        } catch (DirectoryNotEmptyException de) {
+          return -ErrorCodes.ENOTEMPTY();
+        }
+        mFileSystem.rename(sourceUri, destUri);
+      }
     } catch (IOException | AlluxioException e) {
       LOG.error("Failed to rename {} to {}", sourcePath, destPath, e);
       return -ErrorCodes.EIO();
