@@ -59,7 +59,7 @@ ADD dockerfile-common.sh /
 # Install libfuse2 and libfuse3. Libfuse2 setup is modified from cheyang/fuse2:ubuntu1604-customize to be applied on centOS
 WORKDIR /
 
-ENV MAX_IDLE_THREADS "64"
+ENV MAX_IDLE_THREADS "128"
 
 RUN \
     yum update -y && yum upgrade -y && \
