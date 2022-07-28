@@ -12,6 +12,8 @@
 package alluxio.fuse;
 
 import alluxio.jnifuse.AbstractFuseFileSystem;
+import alluxio.jnifuse.ErrorCodes;
+import alluxio.jnifuse.FuseFillDir;
 import alluxio.jnifuse.struct.FileStat;
 import alluxio.jnifuse.struct.FuseFileInfo;
 import alluxio.util.io.FileUtils;
@@ -19,11 +21,18 @@ import alluxio.util.io.FileUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.attribute.PosixFileAttributeView;
 import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.UserPrincipalLookupService;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -40,15 +49,24 @@ import java.util.Set;
  * performance data for Alluxio jni-fuse implementations.
  * </p>
  */
-public class NoopFS extends AbstractFuseFileSystem {
+public class PartFS extends AbstractFuseFileSystem {
   private static final Logger LOG = LoggerFactory.getLogger(StackFS.class);
+  private static final long ID_NOT_SET_VALUE = -1;
+  private static final long ID_NOT_SET_VALUE_UNSIGNED = 4294967295L;
+
+  private final Path mRoot;
 
   /**
    * @param root root
    * @param mountPoint mount point
    */
-  public NoopFS(Path root, Path mountPoint) {
+  public PartFS(Path root, Path mountPoint) {
     super(mountPoint);
+    mRoot = root;
+  }
+
+  private String transformPath(String path) {
+    return mRoot + path;
   }
 
   private int getMode(Path path) throws IOException {
@@ -69,6 +87,18 @@ public class NoopFS extends AbstractFuseFileSystem {
   }
 
   private int getattrInternal(String path, FileStat stat) {
+    stat.st_size.set(0);
+    stat.st_blksize.set(0);
+
+    stat.st_ctim.tv_sec.set(-1);
+    stat.st_ctim.tv_nsec.set(-1);
+    stat.st_mtim.tv_sec.set(-1);
+    stat.st_mtim.tv_nsec.set(-1);
+
+    stat.st_uid.set(1100);
+    stat.st_gid.set(1100);
+
+    stat.st_mode.set(511);
     return 0;
   }
 
@@ -81,6 +111,16 @@ public class NoopFS extends AbstractFuseFileSystem {
 
   private int readdirInternal(String path, long buff, long filter, long offset,
       FuseFileInfo fi) {
+    path = transformPath(path);
+    File dir = new File(path);
+    FuseFillDir.apply(filter, buff, ".", null, 0);
+    FuseFillDir.apply(filter, buff, "..", null, 0);
+    File[] subfiles = dir.listFiles();
+    if (subfiles != null) {
+      for (File subfile : subfiles) {
+        FuseFillDir.apply(filter, buff, subfile.getName(), null, 0);
+      }
+    }
     return 0;
   }
 
@@ -131,7 +171,19 @@ public class NoopFS extends AbstractFuseFileSystem {
   }
 
   private int mkdirInternal(String path, long mode) {
-    return 0;
+    path = transformPath(path);
+    Path dirPath = Paths.get(path);
+    if (Files.exists(dirPath)) {
+      LOG.error("Dir {} already exist", path);
+      return -ErrorCodes.EEXIST();
+    }
+    try {
+      Files.createDirectory(dirPath);
+      return 0;
+    } catch (IOException e) {
+      LOG.error("Failed to mkdir {}", path, e);
+      return -ErrorCodes.EIO();
+    }
   }
 
   @Override
@@ -151,7 +203,25 @@ public class NoopFS extends AbstractFuseFileSystem {
   }
 
   private int renameInternal(String oldPath, String newPath) {
-    return 0;
+    oldPath = transformPath(oldPath);
+    newPath = transformPath(newPath);
+    Path oldFilePath = Paths.get(oldPath);
+    Path newFilePath = Paths.get(newPath);
+    if (!Files.exists(oldFilePath)) {
+      LOG.error("Old path {} does not exist", oldPath);
+      return -ErrorCodes.ENOENT();
+    }
+    if (Files.exists(newFilePath)) {
+      LOG.error("New path {} does not exist", newPath);
+      return -ErrorCodes.ENOENT();
+    }
+    try {
+      Files.move(oldFilePath, newFilePath);
+      return 0;
+    } catch (IOException e) {
+      LOG.error("Failed to move {} to {}", oldFilePath, newFilePath, e);
+      return -ErrorCodes.EIO();
+    }
   }
 
   @Override
@@ -161,7 +231,19 @@ public class NoopFS extends AbstractFuseFileSystem {
   }
 
   private int chmodInternal(String path, long mode) {
-    return 0;
+    path = transformPath(path);
+    Path filePath = Paths.get(path);
+    if (!Files.exists(filePath)) {
+      return -ErrorCodes.ENOENT();
+    }
+    try {
+      Files.setPosixFilePermissions(filePath,
+          FileUtils.translateModeToPosixPermissions((int) mode));
+      return 0;
+    } catch (IOException e) {
+      LOG.error("Failed to chmod {}", path, e);
+      return -ErrorCodes.EIO();
+    }
   }
 
   @Override
@@ -171,7 +253,29 @@ public class NoopFS extends AbstractFuseFileSystem {
   }
 
   private int chownInternal(String path, long uid, long gid) {
-    return 0;
+    path = transformPath(path);
+    Path filePath = Paths.get(path);
+    if (!Files.exists(filePath)) {
+      return -ErrorCodes.ENOENT();
+    }
+    try {
+      UserPrincipalLookupService lookupService =
+          FileSystems.getDefault().getUserPrincipalLookupService();
+      PosixFileAttributeView view = Files.getFileAttributeView(filePath,
+          PosixFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
+      Optional<String> userName = AlluxioFuseUtils.getUserName(uid);
+      if (userName.isPresent()) {
+        view.setOwner(lookupService.lookupPrincipalByName(userName.get()));
+      }
+      Optional<String> groupName = AlluxioFuseUtils.getGroupName(gid);
+      if (groupName.isPresent()) {
+        view.setGroup(lookupService.lookupPrincipalByGroupName(groupName.get()));
+      }
+      return 0;
+    } catch (IOException e) {
+      LOG.error("Failed to chown {}", path, e);
+      return -ErrorCodes.EIO();
+    }
   }
 
   @Override
@@ -186,6 +290,6 @@ public class NoopFS extends AbstractFuseFileSystem {
 
   @Override
   public String getFileSystemName() {
-    return "jnifuse-noopfs";
+    return "jnifuse-stackfs";
   }
 }
