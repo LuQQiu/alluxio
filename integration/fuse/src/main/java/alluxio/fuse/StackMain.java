@@ -38,7 +38,7 @@ public class StackMain {
     Path mountPoint = Paths.get(args[0]);
     AlluxioConfiguration conf = Configuration.global();
     LibFuse.loadLibrary(AlluxioFuseUtils.getVersionPreference(conf));
-    StackFS fs = new StackFS(root, mountPoint);
+    NoopFS fs = new NoopFS(root, mountPoint);
     String[] fuseOpts = new String[args.length - 2];
     System.arraycopy(args, 2, fuseOpts, 0, args.length - 2);
     try {
