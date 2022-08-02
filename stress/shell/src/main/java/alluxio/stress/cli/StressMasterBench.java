@@ -50,6 +50,9 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.URI;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -424,6 +427,7 @@ public class StressMasterBench extends AbstractStressBench<MasterBenchTaskResult
     private final Histogram mResponseTimeNs;
     protected final Path mBasePath;
     protected final Path mFixedBasePath;
+    protected final String mFixedFuseBasePath;
 
     private final MasterBenchTaskResult mResult = new MasterBenchTaskResult();
 
@@ -433,6 +437,8 @@ public class StressMasterBench extends AbstractStressBench<MasterBenchTaskResult
           StressConstants.TIME_HISTOGRAM_PRECISION);
       mBasePath = mContext.getBasePath();
       mFixedBasePath = mContext.getFixedBasePath();
+      mFixedFuseBasePath = Paths.get("/mnt/alluxio-fuse", mFixedBasePath.toString()).toString();
+      LOG.info("Fixed Fuse based path is {}", mFixedBasePath);
     }
 
     @Override
@@ -659,8 +665,8 @@ public class StressMasterBench extends AbstractStressBench<MasterBenchTaskResult
           break;
         case GET_FILE_STATUS:
           counter = counter % mParameters.mFixedCount;
-          path = new Path(mFixedBasePath, Long.toString(counter));
-          mFs.getStatus(new AlluxioURI(path.toString()));
+          java.nio.file.Path fusePath = Paths.get(mFixedFuseBasePath, Long.toString(counter));
+          BasicFileAttributes attributes = Files.readAttributes(fusePath, BasicFileAttributes.class);
           break;
         case LIST_DIR:
           List<alluxio.client.file.URIStatus> files
