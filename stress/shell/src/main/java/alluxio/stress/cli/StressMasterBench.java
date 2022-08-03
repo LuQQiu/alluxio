@@ -427,7 +427,6 @@ public class StressMasterBench extends AbstractStressBench<MasterBenchTaskResult
     private final Histogram mResponseTimeNs;
     protected final Path mBasePath;
     protected final Path mFixedBasePath;
-    protected final String mFixedFuseBasePath;
 
     private final MasterBenchTaskResult mResult = new MasterBenchTaskResult();
 
@@ -437,8 +436,6 @@ public class StressMasterBench extends AbstractStressBench<MasterBenchTaskResult
           StressConstants.TIME_HISTOGRAM_PRECISION);
       mBasePath = mContext.getBasePath();
       mFixedBasePath = mContext.getFixedBasePath();
-      mFixedFuseBasePath = Paths.get("/mnt/alluxio-fuse", mFixedBasePath.toString()).toString();
-      LOG.info("Fixed Fuse based path is {}", mFixedBasePath);
     }
 
     @Override
@@ -622,10 +619,14 @@ public class StressMasterBench extends AbstractStressBench<MasterBenchTaskResult
 
   private final class AlluxioNativeBenchThread extends BenchThread {
     private final alluxio.client.file.FileSystem mFs;
+    private final java.nio.file.Path mFuseFixedBasePath;
 
     private AlluxioNativeBenchThread(BenchContext context, alluxio.client.file.FileSystem fs) {
       super(context);
       mFs = fs;
+      mFuseFixedBasePath = Paths.get("/mnt/alluxio-fuse",
+          mFixedBasePath.toString().replace("alluxio:///", "/"));
+      LOG.info("Fixed Fuse based path is {}", mFuseFixedBasePath);
     }
 
     @Override
@@ -665,8 +666,8 @@ public class StressMasterBench extends AbstractStressBench<MasterBenchTaskResult
           break;
         case GET_FILE_STATUS:
           counter = counter % mParameters.mFixedCount;
-          java.nio.file.Path fusePath = Paths.get(mFixedFuseBasePath, Long.toString(counter));
-          BasicFileAttributes attributes = Files.readAttributes(fusePath, BasicFileAttributes.class);
+          java.nio.file.Path fusePath = mFuseFixedBasePath.resolve(Long.toString(counter));
+          Files.readAttributes(fusePath, BasicFileAttributes.class);
           break;
         case LIST_DIR:
           List<alluxio.client.file.URIStatus> files
