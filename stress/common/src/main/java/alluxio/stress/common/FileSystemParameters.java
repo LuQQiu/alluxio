@@ -29,8 +29,9 @@ public class FileSystemParameters extends Parameters {
   public static final String WRITE_TYPE_OPTION_NAME = "--write-type";
 
   @Parameter(names = {CLIENT_TYPE_OPTION_NAME},
-      description = "the client API type. Alluxio native or hadoop compatible client,"
-          + " default is AlluxioHDFS",
+      description = "the client API type. Alluxio native, hadoop compatible," 
+          + " and fuse client. Valid values includes AlluxioNative, AlluxioHDFS, AlluxioPosix."
+          + " Default is AlluxioHDFS",
       converter = FileSystemParameters.FileSystemParametersClientTypeConverter.class)
   public FileSystemClientType mClientType = FileSystemClientType.ALLUXIO_HDFS;
 

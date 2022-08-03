@@ -21,6 +21,9 @@ public enum FileSystemClientType {
 
   /** Alluxio Hadoop Compatible File System API. */
   ALLUXIO_HDFS("AlluxioHDFS"),
+
+  /** Alluxio FUSE POSIX API. */
+  ALLUXIO_POSIX("AlluxioPosix"),
   ;
 
   private final String mName;

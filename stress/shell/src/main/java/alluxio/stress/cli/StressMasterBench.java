@@ -48,8 +48,14 @@ import org.apache.hadoop.fs.RemoteIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.URI;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -178,12 +184,13 @@ public class StressMasterBench extends AbstractStressBench<MasterBenchTaskResult
       for (int i = 0; i < mCachedFs.length; i++) {
         mCachedFs[i] = FileSystem.get(new URI(mParameters.mBasePath), hdfsConf);
       }
+    } else if (mParameters.mClientType == FileSystemClientType.ALLUXIO_POSIX) {
+      LOG.info("Using ALLUXIO POSIX API to perform the test.");
     } else {
       LOG.info("Using ALLUXIO Native API to perform the test.");
       InstancedConfiguration alluxioProperties = alluxio.conf.Configuration.copyGlobal();
       alluxioProperties.merge(HadoopConfigurationUtils.getConfigurationFromHadoop(hdfsConf),
           Source.RUNTIME);
-
       mCachedNativeFs = new alluxio.client.file.FileSystem[mParameters.mClients];
       for (int i = 0; i < mCachedNativeFs.length; i++) {
         mCachedNativeFs[i] = alluxio.client.file.FileSystem.Factory
@@ -320,7 +327,9 @@ public class StressMasterBench extends AbstractStressBench<MasterBenchTaskResult
     if (mParameters.mClientType == FileSystemClientType.ALLUXIO_HDFS) {
       return new AlluxioHDFSBenchThread(context, mCachedFs[index % mCachedFs.length]);
     }
-
+    if (mParameters.mClientType == FileSystemClientType.ALLUXIO_POSIX) {
+      return new AlluxioFuseBenchThread(context);
+    }
     return new AlluxioNativeBenchThread(context, mCachedNativeFs[index % mCachedNativeFs.length]);
   }
 
@@ -696,6 +705,101 @@ public class StressMasterBench extends AbstractStressBench<MasterBenchTaskResult
 
           mFs.delete(new AlluxioURI(path.toString()),
               DeletePOptions.newBuilder().setRecursive(false).build());
+          break;
+        default:
+          throw new IllegalStateException("Unknown operation: " + mParameters.mOperation);
+      }
+    }
+  }
+
+  private final class AlluxioFuseBenchThread extends BenchThread {
+    java.nio.file.Path mFuseFixedBasePath;
+    java.nio.file.Path mFuseBasePath;
+
+    private AlluxioFuseBenchThread(BenchContext context) {
+      super(context);
+      String fuseMount = alluxio.conf.Configuration.getString(PropertyKey.FUSE_MOUNT_POINT);
+      mFuseFixedBasePath = Paths.get(fuseMount,
+          String.valueOf(mFixedBasePath).replace("alluxio:/", "/"));
+      mFuseBasePath = Paths.get(fuseMount,
+          String.valueOf(mBasePath).replace("alluxio:/", "/"));
+      try {
+        Files.createDirectories(mFuseFixedBasePath);
+        Files.createDirectories(mFuseBasePath);
+      } catch (IOException e) {
+        throw new RuntimeException(String.format("Failed to create directories %s %s",
+            mFuseFixedBasePath, mFuseBasePath));
+      }
+    }
+
+    @Override
+    @SuppressFBWarnings("BC_UNCONFIRMED_CAST")
+    protected void applyOperation(long counter) throws IOException, AlluxioException {
+      java.nio.file.Path path;
+      switch (mParameters.mOperation) {
+        case CREATE_DIR:
+          if (counter < mParameters.mFixedCount) {
+            path = mFuseFixedBasePath.resolve(Long.toString(counter));
+          } else {
+            path = mFuseBasePath.resolve(Long.toString(counter));
+          }
+          Files.createDirectories(path);
+          break;
+        case CREATE_FILE:
+          if (counter < mParameters.mFixedCount) {
+            path = mFuseFixedBasePath.resolve(Long.toString(counter));
+          } else {
+            path = mFuseBasePath.resolve(Long.toString(counter));
+          }
+          long fileSize = FormatUtils.parseSpaceSize(mParameters.mCreateFileSize);
+          try (FileOutputStream stream = new FileOutputStream(String.valueOf(path))) {
+            for (long i = 0; i < fileSize; i += StressConstants.WRITE_FILE_ONCE_MAX_BYTES) {
+              stream.write(mFiledata, 0,
+                  (int) Math.min(StressConstants.WRITE_FILE_ONCE_MAX_BYTES, fileSize - i));
+            }
+          }
+          break;
+        case GET_BLOCK_LOCATIONS:
+          throw new UnsupportedOperationException("GET_BLOCK_LOCATIONS is not supported!");
+        case GET_FILE_STATUS:
+          counter = counter % mParameters.mFixedCount;
+          path = mFuseFixedBasePath.resolve(Long.toString(counter));
+          Files.readAttributes(path, BasicFileAttributes.class);
+          break;
+        case LIST_DIR:
+          File dir = new File(mFuseFixedBasePath.toString());
+          File[] files = dir.listFiles();
+          if (files == null || files.length != mParameters.mFixedCount) {
+            throw new IOException(String
+                .format("listing `%s` expected %d files but got %d files", mFuseFixedBasePath,
+                    mParameters.mFixedCount, files == null ? 0 : files.length));
+          }
+          break;
+        case LIST_DIR_LOCATED:
+          throw new UnsupportedOperationException("LIST_DIR_LOCATED is not supported!");
+        case OPEN_FILE:
+          counter = counter % mParameters.mFixedCount;
+          path = mFuseFixedBasePath.resolve(Long.toString(counter));
+          new FileInputStream(path.toString()).close();
+          break;
+        case RENAME_FILE:
+          java.nio.file.Path dst;
+          if (counter < mParameters.mFixedCount) {
+            path = mFuseFixedBasePath.resolve(Long.toString(counter));
+            dst = mFuseFixedBasePath.resolve(Long.toString(counter) + "-renamed");
+          } else {
+            path = mFuseBasePath.resolve(Long.toString(counter));
+            dst = mFuseBasePath.resolve(Long.toString(counter) + "-renamed");
+          }
+          Files.move(path, dst);
+          break;
+        case DELETE_FILE:
+          if (counter < mParameters.mFixedCount) {
+            path = mFuseFixedBasePath.resolve(Long.toString(counter));
+          } else {
+            path = mFuseBasePath.resolve(Long.toString(counter));
+          }
+          Files.delete(path);
           break;
         default:
           throw new IllegalStateException("Unknown operation: " + mParameters.mOperation);
