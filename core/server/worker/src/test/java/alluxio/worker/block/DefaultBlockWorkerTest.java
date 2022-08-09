@@ -36,10 +36,11 @@ import alluxio.Constants;
 import alluxio.Sessions;
 import alluxio.conf.Configuration;
 import alluxio.conf.PropertyKey;
+import alluxio.exception.AlluxioRuntimeException;
 import alluxio.exception.BlockDoesNotExistRuntimeException;
 import alluxio.exception.WorkerOutOfSpaceException;
 import alluxio.exception.status.DeadlineExceededException;
-import alluxio.exception.status.UnavailableException;
+import alluxio.exception.status.NotFoundException;
 import alluxio.grpc.Block;
 import alluxio.grpc.BlockStatus;
 import alluxio.grpc.CacheRequest;
@@ -78,7 +79,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.OptionalInt;
+import java.util.OptionalLong;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
@@ -261,7 +262,8 @@ public class DefaultBlockWorkerTest {
         blockId,
         0,
         new CreateBlockOptions(null, Constants.MEDIUM_MEM, 1));
-    assertThrows(IOException.class, () -> mBlockWorker.commitBlock(sessionId, blockId, false));
+    assertThrows(AlluxioRuntimeException.class,
+        () -> mBlockWorker.commitBlock(sessionId, blockId, false));
   }
 
   @Test
@@ -479,7 +481,7 @@ public class DefaultBlockWorkerTest {
         .setUfsPath(mTestLoadFilePath).build();
 
     List<BlockStatus> res =
-        mBlockWorker.load(Arrays.asList(block, block2), "test", OptionalInt.empty());
+        mBlockWorker.load(Arrays.asList(block, block2), "test", OptionalLong.empty());
     assertEquals(res.size(), 0);
     assertTrue(mBlockStore.hasBlockMeta(0));
     assertTrue(mBlockStore.hasBlockMeta(1));
@@ -500,10 +502,10 @@ public class DefaultBlockWorkerTest {
     Block blocks = Block.newBuilder().setBlockId(blockId).setBlockSize(BLOCK_SIZE)
         .setMountId(UFS_LOAD_MOUNT_ID).setOffsetInFile(0).setUfsPath(mTestLoadFilePath).build();
     List<BlockStatus> res =
-        mBlockWorker.load(Collections.singletonList(blocks), "test", OptionalInt.empty());
+        mBlockWorker.load(Collections.singletonList(blocks), "test", OptionalLong.empty());
     assertEquals(res.size(), 0);
     List<BlockStatus> failure =
-        mBlockWorker.load(Collections.singletonList(blocks), "test", OptionalInt.empty());
+        mBlockWorker.load(Collections.singletonList(blocks), "test", OptionalLong.empty());
     assertEquals(failure.size(), 1);
   }
 
@@ -566,7 +568,7 @@ public class DefaultBlockWorkerTest {
         .setMountId(UFS_MOUNT_ID)
         .build();
 
-    assertThrows(UnavailableException.class,
+    assertThrows(NotFoundException.class,
         () -> mBlockWorker.createUfsBlockReader(
             sessionId, blockId, 0, false, options));
   }
@@ -668,8 +670,12 @@ public class DefaultBlockWorkerTest {
 
     long sessionId = mRandom.nextLong();
     // check that we can read the block locally
+    // note: this time we use an OpenUfsOption without ufsPath and blockInUfsTier so
+    // that the worker can't fall back to ufs read.
+    Protocol.OpenUfsBlockOptions noFallbackOptions = Protocol.OpenUfsBlockOptions.newBuilder()
+        .setBlockInUfsTier(false).build();
     try (BlockReader reader = mBlockWorker.createBlockReader(
-            sessionId, blockId, 0, false, options)) {
+            sessionId, blockId, 0, false, noFallbackOptions)) {
       ByteBuffer buf = reader.read(0, ufsBlockSize);
       // alert: LocalFileBlockReader uses a MappedByteBuffer, which does not
       // support the array operation. So we need to compare ByteBuffer manually

@@ -46,7 +46,6 @@ import java.io.IOException;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
-import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -78,7 +77,6 @@ public class PagedBlockStore implements BlockStore {
   public static PagedBlockStore create(UfsManager ufsManager) {
     try {
       AlluxioConfiguration conf = Configuration.global();
-      List<PageStoreDir> pageStoreDirs = PageStoreDir.createPageStoreDirs(conf);
       PageMetaStore pageMetaStore = PageMetaStore.create(conf);
       CacheManager cacheManager =
           CacheManager.Factory.create(conf, pageMetaStore);
@@ -116,8 +114,7 @@ public class PagedBlockStore implements BlockStore {
   }
 
   @Override
-  public void commitBlock(long sessionId, long blockId, boolean pinOnCreate)
-      throws IOException {
+  public void commitBlock(long sessionId, long blockId, boolean pinOnCreate) {
     // TODO(bowen): implement actual committing and replace placeholder values
     BlockStoreLocation dummyLoc = new BlockStoreLocation(DEFAULT_TIER, 1);
     for (BlockStoreEventListener listener : mBlockStoreEventListeners) {
@@ -131,7 +128,11 @@ public class PagedBlockStore implements BlockStore {
   @Override
   public String createBlock(long sessionId, long blockId, int tier,
       CreateBlockOptions createBlockOptions) throws WorkerOutOfSpaceException, IOException {
-    return null;
+    //TODO(Beinan): port the allocator algorithm from tiered block store
+    PageStoreDir pageStoreDir = mPageMetaStore.getStoreDirs().get(
+        Math.floorMod(Long.hashCode(blockId), mPageMetaStore.getStoreDirs().size()));
+    pageStoreDir.putTempFile(String.valueOf(blockId));
+    return "DUMMY_FILE_PATH";
   }
 
   @Override
@@ -150,8 +151,7 @@ public class PagedBlockStore implements BlockStore {
   }
 
   @Override
-  public void abortBlock(long sessionId, long blockId)
-      throws IOException {
+  public void abortBlock(long sessionId, long blockId) {
     // TODO(bowen): implement actual abortion and replace placeholder values
     boolean blockAborted = true;
     if (blockAborted) {
@@ -183,7 +183,7 @@ public class PagedBlockStore implements BlockStore {
   }
 
   @Override
-  public List<BlockStatus> load(List<Block> fileBlocks, String tag, OptionalInt bandwidth) {
+  public List<BlockStatus> load(List<Block> fileBlocks, String tag, OptionalLong bandwidth) {
     return null;
   }
 
