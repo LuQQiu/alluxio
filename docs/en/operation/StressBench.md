@@ -8,7 +8,7 @@ priority: 7
 
 * Table of Contents
 {:toc}
-
+What
 The Alluxio system runs in different environments with different hardware for various purposes.
 The StressBench test suite is a performance benchmark suite to help you understand the performance of Alluxio in different scenarios. 
 It will help you quickly test and analyze the Alluxio usage in your environment by simply running the command line.
