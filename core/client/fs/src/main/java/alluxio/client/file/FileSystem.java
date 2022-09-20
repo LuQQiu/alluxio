@@ -161,14 +161,16 @@ public interface FileSystem extends Closeable {
           LOG.debug("{}={} ({})", key.getName(), value, source);
         }
       }
-      FileSystem fs = new BaseFileSystem(context);
-      if (conf.getBoolean(PropertyKey.USER_METADATA_CACHE_ENABLED)
-          && CommonUtils.PROCESS_TYPE.get().equals(CommonUtils.ProcessType.CLIENT)) {
+      if (!CommonUtils.PROCESS_TYPE.get().equals(CommonUtils.ProcessType.CLIENT)) {
+        return new BaseFileSystem(context);
+      }
+      FileSystem fs = conf.getBoolean(PropertyKey.USER_UFS_ENABLED)
+          ? new UfsBaseFileSystem(context) : new BaseFileSystem(context);
+      if (conf.getBoolean(PropertyKey.USER_METADATA_CACHE_ENABLED)) {
         fs = new MetadataCachingFileSystem(fs, context);
       }
       // Enable local cache only for clients which have the property set.
-      if (conf.getBoolean(PropertyKey.USER_CLIENT_CACHE_ENABLED)
-          && CommonUtils.PROCESS_TYPE.get().equals(CommonUtils.ProcessType.CLIENT)) {
+      if (conf.getBoolean(PropertyKey.USER_CLIENT_CACHE_ENABLED)) {
         try {
           CacheManager cacheManager = CacheManager.Factory.get(conf);
           return new LocalCacheFileSystem(cacheManager, fs, conf);
