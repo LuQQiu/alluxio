@@ -50,23 +50,26 @@ import javax.annotation.concurrent.ThreadSafe;
  * FileSystem implementation with the capability of caching metadata of paths.
  */
 @ThreadSafe
-public class MetadataCachingBaseFileSystem extends BaseFileSystem {
-  private static final Logger LOG = LoggerFactory.getLogger(BaseFileSystem.class);
+public class MetadataCachingFileSystem extends DelegatingFileSystem {
+  private static final Logger LOG = LoggerFactory.getLogger(MetadataCachingFileSystem.class);
   private static final int THREAD_KEEPALIVE_SECOND = 60;
   private static final int THREAD_TERMINATION_TIMEOUT_MS = 10000;
   private static final URIStatus NOT_FOUND_STATUS = new URIStatus(
       new FileInfo().setCompleted(true));
 
+  private final FileSystemContext mFsContext;
   private final MetadataCache mMetadataCache;
   private final ExecutorService mAccessTimeUpdater;
   private final boolean mDisableUpdateFileAccessTime;
 
   /**
+   * @param fs the file system
    * @param context the fs context
    */
-  public MetadataCachingBaseFileSystem(FileSystemContext context) {
-    super(context);
+  public MetadataCachingFileSystem(FileSystem fs, FileSystemContext context) {
+    super(fs);
 
+    mFsContext = context;
     int maxSize = mFsContext.getClusterConf().getInt(PropertyKey.USER_METADATA_CACHE_MAX_SIZE);
     long expirationTimeMs = mFsContext.getClusterConf()
         .getMs(PropertyKey.USER_METADATA_CACHE_EXPIRATION_TIME);
@@ -89,7 +92,7 @@ public class MetadataCachingBaseFileSystem extends BaseFileSystem {
       throws FileAlreadyExistsException, InvalidPathException, IOException, AlluxioException {
     mMetadataCache.invalidate(path.getParent());
     mMetadataCache.invalidate(path);
-    super.createDirectory(path, options);
+    mDelegatedFileSystem.createDirectory(path, options);
   }
 
   @Override
@@ -97,7 +100,7 @@ public class MetadataCachingBaseFileSystem extends BaseFileSystem {
       throws IOException, AlluxioException {
     mMetadataCache.invalidate(path.getParent());
     mMetadataCache.invalidate(path);
-    return super.createFile(path, options);
+    return mDelegatedFileSystem.createFile(path, options);
   }
 
   @Override
@@ -106,7 +109,7 @@ public class MetadataCachingBaseFileSystem extends BaseFileSystem {
       AlluxioException {
     mMetadataCache.invalidate(path.getParent());
     mMetadataCache.invalidate(path);
-    super.delete(path, options);
+    mDelegatedFileSystem.delete(path, options);
   }
 
   @Override
@@ -116,17 +119,16 @@ public class MetadataCachingBaseFileSystem extends BaseFileSystem {
     mMetadataCache.invalidate(src);
     mMetadataCache.invalidate(dst.getParent());
     mMetadataCache.invalidate(dst);
-    super.rename(src, dst, options);
+    mDelegatedFileSystem.rename(src, dst, options);
   }
 
   @Override
   public URIStatus getStatus(AlluxioURI path, GetStatusPOptions options)
       throws FileDoesNotExistException, IOException, AlluxioException {
-    checkUri(path);
     URIStatus status = mMetadataCache.get(path);
     if (status == null || !status.isCompleted()) {
       try {
-        status = super.getStatus(path, options);
+        status = mDelegatedFileSystem.getStatus(path, options);
         mMetadataCache.put(path, status);
       } catch (FileDoesNotExistException e) {
         mMetadataCache.put(path, NOT_FOUND_STATUS);
@@ -147,21 +149,19 @@ public class MetadataCachingBaseFileSystem extends BaseFileSystem {
   public void iterateStatus(AlluxioURI path, ListStatusPOptions options,
       Consumer<? super URIStatus> action)
       throws FileDoesNotExistException, IOException, AlluxioException {
-    checkUri(path);
-
     if (options.getRecursive()) {
       // Do not cache results of recursive list status,
       // because some results might be cached multiple times.
       // Otherwise, needs more complicated logic inside the cache,
       // that might not worth the effort of caching.
-      super.iterateStatus(path, options, action);
+      mDelegatedFileSystem.iterateStatus(path, options, action);
       return;
     }
 
     List<URIStatus> cachedStatuses = mMetadataCache.listStatus(path);
     if (cachedStatuses == null) {
       List<URIStatus> statuses = new ArrayList<>();
-      super.iterateStatus(path, options, status -> {
+      mDelegatedFileSystem.iterateStatus(path, options, status -> {
         statuses.add(status);
         action.accept(status);
       });
@@ -174,19 +174,17 @@ public class MetadataCachingBaseFileSystem extends BaseFileSystem {
   @Override
   public List<URIStatus> listStatus(AlluxioURI path, ListStatusPOptions options)
       throws FileDoesNotExistException, IOException, AlluxioException {
-    checkUri(path);
-
     if (options.getRecursive()) {
       // Do not cache results of recursive list status,
       // because some results might be cached multiple times.
       // Otherwise, needs more complicated logic inside the cache,
       // that might not worth the effort of caching.
-      return super.listStatus(path, options);
+      return mDelegatedFileSystem.listStatus(path, options);
     }
 
     List<URIStatus> statuses = mMetadataCache.listStatus(path);
     if (statuses == null) {
-      statuses = super.listStatus(path, options);
+      statuses = mDelegatedFileSystem.listStatus(path, options);
       mMetadataCache.put(path, statuses);
     }
     return statuses;
@@ -210,7 +208,7 @@ public class MetadataCachingBaseFileSystem extends BaseFileSystem {
               .setAccessMode(Bits.READ)
               .setUpdateTimestamps(true)
               .build();
-          super.getStatus(path, getStatusOptions);
+          mDelegatedFileSystem.getStatus(path, getStatusOptions);
         } catch (IOException | AlluxioException e) {
           LOG.error("Failed to update access time for " + path, e);
         }
@@ -222,9 +220,9 @@ public class MetadataCachingBaseFileSystem extends BaseFileSystem {
 
   @Override
   public synchronized void close() throws IOException {
-    if (!mClosed) {
+    if (!mDelegatedFileSystem.isClosed()) {
       ThreadUtils.shutdownAndAwaitTermination(mAccessTimeUpdater, THREAD_TERMINATION_TIMEOUT_MS);
-      super.close();
+      mDelegatedFileSystem.close();
     }
   }
 
