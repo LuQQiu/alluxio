@@ -11,7 +11,6 @@
 
 package alluxio.client.file;
 
-import alluxio.AlluxioTestDirectory;
 import alluxio.AlluxioURI;
 import alluxio.ClientContext;
 import alluxio.conf.Configuration;
@@ -22,10 +21,8 @@ import alluxio.exception.AlluxioException;
 import alluxio.grpc.CreateDirectoryPOptions;
 import alluxio.grpc.CreateFilePOptions;
 import alluxio.grpc.DeletePOptions;
-import alluxio.grpc.SetAttributePOptions;
-import alluxio.security.authorization.Mode;
 import alluxio.underfs.UnderFileSystemFactoryRegistry;
-import alluxio.underfs.local.LocalUnderFileSystemFactory;
+import alluxio.underfs.s3a.S3AUnderFileSystemFactory;
 import alluxio.util.io.BufferUtils;
 
 import org.junit.After;
@@ -33,7 +30,6 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -41,7 +37,7 @@ import java.util.List;
 /**
  * Add unit tests for {@link UfsBaseFileSystem}.
  */
-public class UfsBaseFileSystemTest {
+public class S3BaseFileSystemTest {
   private InstancedConfiguration mConf = Configuration.copyGlobal();
   private AlluxioURI mRootUfs;
   private FileSystem mFileSystem;
@@ -51,11 +47,10 @@ public class UfsBaseFileSystemTest {
    */
   @Before
   public void before() {
-    String ufs = AlluxioTestDirectory.createTemporaryDirectory("ufs").toString();
-    mRootUfs = new AlluxioURI(ufs);
+    mRootUfs = new AlluxioURI("s3://lu-asf-demo/ufsfolder/");
     mConf.set(PropertyKey.USER_UFS_ENABLED, true, Source.RUNTIME);
-    mConf.set(PropertyKey.USER_UFS_ADDRESS, ufs, Source.RUNTIME);
-    UnderFileSystemFactoryRegistry.register(new LocalUnderFileSystemFactory());
+    mConf.set(PropertyKey.USER_UFS_ADDRESS, mRootUfs, Source.RUNTIME);
+    UnderFileSystemFactoryRegistry.register(new S3AUnderFileSystemFactory());
     mFileSystem = new UfsBaseFileSystem(FileSystemContext.create(
         ClientContext.create(mConf)));
   }
@@ -66,7 +61,6 @@ public class UfsBaseFileSystemTest {
     mConf = Configuration.copyGlobal();
   }
 
-  // Basic testing
   @Test
   public void createEmptyFileRead() throws IOException, AlluxioException {
     AlluxioURI uri = mRootUfs.join("emptyFile");
@@ -87,27 +81,10 @@ public class UfsBaseFileSystemTest {
     Assert.assertFalse(mFileSystem.exists(uri));
   }
 
-  /**
-   * Failed in S3. S3 does not have mode concept.
-   */
-  @Test
-  public void createWithMode() throws IOException, AlluxioException {
-    AlluxioURI uri = mRootUfs.join("createWithMode");
-    Mode mode = new Mode(Mode.Bits.EXECUTE, Mode.Bits.WRITE, Mode.Bits.READ);
-    mFileSystem.createFile(uri,
-        CreateFilePOptions.newBuilder().setMode(mode.toProto()).build()).close();
-    Assert.assertEquals(mode.toShort(), mFileSystem.getStatus(uri).getMode());
-  }
-
-  /**
-   * Failed in S3. S3 can create file without recursive
-   */
   @Test
   public void createWithRecursive() throws IOException, AlluxioException {
     AlluxioURI uri = mRootUfs.join("nonexistingfolder").join("createWithRecursive");
-    Assert.assertThrows(FileNotFoundException.class,
-        () -> mFileSystem.createFile(uri).close());
-    mFileSystem.createFile(uri, CreateFilePOptions.newBuilder().setRecursive(true).build());
+    mFileSystem.createFile(uri).close();
     Assert.assertTrue(mFileSystem.exists(uri));
   }
 
@@ -142,18 +119,6 @@ public class UfsBaseFileSystemTest {
     Assert.assertTrue(mFileSystem.exists(dir));
     mFileSystem.delete(dir, DeletePOptions.newBuilder().setRecursive(true).build());
     Assert.assertFalse(mFileSystem.exists(dir));
-  }
-
-  /**
-   * S3 does not have mode concept.
-   */
-  @Test
-  public void createDirectoryWithMode() throws IOException, AlluxioException {
-    AlluxioURI dir = mRootUfs.join("createDirectoryWithMode");
-    Mode mode = new Mode(Mode.Bits.EXECUTE, Mode.Bits.WRITE, Mode.Bits.READ);
-    mFileSystem.createDirectory(dir,
-        CreateDirectoryPOptions.newBuilder().setMode(mode.toProto()).build());
-    Assert.assertEquals(mode.toShort(), mFileSystem.getStatus(dir).getMode());
   }
 
   @Test
@@ -208,20 +173,6 @@ public class UfsBaseFileSystemTest {
     Assert.assertTrue(status.getGroup() != null && !status.getGroup().isEmpty());
   }
 
-  /**
-   * S3 does not have mode concept.
-   */
-  @Test
-  public void setMode() throws IOException, AlluxioException {
-    AlluxioURI uri = mRootUfs.join("setMode");
-    mFileSystem.createFile(uri).close();
-    Mode mode = new Mode(Mode.Bits.EXECUTE, Mode.Bits.WRITE, Mode.Bits.READ);
-    mFileSystem.setAttribute(uri, SetAttributePOptions.newBuilder()
-        .setMode(mode.toProto()).build());
-    // S3 does not support setting mode/owner/group
-    Assert.assertEquals(mode.toShort(), mFileSystem.getStatus(uri).getMode());
-  }
-
   @Test
   public void rename() throws IOException, AlluxioException {
     AlluxioURI src = mRootUfs.join("original");
@@ -248,30 +199,23 @@ public class UfsBaseFileSystemTest {
     AlluxioURI dst = mRootUfs.join("dst");
     mFileSystem.createFile(src).close();
     mFileSystem.createFile(dst).close();
-    // local can overwrite destination file
-    // TODO(lu) test S3
-    mFileSystem.rename(src, dst);
-    Assert.assertFalse(mFileSystem.exists(src));
+    Assert.assertThrows(IOException.class, () -> mFileSystem.rename(src, dst));
+    Assert.assertTrue(mFileSystem.exists(src));
     Assert.assertFalse(mFileSystem.getStatus(dst).isFolder());
   }
 
-  /**
-   * Local can overwrite dest dir but S3 cannot.
-   */
   @Test
   public void renameWhenDestinationDirExist() throws IOException, AlluxioException {
     AlluxioURI src = mRootUfs.join("original");
     AlluxioURI dst = mRootUfs.join("dst");
     mFileSystem.createDirectory(src);
     mFileSystem.createDirectory(dst);
-    mFileSystem.rename(src, dst);
-    Assert.assertFalse(mFileSystem.exists(src));
+    // S3 cannot overwrite destination dir
+    Assert.assertThrows(IOException.class, () -> mFileSystem.rename(src, dst));
+    Assert.assertTrue(mFileSystem.exists(src));
     Assert.assertTrue(mFileSystem.getStatus(dst).isFolder());
   }
 
-  /**
-   * Local can overwrite dest dir but S3 cannot.
-   */
   @Test
   public void renameWhenDestinationDirNotEmpty() throws IOException, AlluxioException {
     AlluxioURI src = mRootUfs.join("original");
