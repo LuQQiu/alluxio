@@ -26,6 +26,7 @@ import alluxio.conf.InstancedConfiguration;
 import alluxio.conf.PropertyKey;
 import alluxio.conf.Source;
 import alluxio.jnifuse.ErrorCodes;
+import alluxio.jnifuse.LibFuse;
 import alluxio.jnifuse.struct.FileStat;
 import alluxio.jnifuse.struct.FuseFileInfo;
 import alluxio.jnifuse.struct.Statvfs;
@@ -67,6 +68,7 @@ public class JniFuseUfsFileSystemTest {
     UnderFileSystemFactoryRegistry.register(localUnderFileSystemFactory);
     FileSystemContext context = FileSystemContext.create(
         ClientContext.create(conf));
+    LibFuse.loadLibrary(AlluxioFuseUtils.getLibfuseVersion(Configuration.global()));
     mFuseFs = new AlluxioJniFuseFileSystem(context, new UfsBaseFileSystem(context));
     mFileInfo = allocateNativeFileInfo();
   }

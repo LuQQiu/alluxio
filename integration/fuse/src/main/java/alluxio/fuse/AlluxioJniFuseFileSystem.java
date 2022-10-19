@@ -26,6 +26,7 @@ import alluxio.exception.AccessControlException;
 import alluxio.exception.AlluxioException;
 import alluxio.exception.DirectoryNotEmptyException;
 import alluxio.exception.FileDoesNotExistException;
+import alluxio.exception.runtime.NotFoundRuntimeException;
 import alluxio.fuse.auth.AuthPolicy;
 import alluxio.fuse.auth.AuthPolicyFactory;
 import alluxio.fuse.file.FuseFileEntry;
@@ -55,7 +56,6 @@ import jnr.constants.platform.OpenFlags;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.file.InvalidPathException;
@@ -191,18 +191,17 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
       } else {
         try {
           status = mFileSystem.getStatus(uri);
-        } catch (FileNotFoundException e) {
-          // TODO(lu) reconsider the logic
+        } catch (NotFoundRuntimeException e) {
+          // TODO(lu) workaround to solve write-then-ls or ls-during-write cannot find file issue
+          // of some object storages
           FuseFileEntry<FuseFileStream> stream = mFileEntries.getFirstByField(PATH_INDEX, path);
-          if (stream != null) {
-            long size = stream.getFileStream().getFileLength();
-            stat.st_size.set(size);
-            stat.st_blocks.set((int) Math.ceil((double) size / 512));
-            // TODO(lu) create URI status when creating the file?
-            return 0;
-          } else {
+          if (stream == null) {
             throw e;
           }
+          long size = stream.getFileStream().getFileLength();
+          stat.st_size.set(size);
+          stat.st_blocks.set((int) Math.ceil((double) size / 512));
+          return 0;
         }
       }
       long size = status.getLength();
@@ -256,7 +255,7 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
       }
       stat.st_mode.set(mode);
       stat.st_nlink.set(1);
-    } catch (FileDoesNotExistException | InvalidPathException | FileNotFoundException e) {
+    } catch (FileDoesNotExistException | InvalidPathException | NotFoundRuntimeException e) {
       LOG.debug("Failed to getattr {}: path does not exist or is invalid", path);
       return -ErrorCodes.ENOENT();
     } catch (AccessControlException e) {

@@ -29,6 +29,7 @@ import alluxio.exception.FileDoesNotExistException;
 import alluxio.exception.InvalidPathException;
 import alluxio.exception.runtime.BlockDoesNotExistRuntimeException;
 import alluxio.exception.runtime.InvalidArgumentRuntimeException;
+import alluxio.exception.runtime.NotFoundRuntimeException;
 import alluxio.fuse.auth.AuthPolicy;
 import alluxio.grpc.CreateFilePOptions;
 import alluxio.grpc.SetAttributePOptions;
@@ -438,7 +439,8 @@ public final class AlluxioFuseUtils {
   public static Optional<URIStatus> getPathStatus(FileSystem fileSystem, AlluxioURI uri) {
     try {
       return Optional.of(fileSystem.getStatus(uri));
-    } catch (InvalidPathException | FileNotFoundException | FileDoesNotExistException e) {
+    } catch (InvalidPathException | FileNotFoundException
+        | FileDoesNotExistException | NotFoundRuntimeException e) {
       return Optional.empty();
     } catch (IOException | AlluxioException ex) {
       throw new RuntimeException(String.format("Failed to get path status of %s", uri), ex);
