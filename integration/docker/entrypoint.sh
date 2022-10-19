@@ -117,7 +117,7 @@ function mountAlluxioFSWithFuseOption {
 }
 
 function mountFuseSDK {
-  exec bin/alluxio-fuse mount -f "${@}"
+  exec bin/alluxio-fuse mount "${@}" -f
 }
 
 function startCsiServer {
