@@ -138,15 +138,6 @@ print_mount_status() {
 #   0 if launch succeed, non-zero on error
 #######################################
 launch_fuse_process() {
-  if [[ $# -lt 2 ]]; then
-    err "ufs_address and mount_point should be provided for mount command"
-    echo -e "${USAGE}"
-    return 1
-  fi
-  declare -r ufs_address="$1"
-  declare -r mount_point="$2"
-  shift 2
-
   local mount_options=""
   local foreground='false'
   while getopts "o:hf" opt > /dev/null 2>&1; do
@@ -166,7 +157,16 @@ launch_fuse_process() {
     esac
   done
   readonly foreground
-  
+  shift $(( OPTIND - 1 ))
+
+  if [[ $# -lt 2 ]]; then
+    err "ufs_address and mount_point should be provided for mount command"
+    echo -e "${USAGE}"
+    return 1
+  fi
+  declare -r ufs_address="$1"
+  declare -r mount_point="$2"
+
   if fuse_mounted "${mount_point}"; then
     err "mount: ${mount_point} is already mounted"
     return 1
