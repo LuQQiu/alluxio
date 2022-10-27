@@ -12,6 +12,7 @@
 package alluxio.master.meta;
 
 import alluxio.ProjectConstants;
+import alluxio.check.UpdateCheck;
 import alluxio.heartbeat.HeartbeatExecutor;
 
 import org.slf4j.Logger;

@@ -9,7 +9,7 @@
  * See the NOTICE file distributed with this work for information regarding copyright ownership.
  */
 
-package alluxio.master.meta;
+package alluxio.check;
 
 import alluxio.ProjectConstants;
 import alluxio.conf.Configuration;
@@ -29,6 +29,8 @@ import org.powermock.api.mockito.PowerMockito;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -53,148 +55,212 @@ public class UpdateCheckTest {
   }
 
   @Test
-  public void userAgentEnvironmentStringEmpty() throws Exception {
-    String userAgentString = UpdateCheck.getUserAgentEnvironmentString("cluster1");
+  public void userAgentEnvironmentStringEmpty() {
+    List<String> info = new ArrayList<>();
     Mockito.when(EC2MetadataUtils.getUserData())
         .thenThrow(new SdkClientException("Unable to contact EC2 metadata service."));
-
-    Assert.assertTrue(userAgentString.equals("cluster1"));
+    UpdateCheck.addUserAgentEnvironments(info);
+    Assert.assertEquals(0, info.size());
   }
 
   @Test
-  public void userAgentEnvironmentStringDocker() throws Exception {
+  public void userAgentEnvironmentStringDocker() {
     Mockito.when(EnvironmentUtils.isDocker()).thenReturn(true);
     Mockito.when(EC2MetadataUtils.getUserData())
         .thenThrow(new SdkClientException("Unable to contact EC2 metadata service."));
-
-    String userAgentString = UpdateCheck.getUserAgentEnvironmentString("cluster1");
-    Assert.assertTrue(userAgentString.equals("cluster1; docker"));
+    List<String> info = new ArrayList<>();
+    UpdateCheck.addUserAgentEnvironments(info);
+    Assert.assertEquals(1, info.size());
+    Assert.assertEquals(UpdateCheck.DOCKER_KEY, info.get(0));
   }
 
   @Test
-  public void userAgentEnvironmentStringK8s() throws Exception {
+  public void userAgentEnvironmentStringK8s() {
     Mockito.when(EnvironmentUtils.isDocker()).thenReturn(true);
     Mockito.when(EnvironmentUtils.isKubernetes()).thenReturn(true);
     Mockito.when(EC2MetadataUtils.getUserData())
         .thenThrow(new SdkClientException("Unable to contact EC2 metadata service."));
-
-    String userAgentString = UpdateCheck.getUserAgentEnvironmentString("cluster1");
-    Assert.assertTrue(userAgentString.equals("cluster1; docker; kubernetes"));
+    List<String> info = new ArrayList<>();
+    UpdateCheck.addUserAgentEnvironments(info);
+    Assert.assertEquals(2, info.size());
+    Assert.assertEquals(UpdateCheck.DOCKER_KEY, info.get(0));
+    Assert.assertEquals(UpdateCheck.KUBERNETES_KEY, info.get(1));
   }
 
   @Test
-  public void userAgentEnvironmentStringGCP() throws Exception {
+  public void userAgentEnvironmentStringGCP() {
     Mockito.when(EnvironmentUtils.isGoogleComputeEngine()).thenReturn(true);
     Mockito.when(EC2MetadataUtils.getUserData())
         .thenThrow(new SdkClientException("Unable to contact EC2 metadata service."));
-
-    String userAgentString = UpdateCheck.getUserAgentEnvironmentString("cluster1");
-    Assert.assertTrue(userAgentString.equals("cluster1; gce"));
+    List<String> info = new ArrayList<>();
+    UpdateCheck.addUserAgentEnvironments(info);
+    Assert.assertEquals(1, info.size());
+    Assert.assertEquals(UpdateCheck.GCE_KEY, info.get(0));
   }
 
   @Test
-  public void userAgentEnvironmentStringEC2AMI() throws Exception {
+  public void userAgentEnvironmentStringEC2AMI() {
+    String randomProductCode = "random123code";
     Mockito.when(EnvironmentUtils.isEC2()).thenReturn(true);
-    Mockito.when(EnvironmentUtils.getEC2ProductCode()).thenReturn("random123code");
+    Mockito.when(EnvironmentUtils.getEC2ProductCode()).thenReturn(randomProductCode);
     // When no user data in this ec2, null is returned
     Mockito.when(EC2MetadataUtils.getUserData()).thenReturn(null);
-
-    String userAgentString = UpdateCheck.getUserAgentEnvironmentString("cluster1");
-    Assert.assertTrue(userAgentString.equals("cluster1; ProductCode:random123code; ec2"));
+    List<String> info = new ArrayList<>();
+    UpdateCheck.addUserAgentEnvironments(info);
+    Assert.assertEquals(2, info.size());
+    Assert.assertEquals(UpdateCheck.PRODUCT_CODE_KEY + randomProductCode, info.get(0));
+    Assert.assertEquals(UpdateCheck.EC2_KEY, info.get(1));
   }
 
   @Test
-  public void userAgentEnvironmentStringEC2CFT() throws Exception {
+  public void userAgentEnvironmentStringEC2CFT() {
+    String randomProductCode = "random123code";
     Mockito.when(EnvironmentUtils.isEC2()).thenReturn(true);
-    Mockito.when(EnvironmentUtils.getEC2ProductCode()).thenReturn("random123code");
+    Mockito.when(EnvironmentUtils.getEC2ProductCode()).thenReturn(randomProductCode);
     Mockito.when(EnvironmentUtils.isCFT(Mockito.anyString())).thenReturn(true);
     Mockito.when(EC2MetadataUtils.getUserData()).thenReturn("{ \"cft_configure\": {}}");
 
-    String userAgentString = UpdateCheck.getUserAgentEnvironmentString("cluster1");
-    Assert.assertTrue(userAgentString.equals("cluster1; ProductCode:random123code; cft; ec2"));
+    List<String> info = new ArrayList<>();
+    UpdateCheck.addUserAgentEnvironments(info);
+    Assert.assertEquals(3, info.size());
+    Assert.assertEquals(UpdateCheck.PRODUCT_CODE_KEY + randomProductCode, info.get(0));
+    Assert.assertEquals(UpdateCheck.CFT_KEY, info.get(1));
+    Assert.assertEquals(UpdateCheck.EC2_KEY, info.get(2));
   }
 
   @Test
-  public void userAgentEnvironmentStringEC2EMR() throws Exception {
+  public void userAgentEnvironmentStringEC2EMR() {
+    String randomProductCode = "random123code";
     Mockito.when(EnvironmentUtils.isEC2()).thenReturn(true);
-    Mockito.when(EnvironmentUtils.getEC2ProductCode()).thenReturn("random123code");
+    Mockito.when(EnvironmentUtils.getEC2ProductCode()).thenReturn(randomProductCode);
     Mockito.when(EnvironmentUtils.isEMR(Mockito.anyString())).thenReturn(true);
     Mockito.when(EC2MetadataUtils.getUserData()).thenReturn("emr_apps");
-
-    String userAgentString = UpdateCheck.getUserAgentEnvironmentString("cluster1");
-    Assert.assertTrue(userAgentString.equals("cluster1; ProductCode:random123code; emr; ec2"));
+    List<String> info = new ArrayList<>();
+    UpdateCheck.addUserAgentEnvironments(info);
+    Assert.assertEquals(3, info.size());
+    Assert.assertEquals(UpdateCheck.PRODUCT_CODE_KEY + randomProductCode, info.get(0));
+    Assert.assertEquals(UpdateCheck.EMR_KEY, info.get(1));
+    Assert.assertEquals(UpdateCheck.EC2_KEY, info.get(2));
   }
 
   @Test
   public void featureStringEmbeddedJournal() {
+    List<String> info = new ArrayList<>();
     Configuration.set(PropertyKey.MASTER_JOURNAL_TYPE, JournalType.UFS);
-    Assert.assertFalse(UpdateCheck.getUserAgentFeatureList().contains("embedded"));
+    UpdateCheck.addUserAgentFeatures(info);
+    Assert.assertFalse(listContainsTarget(info, UpdateCheck.EMBEDDED_KEY));
     Configuration.set(PropertyKey.MASTER_JOURNAL_TYPE, JournalType.EMBEDDED);
-    Assert.assertTrue(UpdateCheck.getUserAgentFeatureList().contains("embedded"));
+    info.clear();
+    UpdateCheck.addUserAgentFeatures(info);
+    Assert.assertTrue(listContainsTarget(info, UpdateCheck.EMBEDDED_KEY));
   }
 
   @Test
   public void featureStringRocks() {
+    List<String> info = new ArrayList<>();
     Configuration.set(PropertyKey.MASTER_METASTORE, MetastoreType.ROCKS);
-    Assert.assertTrue(UpdateCheck.getUserAgentFeatureList().contains("rocks"));
+    UpdateCheck.addUserAgentFeatures(info);
+    Assert.assertTrue(listContainsTarget(info, UpdateCheck.ROCKS_KEY));
     Configuration.set(PropertyKey.MASTER_METASTORE, MetastoreType.HEAP);
-    Assert.assertFalse(UpdateCheck.getUserAgentFeatureList().contains("rocks"));
+    info.clear();
+    UpdateCheck.addUserAgentFeatures(info);
+    Assert.assertFalse(listContainsTarget(info, UpdateCheck.ROCKS_KEY));
   }
 
   @Test
   public void featureStringZookeeper() {
+    List<String> info = new ArrayList<>();
     Configuration.set(PropertyKey.ZOOKEEPER_ENABLED, true);
-    Assert.assertTrue(UpdateCheck.getUserAgentFeatureList().contains("zk"));
+    UpdateCheck.addUserAgentFeatures(info);
+    Assert.assertTrue(listContainsTarget(info, UpdateCheck.ZOOKEEPER_KEY));
     Configuration.set(PropertyKey.ZOOKEEPER_ENABLED, false);
-    Assert.assertFalse(UpdateCheck.getUserAgentFeatureList().contains("zk"));
+    info.clear();
+    UpdateCheck.addUserAgentFeatures(info);
+    Assert.assertFalse(listContainsTarget(info, UpdateCheck.ZOOKEEPER_KEY));
   }
 
   @Test
   public void featureStringBackupDelegation() {
+    List<String> info = new ArrayList<>();
     Configuration.set(PropertyKey.MASTER_BACKUP_DELEGATION_ENABLED, true);
-    Assert.assertTrue(UpdateCheck.getUserAgentFeatureList().contains("backupDelegation"));
+    UpdateCheck.addUserAgentFeatures(info);
+    Assert.assertTrue(listContainsTarget(info, UpdateCheck.BACKUP_DELEGATION_KEY));
     Configuration.set(PropertyKey.MASTER_BACKUP_DELEGATION_ENABLED, false);
-    Assert.assertFalse(UpdateCheck.getUserAgentFeatureList().contains("backupDelegation"));
+    info.clear();
+    UpdateCheck.addUserAgentFeatures(info);
+    Assert.assertFalse(listContainsTarget(info, UpdateCheck.BACKUP_DELEGATION_KEY));
   }
 
   @Test
   public void featureStringDailyBackup() {
+    List<String> info = new ArrayList<>();
     Configuration.set(PropertyKey.MASTER_DAILY_BACKUP_ENABLED, true);
-    Assert.assertTrue(UpdateCheck.getUserAgentFeatureList().contains("dailyBackup"));
+    UpdateCheck.addUserAgentFeatures(info);
+    Assert.assertTrue(listContainsTarget(info, UpdateCheck.DAILY_BACKUP_KEY));
     Configuration.set(PropertyKey.MASTER_DAILY_BACKUP_ENABLED, false);
-    Assert.assertFalse(UpdateCheck.getUserAgentFeatureList().contains("dailyBackup"));
+    info.clear();
+    UpdateCheck.addUserAgentFeatures(info);
+    Assert.assertFalse(listContainsTarget(info, UpdateCheck.DAILY_BACKUP_KEY));
   }
 
   @Test
   public void featureStringPersistneceBlacklist() {
+    List<String> info = new ArrayList<>();
     Configuration.set(PropertyKey.MASTER_PERSISTENCE_BLACKLIST, ".tmp");
-    Assert.assertTrue(UpdateCheck.getUserAgentFeatureList().contains("persistBlackList"));
+    UpdateCheck.addUserAgentFeatures(info);
+    Assert.assertTrue(listContainsTarget(info, UpdateCheck.PERSIST_BLACK_LIST_KEY));
     Configuration.unset(PropertyKey.MASTER_PERSISTENCE_BLACKLIST);
-    Assert.assertFalse(UpdateCheck.getUserAgentFeatureList().contains("persistBlackList"));
+    info.clear();
+    UpdateCheck.addUserAgentFeatures(info);
+    Assert.assertFalse(listContainsTarget(info, UpdateCheck.PERSIST_BLACK_LIST_KEY));
   }
 
   @Test
   public void featureStringUnsafePersist() {
+    List<String> info = new ArrayList<>();
     Configuration.set(PropertyKey.MASTER_UNSAFE_DIRECT_PERSIST_OBJECT_ENABLED, true);
-    Assert.assertTrue(UpdateCheck.getUserAgentFeatureList().contains("unsafePersist"));
+    UpdateCheck.addUserAgentFeatures(info);
+    Assert.assertTrue(listContainsTarget(info, UpdateCheck.UNSAFE_PERSIST_KEY));
     Configuration.set(PropertyKey.MASTER_UNSAFE_DIRECT_PERSIST_OBJECT_ENABLED, false);
-    Assert.assertFalse(UpdateCheck.getUserAgentFeatureList().contains("unsafePersist"));
+    info.clear();
+    UpdateCheck.addUserAgentFeatures(info);
+    Assert.assertFalse(listContainsTarget(info, UpdateCheck.UNSAFE_PERSIST_KEY));
   }
 
   @Test
   public void featureStringMasterAuditLogging() {
+    List<String> info = new ArrayList<>();
     Configuration.set(PropertyKey.MASTER_AUDIT_LOGGING_ENABLED, true);
-    Assert.assertTrue(UpdateCheck.getUserAgentFeatureList().contains("masterAuditLog"));
+    UpdateCheck.addUserAgentFeatures(info);
+    Assert.assertTrue(listContainsTarget(info, UpdateCheck.MASTER_AUDIT_LOG_KEY));
     Configuration.set(PropertyKey.MASTER_AUDIT_LOGGING_ENABLED, false);
-    Assert.assertFalse(UpdateCheck.getUserAgentFeatureList().contains("masterAuditLog"));
+    info.clear();
+    UpdateCheck.addUserAgentFeatures(info);
+    Assert.assertFalse(listContainsTarget(info, UpdateCheck.MASTER_AUDIT_LOG_KEY));
   }
 
   @Test
-  public void userAgent() throws Exception {
+  public void userAgent() {
     String userAgentString = UpdateCheck.getUserAgentString("cluster1");
     Pattern pattern = Pattern.compile(
         String.format("Alluxio\\/%s \\(cluster1(?:.+)[^;]\\)", ProjectConstants.VERSION));
     Matcher matcher = pattern.matcher(userAgentString);
     Assert.assertTrue(matcher.matches());
+  }
+
+  /**
+   * Makes sure the list containing the target information.
+   *
+   * @param list the list to check
+   * @param target the target info
+   * @return true if list contains the target
+   */
+  private boolean listContainsTarget(List<String> list, String target) {
+    for (String str : list) {
+      if (str.equals(target)) {
+        return true;
+      }
+    }
+    return false;
   }
 }

@@ -9,7 +9,7 @@
  * See the NOTICE file distributed with this work for information regarding copyright ownership.
  */
 
-package alluxio.master.meta;
+package alluxio.check;
 
 import alluxio.ProjectConstants;
 import alluxio.util.EnvironmentUtils;
@@ -37,7 +37,21 @@ import javax.annotation.concurrent.ThreadSafe;
  */
 @ThreadSafe
 public final class UpdateCheck {
-  private static final String PRODUCT_CODE_KEY = "ProductCode:";
+  static final String BACKUP_DELEGATION_KEY = "backupDelegation";
+  static final String CFT_KEY = "cft";
+  static final String DAILY_BACKUP_KEY = "dailyBackup";
+  static final String DOCKER_KEY = "docker";
+  static final String EC2_KEY = "ec2";
+  static final String EMBEDDED_KEY = "embedded";
+  static final String EMR_KEY = "emr";
+  static final String GCE_KEY = "gce";
+  static final String KUBERNETES_KEY = "kubernetes";
+  static final String MASTER_AUDIT_LOG_KEY = "masterAuditLog";
+  static final String PERSIST_BLACK_LIST_KEY = "persistBlackList";
+  static final String PRODUCT_CODE_KEY = "ProductCode:";
+  static final String ROCKS_KEY = "rocks";
+  static final String UNSAFE_PERSIST_KEY = "unsafePersist";
+  static final String ZOOKEEPER_KEY = "zookeeper";
 
   /**
    * @param clusterID the cluster ID
@@ -84,55 +98,49 @@ public final class UpdateCheck {
    */
   @VisibleForTesting
   public static String getUserAgentString(String clusterID) {
-    Joiner joiner = Joiner.on("; ").skipNulls();
-    List<String> featureList = getUserAgentFeatureList();
-    String sysInfo = getUserAgentEnvironmentString(clusterID);
-    if (featureList.size() > 0) {
-      sysInfo = joiner.join(sysInfo, joiner.join(getUserAgentFeatureList()));
-    }
-    return String.format("Alluxio/%s (%s)", ProjectConstants.VERSION, sysInfo);
+    List<String> info = new ArrayList<>();
+    info.add(clusterID);
+    addUserAgentEnvironments(info);
+    addUserAgentFeatures(info);
+    return String.format("Alluxio/%s (%s)", ProjectConstants.VERSION,
+        Joiner.on("; ").skipNulls().join(info));
   }
 
   /**
-   * @param clusterID the cluster ID
-   * @return a string representation of the user's environment in the format "docker; kubernetes"
+   * Adds the information of user environment to given list.
+   *
+   * @param info the list to add info to
    */
   @VisibleForTesting
-  public static String getUserAgentEnvironmentString(String clusterID) {
-    Joiner joiner = Joiner.on("; ").skipNulls();
-    boolean isGCE = EnvironmentUtils.isGoogleComputeEngine();
-    String sysInfo = joiner.join(
-        clusterID,
-        EnvironmentUtils.isDocker() ? "docker" : null,
-        EnvironmentUtils.isKubernetes() ? "kubernetes" : null,
-        isGCE ? "gce" : null
-    );
-    if (!isGCE) {
-      List<String> ec2Info = getEC2Info();
-      if (ec2Info.size() != 0) {
-        sysInfo = joiner.join(sysInfo, joiner.join(ec2Info));
-      }
+  public static void addUserAgentEnvironments(List<String> info) {
+    if (EnvironmentUtils.isDocker()) {
+      info.add(DOCKER_KEY);
     }
-    return sysInfo;
+    if (EnvironmentUtils.isKubernetes()) {
+      info.add(KUBERNETES_KEY);
+    }
+    if (EnvironmentUtils.isGoogleComputeEngine()) {
+      info.add(GCE_KEY);
+    } else {
+      addEC2Info(info);
+    }
   }
 
   /**
    * Get the feature's information.
    *
-   * @return a list of strings representing enabled features
+   * @param info the list to add info to
    */
   @VisibleForTesting
-  public static List<String> getUserAgentFeatureList() {
-    List<String> features = new ArrayList<>();
-    addIfTrue(FeatureUtils.isEmbeddedJournal(), features, "embedded");
-    addIfTrue(FeatureUtils.isRocks(), features, "rocks");
-    addIfTrue(FeatureUtils.isZookeeperEnabled(), features, "zk");
-    addIfTrue(FeatureUtils.isBackupDelegationEnabled(), features, "backupDelegation");
-    addIfTrue(FeatureUtils.isDailyBackupEnabled(), features, "dailyBackup");
-    addIfTrue(!FeatureUtils.isPersistenceBlacklistEmpty(), features, "persistBlackList");
-    addIfTrue(FeatureUtils.isUnsafeDirectPersistEnabled(), features, "unsafePersist");
-    addIfTrue(FeatureUtils.isMasterAuditLoggingEnabled(), features, "masterAuditLog");
-    return features;
+  public static void addUserAgentFeatures(List<String> info) {
+    addIfTrue(FeatureUtils.isEmbeddedJournal(), info, EMBEDDED_KEY);
+    addIfTrue(FeatureUtils.isRocks(), info, ROCKS_KEY);
+    addIfTrue(FeatureUtils.isZookeeperEnabled(), info, ZOOKEEPER_KEY);
+    addIfTrue(FeatureUtils.isBackupDelegationEnabled(), info, BACKUP_DELEGATION_KEY);
+    addIfTrue(FeatureUtils.isDailyBackupEnabled(), info, DAILY_BACKUP_KEY);
+    addIfTrue(!FeatureUtils.isPersistenceBlacklistEmpty(), info, PERSIST_BLACK_LIST_KEY);
+    addIfTrue(FeatureUtils.isUnsafeDirectPersistEnabled(), info, UNSAFE_PERSIST_KEY);
+    addIfTrue(FeatureUtils.isMasterAuditLoggingEnabled(), info, MASTER_AUDIT_LOG_KEY);
   }
 
   /**
@@ -149,16 +157,15 @@ public final class UpdateCheck {
   }
 
   /**
-   * Gets the EC2 system information.
+   * Adds the information of EC2 environment to given list.
    *
-   * @return a list of string representation of the user's EC2 environment
+   * @param info the list to add info to
    */
-  private static List<String> getEC2Info() {
-    List<String> ec2Info = new ArrayList<>();
+  private static void addEC2Info(List<String> info) {
     boolean isEC2 = false;
     String productCode = EnvironmentUtils.getEC2ProductCode();
     if (!productCode.isEmpty()) {
-      ec2Info.add(PRODUCT_CODE_KEY + productCode);
+      info.add(PRODUCT_CODE_KEY + productCode);
       isEC2 = true;
     }
 
@@ -172,18 +179,17 @@ public final class UpdateCheck {
     if (userData != null && !userData.isEmpty()) {
       isEC2 = true;
       if (EnvironmentUtils.isCFT(userData)) {
-        ec2Info.add("cft");
+        info.add(CFT_KEY);
       } else if (EnvironmentUtils.isEMR(userData)) {
-        ec2Info.add("emr");
+        info.add(EMR_KEY);
       }
     } else if (!isEC2 && EnvironmentUtils.isEC2()) {
       isEC2 = true;
     }
 
     if (isEC2) {
-      ec2Info.add("ec2");
+      info.add(EC2_KEY);
     }
-    return ec2Info;
   }
 
   private UpdateCheck() {} // prevent instantiation
