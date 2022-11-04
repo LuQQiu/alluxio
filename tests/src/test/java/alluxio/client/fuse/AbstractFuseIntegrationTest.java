@@ -20,6 +20,8 @@ import static org.junit.Assume.assumeTrue;
 import alluxio.AlluxioTestDirectory;
 import alluxio.AlluxioURI;
 import alluxio.Constants;
+import alluxio.client.ReadType;
+import alluxio.client.WriteType;
 import alluxio.client.file.FileInStream;
 import alluxio.client.file.FileOutStream;
 import alluxio.client.file.FileSystem;
@@ -111,6 +113,8 @@ public abstract class AbstractFuseIntegrationTest {
     mMountPoint = AlluxioTestDirectory.createTemporaryDirectory(clusterName).getAbsolutePath();
     mAlluxioCluster.initConfiguration(ALLUXIO_ROOT);
     Configuration.set(PropertyKey.USER_BLOCK_SIZE_BYTES_DEFAULT, BLOCK_SIZE);
+    Configuration.set(PropertyKey.USER_FILE_WRITE_TYPE_DEFAULT, WriteType.MUST_CACHE);
+    Configuration.set(PropertyKey.USER_FILE_READ_TYPE_DEFAULT, ReadType.NO_CACHE);
     configure();
     IntegrationTestUtils.reserveMasterPorts();
     Configuration.global().validate();
