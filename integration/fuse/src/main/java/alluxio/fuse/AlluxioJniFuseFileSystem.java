@@ -146,7 +146,7 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
     mPathResolverCache = AlluxioFuseUtils.getPathResolverCache(mConf, fuseOptions);
     mAuthPolicy = AuthPolicyFactory.create(mFileSystem, mConf, this);
     mStreamFactory = new FuseFileStream.Factory(mFileSystem, mAuthPolicy, PATH_LOCKS);
-    UfsEnabled = fuseOptions.getFileSystemOptions().getUfsFileSystemOptions().isPresent();
+    mUfsEnabled = fuseOptions.getFileSystemOptions().getUfsFileSystemOptions().isPresent();
     if (mConf.getBoolean(PropertyKey.FUSE_DEBUG_ENABLED)) {
       try {
         LogUtils.setLogLevel(this.getClass().getName(), org.slf4j.event.Level.DEBUG.toString());

@@ -19,6 +19,7 @@ import alluxio.client.file.FileOutStream;
 import alluxio.client.file.FileSystem;
 import alluxio.client.file.FileSystemContext;
 import alluxio.client.file.URIStatus;
+import alluxio.client.file.options.UfsFileSystemOptions;
 import alluxio.collections.LockPool;
 import alluxio.concurrent.LockMode;
 import alluxio.conf.AlluxioConfiguration;
