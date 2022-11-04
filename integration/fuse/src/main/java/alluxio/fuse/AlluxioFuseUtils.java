@@ -19,13 +19,8 @@ import alluxio.client.file.FileOutStream;
 import alluxio.client.file.FileSystem;
 import alluxio.client.file.FileSystemContext;
 import alluxio.client.file.URIStatus;
-<<<<<<< HEAD
-import alluxio.client.file.options.UfsFileSystemOptions;
-||||||| 8389e63fbb
-=======
 import alluxio.collections.LockPool;
 import alluxio.concurrent.LockMode;
->>>>>>> 762c0a11021c011490e1f1471e72f30d29f79503
 import alluxio.conf.AlluxioConfiguration;
 import alluxio.conf.Configuration;
 import alluxio.conf.PropertyKey;
