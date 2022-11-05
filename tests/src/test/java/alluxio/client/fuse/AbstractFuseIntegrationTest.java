@@ -115,6 +115,7 @@ public abstract class AbstractFuseIntegrationTest {
     Configuration.set(PropertyKey.USER_BLOCK_SIZE_BYTES_DEFAULT, BLOCK_SIZE);
     Configuration.set(PropertyKey.USER_FILE_WRITE_TYPE_DEFAULT, WriteType.MUST_CACHE);
     Configuration.set(PropertyKey.USER_FILE_READ_TYPE_DEFAULT, ReadType.NO_CACHE);
+    Configuration.set(PropertyKey.FUSE_READ_WRITE_TRY_LOCK_TIMEOUT, "5min");
     configure();
     IntegrationTestUtils.reserveMasterPorts();
     Configuration.global().validate();

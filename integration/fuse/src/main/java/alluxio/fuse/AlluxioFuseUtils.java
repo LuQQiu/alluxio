@@ -82,19 +82,18 @@ import javax.annotation.concurrent.ThreadSafe;
  */
 @ThreadSafe
 public final class AlluxioFuseUtils {
+  public static final int MAX_NAME_LENGTH = 255;
+  public static final long ID_NOT_SET_VALUE = -1;
+  public static final long ID_NOT_SET_VALUE_UNSIGNED = 4294967295L;
+  public static final long MODE_NOT_SET_VALUE = -1;
+
   private static final Logger LOG = LoggerFactory.getLogger(AlluxioFuseUtils.class);
   private static final long THRESHOLD = Configuration.global()
       .getMs(PropertyKey.FUSE_LOGGING_THRESHOLD);
-
   private static final int MAX_ASYNC_RELEASE_WAITTIME_MS = 5000;
-  private static final int MAX_LOCK_WAIT_TIME = 20000;
   /** Most FileSystems on linux limit the length of file name beyond 255 characters. */
-  public static final int MAX_NAME_LENGTH = 255;
-
-  public static final long ID_NOT_SET_VALUE = -1;
-  public static final long ID_NOT_SET_VALUE_UNSIGNED = 4294967295L;
-
-  public static final long MODE_NOT_SET_VALUE = -1;
+  private static final int MAX_TRY_LOCK_TIMEOUT
+      = (int) Configuration.getMs(PropertyKey.FUSE_READ_WRITE_TRY_LOCK_TIMEOUT);
 
   private AlluxioFuseUtils() {}
 
@@ -578,7 +577,7 @@ public final class AlluxioFuseUtils {
               throw AlluxioRuntimeException.from(e);
             }
           }, Optional::isPresent,
-          WaitForOptions.defaults().setTimeoutMs(MAX_LOCK_WAIT_TIME).setInterval(1000));
+          WaitForOptions.defaults().setTimeoutMs(MAX_TRY_LOCK_TIMEOUT).setInterval(1000));
       if (!resource.isPresent()) {
         // should not reach here
         throw new DeadlineExceededRuntimeException(String.format(

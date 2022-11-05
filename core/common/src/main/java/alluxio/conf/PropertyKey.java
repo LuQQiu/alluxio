@@ -6474,6 +6474,14 @@ public final class PropertyKey implements Comparable<PropertyKey> {
           .setConsistencyCheckLevel(ConsistencyCheckLevel.WARN)
           .setScope(Scope.ALL)
           .build();
+  public static final PropertyKey FUSE_READ_WRITE_TRY_LOCK_TIMEOUT =
+      durationBuilder(Name.FUSE_READ_WRITE_TRY_LOCK_TIMEOUT)
+          .setDefaultValue("20s")
+          .setDescription("The timeout to try locking the FUSE path for reading or writing. "
+              + "Only one write allows at one time and multiple reads can happen concurrently.")
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.WARN)
+          .setScope(Scope.ALL)
+          .build();
   public static final PropertyKey FUSE_STAT_CACHE_REFRESH_INTERVAL =
       durationBuilder(Name.FUSE_STAT_CACHE_REFRESH_INTERVAL)
           .setDefaultValue("5min")
@@ -8386,6 +8394,8 @@ public final class PropertyKey implements Comparable<PropertyKey> {
         "alluxio.fuse.mount.options";
     public static final String FUSE_MOUNT_POINT =
         "alluxio.fuse.mount.point";
+    public static final String FUSE_READ_WRITE_TRY_LOCK_TIMEOUT =
+        "alluxio.fuse.read.write.try.lock.timeout";
     public static final String FUSE_STAT_CACHE_REFRESH_INTERVAL =
         "alluxio.fuse.stat.cache.refresh.interval";
     public static final String FUSE_UMOUNT_TIMEOUT =
