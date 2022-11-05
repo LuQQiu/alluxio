@@ -232,6 +232,7 @@ public class LockPool<K> implements Closeable {
         throw new IllegalStateException("Unknown lock mode: " + mode);
     }
     if (!innerLock.tryLock()) {
+      LOG.info("Failed to get lock for mode {} and key {}", mode, key);
       return Optional.empty();
     }
     return Optional.of(new RefCountLockResource(lock, mode, false, resource.mRefCount, false));

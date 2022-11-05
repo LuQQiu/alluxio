@@ -569,6 +569,7 @@ public final class AlluxioFuseUtils {
       // File path is a unique identifier for a file, however it can be a long string
       // hence using md5 hash of the file path as the lock identifier
       String hashedKey = md5().hashString(key, UTF_8).toString();
+      LOG.info("acquire lock {} for path {} hashed key {}", mode, key, hashedKey);
       Optional<RWLockResource> resource = CommonUtils
           .waitForResult("successfully get the path lock", () -> {
             try {
@@ -583,6 +584,7 @@ public final class AlluxioFuseUtils {
         throw new DeadlineExceededRuntimeException(String.format(
             message + ": fail to acquire lock", args));
       }
+      LOG.info("Locked {} for path {} hashed key {}", mode, key, hashedKey);
       return resource.get();
     } catch (InterruptedException ie) {
       Thread.currentThread().interrupt();
@@ -620,7 +622,7 @@ public final class AlluxioFuseUtils {
       String description, Object... args) {
     int ret;
     try {
-      String debugDesc = logger.isDebugEnabled() ? String.format(description, args) : null;
+      String debugDesc = String.format(description, args);
       logger.info("Enter: {}({})", methodName, debugDesc);
       long startMs = System.currentTimeMillis();
       ret = callable.call();
