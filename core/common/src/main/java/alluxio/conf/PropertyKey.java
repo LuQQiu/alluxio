@@ -6476,7 +6476,7 @@ public final class PropertyKey implements Comparable<PropertyKey> {
           .build();
   public static final PropertyKey FUSE_READ_WRITE_TRY_LOCK_TIMEOUT =
       durationBuilder(Name.FUSE_READ_WRITE_TRY_LOCK_TIMEOUT)
-          .setDefaultValue("20s")
+          .setDefaultValue("1min")
           .setDescription("The timeout to try locking the FUSE path for reading or writing. "
               + "Only one write allows at one time and multiple reads can happen concurrently.")
           .setConsistencyCheckLevel(ConsistencyCheckLevel.WARN)
