@@ -235,6 +235,7 @@ public class LockPool<K> implements Closeable {
       LOG.info("Failed to get lock for mode {} and key {}", mode, key);
       return Optional.empty();
     }
+    LOG.info("Got lock for mode {} and key {}", mode, key);
     return Optional.of(new RefCountLockResource(lock, mode, false, resource.mRefCount, false));
   }
 
