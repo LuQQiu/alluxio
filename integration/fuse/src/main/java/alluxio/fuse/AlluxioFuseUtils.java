@@ -621,11 +621,11 @@ public final class AlluxioFuseUtils {
     int ret;
     try {
       String debugDesc = logger.isDebugEnabled() ? String.format(description, args) : null;
-      logger.debug("Enter: {}({})", methodName, debugDesc);
+      logger.info("Enter: {}({})", methodName, debugDesc);
       long startMs = System.currentTimeMillis();
       ret = callable.call();
       long durationMs = System.currentTimeMillis() - startMs;
-      logger.debug("Exit ({}): {}({}) in {} ms", ret, methodName, debugDesc, durationMs);
+      logger.info("Exit ({}): {}({}) in {} ms", ret, methodName, debugDesc, durationMs);
       MetricsSystem.timer(methodName).update(durationMs, TimeUnit.MILLISECONDS);
       MetricsSystem.timer(MetricKey.FUSE_TOTAL_CALLS.getName())
           .update(durationMs, TimeUnit.MILLISECONDS);
