@@ -14,13 +14,12 @@ package alluxio.fuse.file;
 import alluxio.AlluxioURI;
 import alluxio.client.file.FileSystem;
 import alluxio.client.file.URIStatus;
-import alluxio.collections.LockPool;
 import alluxio.exception.runtime.UnimplementedRuntimeException;
 import alluxio.fuse.AlluxioFuseOpenUtils;
 import alluxio.fuse.AlluxioFuseUtils;
 import alluxio.fuse.auth.AuthPolicy;
-
 import alluxio.fuse.lock.FuseReadWriteLockManager;
+
 import com.google.common.base.Preconditions;
 import jnr.constants.platform.OpenFlags;
 
@@ -60,7 +59,7 @@ public class FuseFileInOrOutStream implements FuseFileStream {
    * @return a {@link FuseFileInOrOutStream}
    */
   public static FuseFileInOrOutStream create(FileSystem fileSystem, AuthPolicy authPolicy,
-     FuseReadWriteLockManager lockManager, AlluxioURI uri, int flags, long mode) {
+      FuseReadWriteLockManager lockManager, AlluxioURI uri, int flags, long mode) {
     Preconditions.checkNotNull(fileSystem);
     Preconditions.checkNotNull(lockManager);
     Preconditions.checkNotNull(uri);
@@ -142,8 +141,8 @@ public class FuseFileInOrOutStream implements FuseFileStream {
           "Alluxio does not support reading while writing/truncating");
     }
     if (!mOutStream.isPresent()) {
-      mOutStream = Optional.of(FuseFileOutStream.create(mFileSystem, mAuthPolicy, mLockManager, mUri,
-          OpenFlags.O_WRONLY.intValue(), mMode));
+      mOutStream = Optional.of(FuseFileOutStream.create(mFileSystem, mAuthPolicy,
+          mLockManager, mUri, OpenFlags.O_WRONLY.intValue(), mMode));
     }
     mOutStream.get().truncate(size);
   }

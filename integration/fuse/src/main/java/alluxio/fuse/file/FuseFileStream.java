@@ -15,10 +15,9 @@ import static jnr.constants.platform.OpenFlags.O_ACCMODE;
 
 import alluxio.AlluxioURI;
 import alluxio.client.file.FileSystem;
-import alluxio.collections.LockPool;
 import alluxio.fuse.auth.AuthPolicy;
-
 import alluxio.fuse.lock.FuseReadWriteLockManager;
+
 import jnr.constants.platform.OpenFlags;
 
 import java.nio.ByteBuffer;
@@ -77,9 +76,9 @@ public interface FuseFileStream extends AutoCloseable {
    */
   @ThreadSafe
   class Factory {
+    private final FuseReadWriteLockManager mLockManager = new FuseReadWriteLockManager();
     private final FileSystem mFileSystem;
     private final AuthPolicy mAuthPolicy;
-    private final FuseReadWriteLockManager mLockManager;
 
     /**
      * Creates an instance of {@link FuseFileStream.Factory} for
@@ -87,12 +86,10 @@ public interface FuseFileStream extends AutoCloseable {
      *
      * @param fileSystem the file system
      * @param authPolicy the authentication policy
-     * @param lockManager the lock manager
      */
-    public Factory(FileSystem fileSystem, AuthPolicy authPolicy, FuseReadWriteLockManager lockManager) {
+    public Factory(FileSystem fileSystem, AuthPolicy authPolicy) {
       mFileSystem = fileSystem;
       mAuthPolicy = authPolicy;
-      mLockManager = lockManager;
     }
 
     /**

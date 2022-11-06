@@ -51,7 +51,6 @@ public abstract class AbstractFuseFileStreamIntegrationTest extends BaseIntegrat
 
   protected FileSystem mFileSystem = null;
   protected AuthPolicy mAuthPolicy = null;
-  protected FuseReadWriteLockManager mLockManager = null;
   protected FuseFileStream.Factory mStreamFactory = null;
 
   @Before
@@ -60,8 +59,7 @@ public abstract class AbstractFuseFileStreamIntegrationTest extends BaseIntegrat
     mAuthPolicy = LaunchUserGroupAuthPolicy.create(mFileSystem,
         mLocalAlluxioClusterResource.get().getClient().getConf(), Optional.empty());
     mAuthPolicy.init();
-    mLockManager = new FuseReadWriteLockManager();
-    mStreamFactory = new FuseFileStream.Factory(mFileSystem, mAuthPolicy, mLockManager);
+    mStreamFactory = new FuseFileStream.Factory(mFileSystem, mAuthPolicy);
   }
 
   /**

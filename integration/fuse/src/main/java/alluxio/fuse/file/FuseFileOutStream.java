@@ -25,8 +25,8 @@ import alluxio.fuse.AlluxioFuseOpenUtils;
 import alluxio.fuse.AlluxioFuseUtils;
 import alluxio.fuse.auth.AuthPolicy;
 import alluxio.fuse.lock.FuseReadWriteLockManager;
-
 import alluxio.resource.LockResource;
+
 import com.google.common.base.Preconditions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
