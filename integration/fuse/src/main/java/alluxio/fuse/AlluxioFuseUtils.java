@@ -80,6 +80,7 @@ public final class AlluxioFuseUtils {
   private static final Logger LOG = LoggerFactory.getLogger(AlluxioFuseUtils.class);
   private static final long THRESHOLD = Configuration.global()
       .getMs(PropertyKey.FUSE_LOGGING_THRESHOLD);
+  private static final Mode DEFAULT_MODE = new Mode(Mode.Bits.ALL, Mode.Bits.ALL, Mode.Bits.ALL);
 
   private static final int MAX_ASYNC_RELEASE_WAITTIME_MS = 5000;
   private static final int MAX_LOCK_WAIT_TIME = 20000;
@@ -247,6 +248,23 @@ public final class AlluxioFuseUtils {
     } else {
       mode |= FileStat.S_IFREG;
     }
+    stat.st_mode.set(mode);
+    stat.st_nlink.set(1);
+  }
+
+  /**
+   * Updates file status size.
+   *
+   * @param stat stat to file
+   */
+  public static void setDefaultFileStat(AuthPolicy policy, FileStat stat) {
+    stat.st_uid.set(policy.getUid("random")
+        .orElse(AlluxioFuseUtils.ID_NOT_SET_VALUE));
+    stat.st_gid.set(policy.getGid("random")
+        .orElse(AlluxioFuseUtils.ID_NOT_SET_VALUE));
+
+    int mode = DEFAULT_MODE.toShort();
+    mode |= FileStat.S_IFREG;
     stat.st_mode.set(mode);
     stat.st_nlink.set(1);
   }

@@ -227,6 +227,9 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
               && ((FuseFileInOrOutStream) a.getFileStream()).isWriteStream()))
           .collect(Collectors.toList());
       if (!stream.isEmpty()) {
+        if (!status.isPresent()) {
+          AlluxioFuseUtils.setDefaultFileStat(mAuthPolicy, stat);
+        }
         // File is being written by current Alluxio client
         AlluxioFuseUtils.updateStatSize(stat, stream.get(0).getFileStream().getFileLength());
         fileExist = true;
