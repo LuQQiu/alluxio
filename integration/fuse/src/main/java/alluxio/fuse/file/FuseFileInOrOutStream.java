@@ -62,6 +62,7 @@ public class FuseFileInOrOutStream implements FuseFileStream {
   public static FuseFileInOrOutStream create(FileSystem fileSystem, AuthPolicy authPolicy,
      FuseReadWriteLockManager lockManager, AlluxioURI uri, int flags, long mode) {
     Preconditions.checkNotNull(fileSystem);
+    Preconditions.checkNotNull(lockManager);
     Preconditions.checkNotNull(uri);
     // Left for first operation to decide read-only or write-only mode
     // read-only: open(READ_WRITE) existing file - read()

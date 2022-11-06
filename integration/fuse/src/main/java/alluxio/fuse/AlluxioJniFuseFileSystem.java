@@ -108,7 +108,7 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
   private static final IndexDefinition<FuseFileEntry<FuseFileStream>, String>
       PATH_INDEX = IndexDefinition.ofUnique(FuseFileEntry::getPath);
 
-  private static final FuseReadWriteLockManager mLockManager = new FuseReadWriteLockManager(128, 64, 256);
+  private static final FuseReadWriteLockManager mLockManager = new FuseReadWriteLockManager();
   private final IndexedSet<FuseFileEntry<FuseFileStream>> mFileEntries
       = new IndexedSet<>(ID_INDEX, PATH_INDEX);
   private final AuthPolicy mAuthPolicy;

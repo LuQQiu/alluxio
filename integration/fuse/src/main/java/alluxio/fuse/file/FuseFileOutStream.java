@@ -26,6 +26,7 @@ import alluxio.fuse.AlluxioFuseUtils;
 import alluxio.fuse.auth.AuthPolicy;
 import alluxio.fuse.lock.FuseReadWriteLockManager;
 
+import alluxio.resource.LockResource;
 import com.google.common.base.Preconditions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,7 +47,7 @@ public class FuseFileOutStream implements FuseFileStream {
   private static final int DEFAULT_BUFFER_SIZE = Constants.MB * 4;
   private final AuthPolicy mAuthPolicy;
   private final FileSystem mFileSystem;
-  private final FuseReadWriteLockManager mLockManager;
+  private final LockResource mLockResource;
   private final long mMode;
   private final AlluxioURI mURI;
   // Support returning the correct file length
@@ -73,9 +74,10 @@ public class FuseFileOutStream implements FuseFileStream {
       FuseReadWriteLockManager lockManager, AlluxioURI uri, int flags, long mode) {
     Preconditions.checkNotNull(fileSystem);
     Preconditions.checkNotNull(authPolicy);
+    Preconditions.checkNotNull(lockManager);
     Preconditions.checkNotNull(uri);
     // Make sure file is not being read/written by current FUSE
-    lockManager.tryLock(uri.toString(), LockMode.WRITE);
+    LockResource lockResource = lockManager.tryLock(uri.toString(), LockMode.WRITE);
 
     try {
       // Make sure file is not being written by other clients outside current FUSE
@@ -104,26 +106,26 @@ public class FuseFileOutStream implements FuseFileStream {
           }
         } else {
           // Support open(O_WRONLY | O_RDWR flag) - truncate(0) - write() workflow
-          return new FuseFileOutStream(fileSystem, authPolicy, uri, lockManager,
+          return new FuseFileOutStream(fileSystem, authPolicy, uri, lockResource,
               Optional.empty(), fileLen, mode);
         }
       }
-      return new FuseFileOutStream(fileSystem, authPolicy, uri, lockManager,
+      return new FuseFileOutStream(fileSystem, authPolicy, uri, lockResource,
           Optional.of(AlluxioFuseUtils.createFile(fileSystem, authPolicy, uri, mode)),
           fileLen, mode);
     } catch (Throwable t) {
-      lockManager.unlock(uri.toString(), LockMode.WRITE);
+      lockResource.close();
       throw t;
     }
   }
 
   private FuseFileOutStream(FileSystem fileSystem, AuthPolicy authPolicy,
-      AlluxioURI uri, FuseReadWriteLockManager lockManager, Optional<FileOutStream> outStream,
+      AlluxioURI uri, LockResource lockResource, Optional<FileOutStream> outStream,
       long fileLen, long mode) {
     mFileSystem = Preconditions.checkNotNull(fileSystem);
     mAuthPolicy = Preconditions.checkNotNull(authPolicy);
     mURI = Preconditions.checkNotNull(uri);
-    mLockManager = Preconditions.checkNotNull(lockManager);
+    mLockResource = Preconditions.checkNotNull(lockResource);
     mOutStream = Preconditions.checkNotNull(outStream);
     mOriginalFileLen = fileLen;
     mMode = mode;
@@ -222,7 +224,7 @@ public class FuseFileOutStream implements FuseFileStream {
     try {
       closeStreams();
     } finally {
-      mLockManager.unlock(mURI.toString(), LockMode.WRITE);
+      mLockResource.close();
     }
   }
 

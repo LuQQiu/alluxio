@@ -553,47 +553,6 @@ public final class AlluxioFuseUtils {
   }
 
   /**
-   * Trys to lock the lock.
-   *
-   * @param lockPool the lock pool to get lock from
-   * @param key the lock key
-   * @param mode the lock mode
-   * @param message fail to lock message
-   * @param args fail to lock arguments
-   * @return the lock resource which much be closed
-   */
-  public static RWLockResource lock(LockPool<String> lockPool, String key, LockMode mode,
-      String message, Object... args) {
-    try {
-      // File path is a unique identifier for a file, however it can be a long string
-      // hence using md5 hash of the file path as the lock identifier
-      String hashedKey = md5().hashString(key, UTF_8).toString();
-      Optional<RWLockResource> resource = CommonUtils
-          .waitForResult("successfully get the path lock", () -> {
-            try {
-              return lockPool.tryGet(hashedKey, mode);
-            } catch (Exception e) {
-              throw AlluxioRuntimeException.from(e);
-            }
-          }, Optional::isPresent,
-          WaitForOptions.defaults().setTimeoutMs(MAX_LOCK_WAIT_TIME).setInterval(1000));
-      if (!resource.isPresent()) {
-        // should not reach here
-        throw new DeadlineExceededRuntimeException(String.format(
-            message + ": fail to acquire lock", args));
-      }
-      return resource.get();
-    } catch (InterruptedException ie) {
-      Thread.currentThread().interrupt();
-      throw new CancelledRuntimeException(String.format(
-          message + ": acquire lock interrupted", args));
-    } catch (TimeoutException te) {
-      throw new DeadlineExceededRuntimeException(String.format(
-          message + ": fail to acquire lock", args));
-    }
-  }
-
-  /**
    * An interface representing a callable for FUSE APIs.
    */
   public interface FuseCallable {

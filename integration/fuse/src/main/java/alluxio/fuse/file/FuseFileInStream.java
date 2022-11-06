@@ -23,6 +23,7 @@ import alluxio.exception.runtime.NotFoundRuntimeException;
 import alluxio.exception.runtime.UnimplementedRuntimeException;
 import alluxio.fuse.AlluxioFuseUtils;
 import alluxio.fuse.lock.FuseReadWriteLockManager;
+import alluxio.resource.LockResource;
 
 import com.google.common.base.Preconditions;
 
@@ -39,7 +40,7 @@ public class FuseFileInStream implements FuseFileStream {
   private final FileInStream mInStream;
   private final long mFileLength;
   private final AlluxioURI mURI;
-  private final FuseReadWriteLockManager mLockManager;
+  private final LockResource mLockResource;
   private volatile boolean mClosed = false;
 
   /**
@@ -56,7 +57,7 @@ public class FuseFileInStream implements FuseFileStream {
     Preconditions.checkNotNull(uri);
     // Make sure file is not being written by current FUSE
     // deal with the async Fuse.release issue by waiting for write lock to be released
-    lockManager.tryLock(uri.toString(), LockMode.READ);
+    LockResource lockResource = lockManager.tryLock(uri.toString(), LockMode.READ);
 
     try {
       // Make sure file is not being written by other clients outside current FUSE
@@ -76,20 +77,20 @@ public class FuseFileInStream implements FuseFileStream {
 
       try {
         FileInStream is = fileSystem.openFile(uri);
-        return new FuseFileInStream(is, lockManager, status.get().getLength(), uri);
+        return new FuseFileInStream(is, lockResource, status.get().getLength(), uri);
       } catch (IOException | AlluxioException e) {
         throw new RuntimeException(e);
       }
     } catch (Throwable t) {
-      lockManager.unlock(uri.toString(), LockMode.READ);
+      lockResource.close();
       throw t;
     }
   }
 
-  private FuseFileInStream(FileInStream inStream, FuseReadWriteLockManager lockManager,
+  private FuseFileInStream(FileInStream inStream, LockResource lockResource,
       long fileLength, AlluxioURI uri) {
     mInStream = Preconditions.checkNotNull(inStream);
-    mLockManager = Preconditions.checkNotNull(lockManager);
+    mLockResource = Preconditions.checkNotNull(lockResource);
     mURI = Preconditions.checkNotNull(uri);
     mFileLength = fileLength;
   }
@@ -152,7 +153,7 @@ public class FuseFileInStream implements FuseFileStream {
     } catch (IOException e) {
       throw AlluxioRuntimeException.from(e);
     } finally {
-      mLockManager.unlock(mURI.toString(), LockMode.READ);
+      mLockResource.close();
     }
   }
 }
