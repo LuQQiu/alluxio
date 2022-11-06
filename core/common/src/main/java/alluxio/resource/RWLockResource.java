@@ -24,6 +24,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 public class RWLockResource extends LockResource {
 
   private final ReentrantReadWriteLock mRwLock;
+  private final LockMode mMode;
 
   /**
    * Creates a new instance of RW lock that will lock with the given mode.
@@ -38,6 +39,7 @@ public class RWLockResource extends LockResource {
       boolean useTryLock) {
     super(mode == LockMode.READ ? rwLock.readLock() : rwLock.writeLock(), acquireLock, useTryLock);
     mRwLock = rwLock;
+    mMode = mode;
   }
 
   /**
@@ -58,5 +60,14 @@ public class RWLockResource extends LockResource {
     mLock.unlock();
     mLock = mRwLock.readLock();
     return true;
+  }
+
+  @Override
+  public void unlock() {
+    if (mMode == LockMode.READ) {
+      mRwLock.readLock().unlock();
+    } else {
+      mRwLock.writeLock().unlock();
+    }
   }
 }

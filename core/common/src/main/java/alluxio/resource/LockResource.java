@@ -126,6 +126,13 @@ public class LockResource implements Closeable {
     if (mTracker != null) {
       mTracker.close(this);
     }
+    unlock();
+  }
+
+  /**
+   * Unlock the lock.
+   */
+  public void unlock() {
     mLock.unlock();
   }
 }
