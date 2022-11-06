@@ -16,7 +16,7 @@ import alluxio.concurrent.ClientRWLock;
 import alluxio.concurrent.LockMode;
 import alluxio.exception.runtime.CancelledRuntimeException;
 import alluxio.exception.runtime.DeadlineExceededRuntimeException;
-import alluxio.resource.LockResource;
+import alluxio.resource.CloseableResource;
 
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
@@ -52,7 +52,7 @@ public class FuseReadWriteLockManager {
    * @param mode the lock mode
    * @return the lock resource to unlock the locked lock
    */
-  public LockResource tryLock(String path, LockMode mode) {
+  public CloseableResource<Lock> tryLock(String path, LockMode mode) {
     ClientRWLock pathLock = mLockCache.getUnchecked(path);
     Lock lock = mode == LockMode.READ ? pathLock.readLock() : pathLock.writeLock();
     try {
@@ -62,7 +62,12 @@ public class FuseReadWriteLockManager {
                 + "LockMode: %s, lock reference count = %s",
             path, TRY_LOCK_TIMEOUT, mode, pathLock.getReferenceCount()));
       }
-      return new LockResource(lock);
+      return new CloseableResource<Lock>(lock) {
+        @Override
+        public void closeResource() {
+          lock.unlock();
+        }
+      };
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
       throw new CancelledRuntimeException(String.format(

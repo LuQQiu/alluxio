@@ -25,7 +25,7 @@ import alluxio.fuse.AlluxioFuseOpenUtils;
 import alluxio.fuse.AlluxioFuseUtils;
 import alluxio.fuse.auth.AuthPolicy;
 import alluxio.fuse.lock.FuseReadWriteLockManager;
-import alluxio.resource.LockResource;
+import alluxio.resource.CloseableResource;
 
 import com.google.common.base.Preconditions;
 import org.slf4j.Logger;
@@ -35,6 +35,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Optional;
+import java.util.concurrent.locks.Lock;
 import javax.annotation.concurrent.ThreadSafe;
 
 /**
@@ -47,7 +48,7 @@ public class FuseFileOutStream implements FuseFileStream {
   private static final int DEFAULT_BUFFER_SIZE = Constants.MB * 4;
   private final AuthPolicy mAuthPolicy;
   private final FileSystem mFileSystem;
-  private final LockResource mLockResource;
+  private final CloseableResource<Lock> mLockResource;
   private final long mMode;
   private final AlluxioURI mURI;
   // Support returning the correct file length
@@ -77,7 +78,7 @@ public class FuseFileOutStream implements FuseFileStream {
     Preconditions.checkNotNull(lockManager);
     Preconditions.checkNotNull(uri);
     // Make sure file is not being read/written by current FUSE
-    LockResource lockResource = lockManager.tryLock(uri.toString(), LockMode.WRITE);
+    CloseableResource<Lock> lockResource = lockManager.tryLock(uri.toString(), LockMode.WRITE);
 
     try {
       // Make sure file is not being written by other clients outside current FUSE
@@ -120,7 +121,7 @@ public class FuseFileOutStream implements FuseFileStream {
   }
 
   private FuseFileOutStream(FileSystem fileSystem, AuthPolicy authPolicy,
-      AlluxioURI uri, LockResource lockResource, Optional<FileOutStream> outStream,
+      AlluxioURI uri, CloseableResource<Lock> lockResource, Optional<FileOutStream> outStream,
       long fileLen, long mode) {
     mFileSystem = Preconditions.checkNotNull(fileSystem);
     mAuthPolicy = Preconditions.checkNotNull(authPolicy);
