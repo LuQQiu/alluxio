@@ -14,6 +14,7 @@ package alluxio.worker.block;
 import alluxio.collections.IndexDefinition;
 import alluxio.collections.IndexedSet;
 import alluxio.collections.Pair;
+import alluxio.concurrent.ClientRWLock;
 import alluxio.conf.Configuration;
 import alluxio.conf.PropertyKey;
 import alluxio.resource.ResourcePool;

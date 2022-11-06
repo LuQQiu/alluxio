@@ -18,6 +18,7 @@ import alluxio.client.file.FileSystem;
 import alluxio.collections.LockPool;
 import alluxio.fuse.auth.AuthPolicy;
 
+import alluxio.fuse.lock.FuseReadWriteLockManager;
 import jnr.constants.platform.OpenFlags;
 
 import java.nio.ByteBuffer;
@@ -78,7 +79,7 @@ public interface FuseFileStream extends AutoCloseable {
   class Factory {
     private final FileSystem mFileSystem;
     private final AuthPolicy mAuthPolicy;
-    private final LockPool<String> mPathLocks;
+    private final FuseReadWriteLockManager mLockManager;
 
     /**
      * Creates an instance of {@link FuseFileStream.Factory} for
@@ -86,12 +87,12 @@ public interface FuseFileStream extends AutoCloseable {
      *
      * @param fileSystem the file system
      * @param authPolicy the authentication policy
-     * @param pathLocks the path locks
+     * @param lockManager the lock manager
      */
-    public Factory(FileSystem fileSystem, AuthPolicy authPolicy, LockPool<String> pathLocks) {
+    public Factory(FileSystem fileSystem, AuthPolicy authPolicy, FuseReadWriteLockManager lockManager) {
       mFileSystem = fileSystem;
       mAuthPolicy = authPolicy;
-      mPathLocks = pathLocks;
+      mLockManager = lockManager;
     }
 
     /**
@@ -107,11 +108,11 @@ public interface FuseFileStream extends AutoCloseable {
         AlluxioURI uri, int flags, long mode) {
       switch (OpenFlags.valueOf(flags & O_ACCMODE.intValue())) {
         case O_RDONLY:
-          return FuseFileInStream.create(mFileSystem, mPathLocks, uri);
+          return FuseFileInStream.create(mFileSystem, mLockManager, uri);
         case O_WRONLY:
-          return FuseFileOutStream.create(mFileSystem, mAuthPolicy, mPathLocks, uri, flags, mode);
+          return FuseFileOutStream.create(mFileSystem, mAuthPolicy, mLockManager, uri, flags, mode);
         default:
-          return FuseFileInOrOutStream.create(mFileSystem, mAuthPolicy, mPathLocks,
+          return FuseFileInOrOutStream.create(mFileSystem, mAuthPolicy, mLockManager,
               uri, flags, mode);
       }
     }

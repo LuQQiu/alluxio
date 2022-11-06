@@ -21,6 +21,7 @@ import alluxio.conf.PropertyKey;
 import alluxio.fuse.auth.AuthPolicy;
 import alluxio.fuse.auth.LaunchUserGroupAuthPolicy;
 import alluxio.fuse.file.FuseFileStream;
+import alluxio.fuse.lock.FuseReadWriteLockManager;
 import alluxio.grpc.CreateFilePOptions;
 import alluxio.grpc.OpenFilePOptions;
 import alluxio.grpc.ReadPType;
@@ -52,7 +53,7 @@ public abstract class AbstractFuseFileStreamIntegrationTest extends BaseIntegrat
 
   protected FileSystem mFileSystem = null;
   protected AuthPolicy mAuthPolicy = null;
-  protected LockPool<String> mPathLocks = null;
+  protected FuseReadWriteLockManager mLockManager = null;
   protected FuseFileStream.Factory mStreamFactory = null;
 
   @Before
@@ -61,9 +62,8 @@ public abstract class AbstractFuseFileStreamIntegrationTest extends BaseIntegrat
     mAuthPolicy = LaunchUserGroupAuthPolicy.create(mFileSystem,
         mLocalAlluxioClusterResource.get().getClient().getConf(), Optional.empty());
     mAuthPolicy.init();
-    mPathLocks = new LockPool<>((key) -> new ReentrantReadWriteLock(),
-        8, 16, 128, 8);
-    mStreamFactory = new FuseFileStream.Factory(mFileSystem, mAuthPolicy, mPathLocks);
+    mLockManager = new FuseReadWriteLockManager(12, 12, 36);
+    mStreamFactory = new FuseFileStream.Factory(mFileSystem, mAuthPolicy, mLockManager);
   }
 
   /**

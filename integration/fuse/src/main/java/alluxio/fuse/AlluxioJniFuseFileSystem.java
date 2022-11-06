@@ -38,6 +38,7 @@ import alluxio.fuse.file.FuseFileEntry;
 import alluxio.fuse.file.FuseFileInOrOutStream;
 import alluxio.fuse.file.FuseFileOutStream;
 import alluxio.fuse.file.FuseFileStream;
+import alluxio.fuse.lock.FuseReadWriteLockManager;
 import alluxio.grpc.CreateDirectoryPOptions;
 import alluxio.grpc.ErrorType;
 import alluxio.grpc.SetAttributePOptions;
@@ -106,13 +107,8 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
   // Add a PATH_INDEX to know getattr() been called when writing this file
   private static final IndexDefinition<FuseFileEntry<FuseFileStream>, String>
       PATH_INDEX = IndexDefinition.ofUnique(FuseFileEntry::getPath);
-  /**
-   * Making sure only one write stream at a time.
-   * Key is the hash string of file path.
-   */
-  private static final LockPool<String> PATH_LOCKS
-      = new LockPool<>((key) -> new ReentrantReadWriteLock(),
-      128, 128, 512, 64);
+
+  private static final FuseReadWriteLockManager mLockManager = new FuseReadWriteLockManager(128, 64, 256);
   private final IndexedSet<FuseFileEntry<FuseFileStream>> mFileEntries
       = new IndexedSet<>(ID_INDEX, PATH_INDEX);
   private final AuthPolicy mAuthPolicy;
@@ -142,7 +138,7 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
         : this::acquireBlockMasterInfo;
     mPathResolverCache = AlluxioFuseUtils.getPathResolverCache(mConf);
     mAuthPolicy = AuthPolicyFactory.create(mFileSystem, mConf, this);
-    mStreamFactory = new FuseFileStream.Factory(mFileSystem, mAuthPolicy, PATH_LOCKS);
+    mStreamFactory = new FuseFileStream.Factory(mFileSystem, mAuthPolicy, mLockManager);
     mUfsEnabled = mConf.getBoolean(PropertyKey.USER_UFS_ENABLED);
     if (mConf.getBoolean(PropertyKey.FUSE_DEBUG_ENABLED)) {
       try {

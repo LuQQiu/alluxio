@@ -48,7 +48,7 @@ public class FuseFileInStreamIntegrationTest extends AbstractFuseFileStreamInteg
   @Test (expected = NotFoundRuntimeException.class)
   public void createNonexisting() {
     AlluxioURI alluxioURI = new AlluxioURI(PathUtils.uniqPath());
-    FuseFileInStream.create(mFileSystem, mPathLocks, alluxioURI);
+    FuseFileInStream.create(mFileSystem, mLockManager, alluxioURI);
   }
 
   @Test

@@ -9,7 +9,7 @@
  * See the NOTICE file distributed with this work for information regarding copyright ownership.
  */
 
-package alluxio.worker.block;
+package alluxio.concurrent;
 
 import alluxio.conf.Configuration;
 import alluxio.conf.PropertyKey;

@@ -16,7 +16,6 @@ import alluxio.Constants;
 import alluxio.client.file.FileOutStream;
 import alluxio.client.file.FileSystem;
 import alluxio.client.file.URIStatus;
-import alluxio.collections.LockPool;
 import alluxio.concurrent.LockMode;
 import alluxio.exception.PreconditionMessage;
 import alluxio.exception.runtime.AlluxioRuntimeException;
@@ -25,7 +24,7 @@ import alluxio.exception.runtime.UnimplementedRuntimeException;
 import alluxio.fuse.AlluxioFuseOpenUtils;
 import alluxio.fuse.AlluxioFuseUtils;
 import alluxio.fuse.auth.AuthPolicy;
-import alluxio.resource.RWLockResource;
+import alluxio.fuse.lock.FuseReadWriteLockManager;
 
 import com.google.common.base.Preconditions;
 import org.slf4j.Logger;
@@ -47,7 +46,7 @@ public class FuseFileOutStream implements FuseFileStream {
   private static final int DEFAULT_BUFFER_SIZE = Constants.MB * 4;
   private final AuthPolicy mAuthPolicy;
   private final FileSystem mFileSystem;
-  private final RWLockResource mLockResource;
+  private final FuseReadWriteLockManager mLockManager;
   private final long mMode;
   private final AlluxioURI mURI;
   // Support returning the correct file length
@@ -64,20 +63,19 @@ public class FuseFileOutStream implements FuseFileStream {
    *
    * @param fileSystem the Alluxio file system
    * @param authPolicy the Authentication policy
-   * @param pathLocks the path locks
+   * @param lockManager the lock manager
    * @param uri the alluxio uri
    * @param flags the fuse create/open flags
    * @param mode the filesystem mode, -1 if not set
    * @return a {@link FuseFileInOrOutStream}
    */
   public static FuseFileOutStream create(FileSystem fileSystem, AuthPolicy authPolicy,
-      LockPool<String> pathLocks, AlluxioURI uri, int flags, long mode) {
+      FuseReadWriteLockManager lockManager, AlluxioURI uri, int flags, long mode) {
     Preconditions.checkNotNull(fileSystem);
     Preconditions.checkNotNull(authPolicy);
     Preconditions.checkNotNull(uri);
     // Make sure file is not being read/written by current FUSE
-    RWLockResource lockResource = AlluxioFuseUtils.lock(pathLocks, uri.toString(), LockMode.WRITE,
-        "Failed to create fuse file out stream for %s", uri);
+    lockManager.tryLock(uri.toString(), LockMode.WRITE);
 
     try {
       // Make sure file is not being written by other clients outside current FUSE
@@ -106,27 +104,26 @@ public class FuseFileOutStream implements FuseFileStream {
           }
         } else {
           // Support open(O_WRONLY | O_RDWR flag) - truncate(0) - write() workflow
-          return new FuseFileOutStream(fileSystem, authPolicy, uri, lockResource,
+          return new FuseFileOutStream(fileSystem, authPolicy, uri, lockManager,
               Optional.empty(), fileLen, mode);
         }
       }
-      return new FuseFileOutStream(fileSystem, authPolicy, uri, lockResource,
+      return new FuseFileOutStream(fileSystem, authPolicy, uri, lockManager,
           Optional.of(AlluxioFuseUtils.createFile(fileSystem, authPolicy, uri, mode)),
           fileLen, mode);
     } catch (Throwable t) {
-      lockResource.close();
+      lockManager.unlock(uri.toString(), LockMode.WRITE);
       throw t;
     }
   }
 
   private FuseFileOutStream(FileSystem fileSystem, AuthPolicy authPolicy,
-      AlluxioURI uri, RWLockResource lockResource, Optional<FileOutStream> outStream,
+      AlluxioURI uri, FuseReadWriteLockManager lockManager, Optional<FileOutStream> outStream,
       long fileLen, long mode) {
     mFileSystem = Preconditions.checkNotNull(fileSystem);
     mAuthPolicy = Preconditions.checkNotNull(authPolicy);
     mURI = Preconditions.checkNotNull(uri);
-    // The lock must be locked
-    mLockResource = Preconditions.checkNotNull(lockResource);
+    mLockManager = Preconditions.checkNotNull(lockManager);
     mOutStream = Preconditions.checkNotNull(outStream);
     mOriginalFileLen = fileLen;
     mMode = mode;
@@ -225,7 +222,7 @@ public class FuseFileOutStream implements FuseFileStream {
     try {
       closeStreams();
     } finally {
-      mLockResource.close();
+      mLockManager.unlock(mURI.toString(), LockMode.WRITE);
     }
   }
 
