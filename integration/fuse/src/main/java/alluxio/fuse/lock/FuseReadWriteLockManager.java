@@ -36,7 +36,7 @@ public class FuseReadWriteLockManager {
       .build(new CacheLoader<String, ClientRWLock>() {
         @Override
         public ClientRWLock load(String key) {
-          return new ClientRWLock();
+          return new ClientRWLock(64);
         }
       });
 

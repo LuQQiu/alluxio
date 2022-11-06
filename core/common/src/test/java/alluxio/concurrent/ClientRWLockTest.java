@@ -9,14 +9,13 @@
  * See the NOTICE file distributed with this work for information regarding copyright ownership.
  */
 
-package alluxio.worker.block;
+package alluxio.concurrent;
 
 import static junit.framework.TestCase.assertNotSame;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-import alluxio.concurrent.ClientRWLock;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -36,7 +35,7 @@ public final class ClientRWLockTest {
    */
   @Before
   public void before() {
-    mClientRWLock = new ClientRWLock();
+    mClientRWLock = new ClientRWLock(20);
     mReadLock = mClientRWLock.readLock();
     mWriteLock = mClientRWLock.writeLock();
   }

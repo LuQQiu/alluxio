@@ -15,7 +15,6 @@ import alluxio.AlluxioURI;
 import alluxio.client.file.URIStatus;
 import alluxio.exception.runtime.NotFoundRuntimeException;
 import alluxio.exception.runtime.UnimplementedRuntimeException;
-import alluxio.fuse.file.FuseFileInStream;
 import alluxio.fuse.file.FuseFileStream;
 import alluxio.util.io.BufferUtils;
 import alluxio.util.io.PathUtils;
