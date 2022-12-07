@@ -168,6 +168,9 @@ public class NativeLibraryLoader {
         err = load2(tmpDir);
         break;
       case VERSION_3:
+        if (!libfuse3Installed()) {
+          throw new RuntimeException("Failed to find libfuse 3. Please install fuse3");
+        }
         err = load3(tmpDir);
         break;
       default:
@@ -243,6 +246,13 @@ public class NativeLibraryLoader {
     }
 
     return temp;
+  }
+
+  private boolean libfuse3Installed() {
+    return !tryLoad(() -> {
+      System.loadLibrary("libfuse3");
+      LOG.info("Loaded {} by System.loadLibrary.", "libfuse3");
+    }).isPresent();
   }
 
   /**
