@@ -1410,6 +1410,16 @@ public final class PropertyKey implements Comparable<PropertyKey> {
           .setConsistencyCheckLevel(ConsistencyCheckLevel.WARN)
           .setScope(Scope.SERVER)
           .build();
+  public static final PropertyKey UNDERFS_S3_IN_STREAM_BUFFER_SIZE =
+      dataSizeBuilder(Name.UNDERFS_S3_IN_STREAM_BUFFER_SIZE)
+          .setDefaultValue("4MB")
+          .setDescription("The buffer size for reading a object from S3. "
+              + "Bigger buffer size may improve read performance with less connection to S3A "
+              + "but at a cost of larger memory consumption. "
+              + "This value should be smaller than 2GB.")
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.WARN)
+          .setScope(Scope.SERVER)
+          .build();
   public static final PropertyKey UNDERFS_S3_LIST_OBJECTS_V1 =
       booleanBuilder(Name.UNDERFS_S3_LIST_OBJECTS_V1)
           .setAlias("alluxio.underfs.s3a.list.objects.v1")
@@ -7363,6 +7373,8 @@ public final class PropertyKey implements Comparable<PropertyKey> {
         "alluxio.underfs.s3.connection.ttl";
     public static final String UNDERFS_S3_SOCKET_TIMEOUT =
         "alluxio.underfs.s3.socket.timeout";
+    public static final String UNDERFS_S3_IN_STREAM_BUFFER_SIZE =
+        "alluxio.underfs.s3.instream.buffer.size";
     public static final String UNDERFS_S3_STREAMING_UPLOAD_ENABLED =
         "alluxio.underfs.s3.streaming.upload.enabled";
     public static final String UNDERFS_S3_STREAMING_UPLOAD_PARTITION_SIZE =
