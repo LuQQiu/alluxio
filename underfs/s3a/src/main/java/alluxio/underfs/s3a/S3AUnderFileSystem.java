@@ -679,8 +679,7 @@ public class S3AUnderFileSystem extends ObjectUnderFileSystem {
   @Override
   protected InputStream openObject(String key, OpenOptions options,
       RetryPolicy retryPolicy) {
-    return new BufferedInputStream(new S3AInputStream(
-        mBucketName, key, mClient, options.getOffset(), retryPolicy),
-        (int) mUfsConf.getBytes(PropertyKey.UNDERFS_S3_IN_STREAM_BUFFER_SIZE));
+    return new S3AInputStream(
+        mBucketName, key, mClient, options.getOffset(), retryPolicy);
   }
 }
