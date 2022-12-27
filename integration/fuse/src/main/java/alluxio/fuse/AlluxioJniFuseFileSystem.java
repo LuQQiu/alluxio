@@ -108,6 +108,7 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
   private final AuthPolicy mAuthPolicy;
   private final FuseFileStream.Factory mStreamFactory;
 
+  private final FuseOptions mFuseOptions;
   private final boolean mUfsEnabled;
 
   /** df command will treat -1 as an unknown value. */
@@ -126,6 +127,7 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
     super(Paths.get(fsContext.getClusterConf().getString(PropertyKey.FUSE_MOUNT_POINT)));
     mFileSystemContext = fsContext;
     mFileSystem = fs;
+    mFuseOptions = fuseOptions;
     mConf = fsContext.getClusterConf();
     mFuseShell = new FuseShell(fs, mConf);
     long statCacheTimeout = mConf.getMs(PropertyKey.FUSE_STAT_CACHE_REFRESH_INTERVAL);
@@ -171,6 +173,9 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
     int res = AlluxioFuseUtils.checkNameLength(uri);
     if (res != 0) {
       return res;
+    }
+    if (mFuseOptions.directIOEnabled()) {
+      fi.direct_io.set(1);
     }
     try {
       FuseFileStream stream = mStreamFactory.create(uri, fi.flags.get(), mode);

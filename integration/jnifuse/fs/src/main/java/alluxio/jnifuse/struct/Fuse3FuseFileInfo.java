@@ -17,7 +17,8 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
 /**
- * Maps to struct fuse_file_info in /usr/include/fuse3/fuse_common.h
+ * Maps to struct fuse_file_info in /usr/include/fuse3/fuse_common.h.
+ * Supports Libfuse version bigger or equal to 3.0 but smaller than 3.7.
  */
 public class Fuse3FuseFileInfo extends FuseFileInfo {
 
@@ -37,6 +38,8 @@ public class Fuse3FuseFileInfo extends FuseFileInfo {
     super(runtime, buffer);
 
     this.flags = new Signed32();
+    new Unsigned32(); // writepage
+    this.direct_io = new Unsigned32();
     new Padding(NativeType.UCHAR, 8); // unused flags and paddings
     this.fh = new u_int64_t();
     new u_int64_t(); // lock_owner

@@ -18,6 +18,7 @@ import java.nio.ByteBuffer;
 
 /**
  * Maps to struct fuse_file_info in /usr/include/fuse/fuse_common.h
+ * Supports Libfuse version bigger or equal to 2.6 but smaller than 3.0.
  */
 public class Fuse2FuseFileInfo extends FuseFileInfo {
 
@@ -38,6 +39,8 @@ public class Fuse2FuseFileInfo extends FuseFileInfo {
 
     this.flags = new Signed32();
     new UnsignedLong(); // fh_old
+    new Signed32(); // writepage
+    this.direct_io = new Unsigned32();
     new Padding(NativeType.UCHAR, 4); // unused flags and paddings
     this.fh = new u_int64_t();
     new u_int64_t(); // lock_owner
