@@ -27,8 +27,6 @@ public class FuseFileInfo extends Struct {
   public ByteBuffer buffer;
 
   public Signed32 flags;
-  public UnsignedLong fh_old;
-  public Signed32 writepage;
   public Unsigned32 direct_io;
   public u_int64_t fh;
   public u_int64_t lock_owner;
@@ -40,6 +38,7 @@ public class FuseFileInfo extends Struct {
   }
 
   public static FuseFileInfo of(ByteBuffer buffer) {
+    LOG.info("buffer position {}, limit {}, ", buffer.position(), buffer.limit());
     Runtime runtime = Runtime.getSystemRuntime();
     // select the actual FuseFileInfo by loaded version
     NativeLibraryLoader.LoadState state = NativeLibraryLoader.getLoadState();
@@ -53,10 +52,8 @@ public class FuseFileInfo extends Struct {
         ? new Fuse2FuseFileInfo(runtime, buffer)
         : new Fuse3FuseFileInfo(runtime, buffer);
     fi.useMemory(jnr.ffi.Pointer.wrap(runtime, buffer));
-    LOG.info("buffer position {}, limit {}, fi.flags offset {} fh_old {}, writepage {}, direct_io {}, fh {}, lock_owner {}",
-        buffer.position(), buffer.limit(),
-        fi.flags.offset(), fi.fh_old.offset(), fi.writepage.offset(),
-        fi.direct_io.offset(), fi.fh.offset(), fi.lock_owner.offset());
+    LOG.info("fi.flags offset {} direct_io {}, fh {}, lock_owner {}",
+        fi.flags.offset(), fi.direct_io.offset(), fi.fh.offset(), fi.lock_owner.offset());
     return fi;
   }
 }

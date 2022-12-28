@@ -37,9 +37,8 @@ public class Fuse3FuseFileInfo extends FuseFileInfo {
   protected Fuse3FuseFileInfo(jnr.ffi.Runtime runtime, ByteBuffer buffer) {
     super(runtime, buffer);
     this.flags = new Signed32(); // 0
-    this.writepage = new Signed32(); // 8 - 11
+    new Unsigned32(); // 8 - 11
     this.direct_io = new Unsigned32(); // 12 - 15
-    new Padding(NativeType.UCHAR, 4);
     this.fh = new u_int64_t(); // 20
     this.lock_owner = new u_int64_t(); // 28
     new u_int32_t(); // poll_events 36 - 39

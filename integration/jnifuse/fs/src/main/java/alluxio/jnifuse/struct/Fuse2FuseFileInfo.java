@@ -38,8 +38,8 @@ public class Fuse2FuseFileInfo extends FuseFileInfo {
     super(runtime, buffer);
     // total 40 bytes
     this.flags = new Signed32(); // 0
-    this.fh_old = new UnsignedLong(); // fh_old // 8
-    this.writepage = new Signed32(); // write_page // 16
+    new UnsignedLong(); // fh_old // 8
+    new Signed32(); // write_page // 16
     this.direct_io = new Unsigned32(); // 20
     this.fh = new u_int64_t(); // 24
     this.lock_owner = new u_int64_t(); // 32
