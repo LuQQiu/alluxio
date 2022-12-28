@@ -11,10 +11,7 @@
 
 package alluxio.jnifuse.struct;
 
-import jnr.ffi.NativeType;
-
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 
 /**
  * Maps to struct fuse_file_info in /usr/include/fuse3/fuse_common.h.
@@ -36,11 +33,12 @@ public class Fuse3FuseFileInfo extends FuseFileInfo {
    */
   protected Fuse3FuseFileInfo(jnr.ffi.Runtime runtime, ByteBuffer buffer) {
     super(runtime, buffer);
-    this.flags = new Signed32(); // 0
-    new Unsigned32(); // 8 - 11
-    this.direct_io = new Unsigned32(); // 12 - 15
-    this.fh = new u_int64_t(); // 20
-    this.lock_owner = new u_int64_t(); // 28
-    new u_int32_t(); // poll_events 36 - 39
+    // fi.flags offset 0 direct_io 8, fh 16, lock_owner 24
+    this.flags = new Signed32();
+    new Unsigned32(); // writepage
+    this.direct_io = new Unsigned32();
+    this.fh = new u_int64_t();
+    this.lock_owner = new u_int64_t();
+    new u_int32_t(); // poll_events
   }
 }
