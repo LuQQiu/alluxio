@@ -43,5 +43,6 @@ public class Fuse2FuseFileInfo extends FuseFileInfo {
     this.direct_io = new Unsigned32(); // 20
     this.fh = new u_int64_t(); // 24
     this.lock_owner = new u_int64_t(); // 32
+    // buffer position 0, limit 40, fi.flags offset 0 fh_old 8, writepage 16, direct_io 20, fh 24, lock_owner 32
   }
 }
