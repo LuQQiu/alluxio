@@ -36,12 +36,12 @@ public class Fuse2FuseFileInfo extends FuseFileInfo {
    */
   public Fuse2FuseFileInfo(Runtime runtime, ByteBuffer buffer) {
     super(runtime, buffer);
-
-    this.flags = new Signed32();
-    new UnsignedLong(); // fh_old
-    this.direct_io = new Unsigned32();
-    new Padding(NativeType.UCHAR, 7); // unused flags and paddings
-    this.fh = new u_int64_t();
-    new u_int64_t(); // lock_owner
+    // total 40 bytes
+    this.flags = new Signed32(); // 0
+    this.fh_old = new UnsignedLong(); // fh_old // 8
+    this.writepage = new Signed32(); // write_page // 16
+    this.direct_io = new Unsigned32(); // 20
+    this.fh = new u_int64_t(); // 24
+    this.lock_owner = new u_int64_t(); // 32
   }
 }

@@ -15,16 +15,23 @@ import alluxio.jnifuse.utils.NativeLibraryLoader;
 
 import jnr.ffi.Runtime;
 import jnr.ffi.Struct;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
 public class FuseFileInfo extends Struct {
+  private static final Logger LOG = LoggerFactory.getLogger(FuseFileInfo.class);
+
   public ByteBuffer buffer;
 
-  public u_int64_t fh;
-  public Unsigned32 direct_io;
   public Signed32 flags;
+  public UnsignedLong fh_old;
+  public Signed32 writepage;
+  public Unsigned32 direct_io;
+  public u_int64_t fh;
+  public u_int64_t lock_owner;
 
   public FuseFileInfo(Runtime runtime, ByteBuffer buffer) {
     super(runtime);
@@ -46,6 +53,10 @@ public class FuseFileInfo extends Struct {
         ? new Fuse2FuseFileInfo(runtime, buffer)
         : new Fuse3FuseFileInfo(runtime, buffer);
     fi.useMemory(jnr.ffi.Pointer.wrap(runtime, buffer));
+    LOG.info("buffer position {}, limit {}, fi.flags offset {} fh_old {}, writepage {}, direct_io {}, fh {}, lock_owner {}",
+        buffer.position(), buffer.limit(),
+        fi.flags.offset(), fi.fh_old.offset(), fi.writepage.offset(),
+        fi.direct_io.offset(), fi.fh.offset(), fi.lock_owner.offset());
     return fi;
   }
 }
