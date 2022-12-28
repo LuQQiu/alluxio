@@ -174,9 +174,7 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
     if (res != 0) {
       return res;
     }
-    if (mFuseOptions.directIOEnabled()) {
-      fi.direct_io.set(1);
-    }
+    fi.direct_io.set(1);
     try {
       FuseFileStream stream = mStreamFactory.create(uri, fi.flags.get(), mode);
       long fd = mNextOpenFileId.getAndIncrement();
