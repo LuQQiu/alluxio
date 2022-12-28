@@ -731,7 +731,7 @@ public final class AlluxioFuseUtils {
      * Constructor.
      */
     public CloseableFuseFileInfo() {
-      mBuffer = ByteBuffer.allocateDirect(36);
+      mBuffer = ByteBuffer.allocateDirect(60);
       mBuffer.clear();
       mInfo =  FuseFileInfo.of(mBuffer);
     }

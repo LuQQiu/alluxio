@@ -23,8 +23,8 @@ public class FuseFileInfo extends Struct {
   public ByteBuffer buffer;
 
   public u_int64_t fh;
-  public Signed32 flags;
   public Unsigned32 direct_io;
+  public Signed32 flags;
 
   public FuseFileInfo(Runtime runtime, ByteBuffer buffer) {
     super(runtime);

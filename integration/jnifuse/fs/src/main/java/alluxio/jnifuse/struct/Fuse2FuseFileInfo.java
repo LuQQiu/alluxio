@@ -39,9 +39,8 @@ public class Fuse2FuseFileInfo extends FuseFileInfo {
 
     this.flags = new Signed32();
     new UnsignedLong(); // fh_old
-    new Signed32(); // writepage
     this.direct_io = new Unsigned32();
-    new Padding(NativeType.UCHAR, 4); // unused flags and paddings
+    new Padding(NativeType.UCHAR, 7); // unused flags and paddings
     this.fh = new u_int64_t();
     new u_int64_t(); // lock_owner
   }

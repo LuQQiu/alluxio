@@ -38,9 +38,8 @@ public class Fuse3FuseFileInfo extends FuseFileInfo {
     super(runtime, buffer);
 
     this.flags = new Signed32();
-    new Unsigned32(); // writepage
     this.direct_io = new Unsigned32();
-    new Padding(NativeType.UCHAR, 8); // unused flags and paddings
+    new Padding(NativeType.UCHAR, 3); // unused flags and paddings
     this.fh = new u_int64_t();
     new u_int64_t(); // lock_owner
     new u_int32_t(); // poll_events
