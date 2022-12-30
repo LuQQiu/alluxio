@@ -54,6 +54,7 @@ import alluxio.security.authorization.Mode;
 import alluxio.util.CommonUtils;
 import alluxio.util.LogUtils;
 import alluxio.util.WaitForOptions;
+import alluxio.util.io.BufferUtils;
 import alluxio.wire.BlockMasterInfo;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -111,6 +112,8 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
 
   private final boolean mUfsEnabled;
   private final FuseOptions mFuseOptions;
+  private final int mFileStatSize;
+  private final byte[] mEmptyFileStatBytes;
 
   /** df command will treat -1 as an unknown value. */
   @VisibleForTesting
@@ -146,6 +149,8 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
         LOG.error("Failed to set AlluxioJniFuseFileSystem log to debug level", e);
       }
     }
+    mFileStatSize = getFileStatSize();
+    mEmptyFileStatBytes = new byte[mFileStatSize];
     MetricsSystem.registerGaugeIfAbsent(
         MetricsSystem.getMetricName(MetricKey.FUSE_READ_WRITE_FILE_COUNT.getName()),
         mFileEntries::size);
@@ -280,10 +285,23 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
       // standard . and .. entries
       FuseFillDir.apply(filter, buff, ".", null, 0);
       FuseFillDir.apply(filter, buff, "..", null, 0);
-
-      mFileSystem.iterateStatus(uri, file -> {
-        FuseFillDir.apply(filter, buff, file.getName(), null, 0);
-      });
+      ByteBuffer buffer = ByteBuffer.allocateDirect(mFileStatSize);
+      try {
+        mFileSystem.iterateStatus(uri, file -> {
+          try {
+            FileStat stat = FileStat.of(buffer);
+            AlluxioFuseUtils.fillStat(mAuthPolicy, stat, file);
+            buffer.clear(); // prepare for read
+            FuseFillDir.apply(filter, buff, file.getName(), stat, 0);
+          } finally {
+            buffer.clear();
+            buffer.put(mEmptyFileStatBytes);
+            buffer.clear();
+          }
+        });
+      } finally {
+        BufferUtils.cleanDirectBuffer(buffer);
+      }
     } catch (IOException | AlluxioException e) {
       LOG.error("Failed to readdir {}", path, e);
       return -ErrorCodes.EIO();
