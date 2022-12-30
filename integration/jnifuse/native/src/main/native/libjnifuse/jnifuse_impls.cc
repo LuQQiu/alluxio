@@ -84,8 +84,8 @@ int mkdir_wrapper(const char *path, mode_t mode) {
 
 int open_wrapper(const char *path, struct fuse_file_info *fi) {
   LOGD("open %s", path);
-  if (jnifuse::JniFuseFileSystem::getDirectIO()) {
-	  fi->direct_io = 1
+  if (jnifuse::JniFuseFileSystem::getInstance()->getDirectIO()) {
+	  fi->direct_io = 1;
   }
   int ret = jnifuse::JniFuseFileSystem::getInstance()->openOper->call(path, fi);
 
