@@ -282,6 +282,9 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
       return res;
     }
     try {
+      // standard . and .. entries
+      FuseFillDir.apply(filter, buff, ".", null, 0);
+      FuseFillDir.apply(filter, buff, "..", null, 0);
       ByteBuffer buffer = ByteBuffer.allocateDirect(mFileStatSize);
       try {
         mFileSystem.iterateStatus(uri, file -> {
