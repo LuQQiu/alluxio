@@ -231,7 +231,8 @@ public final class AlluxioFuse {
       try {
         LOG.info("Mounting AlluxioJniFuseFileSystem: mount point=\"{}\", OPTIONS=\"{}\"",
             mountPoint, String.join(",", fuseOptions.getFuseMountOptions()));
-        fuseFs.mount(blocking, debugEnabled, fuseOptions.getFuseMountOptions());
+        fuseFs.mount(blocking, debugEnabled, fuseOptions.getFuseMountOptions(),
+            fuseOptions.directIOEnabled());
         return fuseFs;
       } catch (RuntimeException e) {
         fuseFs.umount(true);
