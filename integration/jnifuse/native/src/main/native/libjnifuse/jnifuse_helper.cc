@@ -101,6 +101,7 @@ jint JNICALL Java_alluxio_jnifuse_FuseFillDir_fill(JNIEnv *env, jclass cls,
   if (stbuf) {
     ret = filler((void *)bufaddr, fn, NULL, 0, fuse_fill_dir_flags::FUSE_FILL_DIR_PLUS);
   } else {
+    LOGI("put in stbuf");
     ret = filler((void *)bufaddr, fn, (struct stat*)stbuf, 0, fuse_fill_dir_flags::FUSE_FILL_DIR_PLUS);
   }
 #else
