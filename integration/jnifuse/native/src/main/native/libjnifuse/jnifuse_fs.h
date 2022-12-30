@@ -44,17 +44,19 @@ class SymlinkOperation;
 
 class JniFuseFileSystem {
  private:
-  JniFuseFileSystem(JNIEnv *env, jobject obj);
+  JniFuseFileSystem(JNIEnv *env, jobject obj, bool directio);
   ~JniFuseFileSystem();
 
  public:
   static JniFuseFileSystem *getInstance();
-  static void init(JNIEnv *env, jobject obj);
+  static void init(JNIEnv *env, jobject obj, bool directio);
   jobject getFSObj();
+  bool getDirectIO();
 
  private:
   static JniFuseFileSystem *instance;
   jobject fs;
+  bool directio;
 
  public:
   ChmodOperation *chmodOper;

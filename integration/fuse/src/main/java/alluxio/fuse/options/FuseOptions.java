@@ -34,6 +34,7 @@ public class FuseOptions {
   private final Set<String> mFuseMountOptions;
   private final boolean mUpdateCheckEnabled;
   private final boolean mSpecialCommandEnabled;
+  private final boolean mDirectIOEnabled;
 
   /**
    * Creates the FUSE options.
@@ -73,6 +74,7 @@ public class FuseOptions {
         && version == LibfuseVersion.VERSION_3) {
       throw new InvalidArgumentRuntimeException("Cannot use JNR-FUSE with libfuse 3");
     }
+    boolean fuse3DirectIOEnabled = false;
     if (version == LibfuseVersion.VERSION_2) {
       // Without option big_write, the kernel limits a single writing request to 4k.
       // With option big_write, maximum of a single writing request is 128k.
@@ -92,8 +94,7 @@ public class FuseOptions {
       }
     } else {
       if (mountOptions.remove("direct_io")) {
-        // TODO(lu) implement direct_io with libfuse3
-        LOG.error("FUSE 3 does not support direct_io mount option");
+        fuse3DirectIOEnabled = true;
       }
       if (mountOptions.stream().noneMatch(a -> a.startsWith("max_idle_threads"))) {
         String idleThreadsOption = "max_idle_threads=64";
@@ -102,7 +103,7 @@ public class FuseOptions {
       }
     }
     return new FuseOptions(fileSystemOptions, mountOptions, updateCheckEnabled,
-        conf.getBoolean(PropertyKey.FUSE_SPECIAL_COMMAND_ENABLED));
+        conf.getBoolean(PropertyKey.FUSE_SPECIAL_COMMAND_ENABLED), fuse3DirectIOEnabled);
   }
 
   /**
@@ -111,13 +112,15 @@ public class FuseOptions {
    * @param fileSystemOptions the file system options
    * @param fuseMountOptions the FUSE mount options
    * @param updateCheckEnabled whether to enable update check
-   * @param specialCommandEnabled whether fuse special commands are enabled
+   * @param directIOEanbled whether to enable direct_io in fuse read/write
    */
   private FuseOptions(FileSystemOptions fileSystemOptions,
-      Set<String> fuseMountOptions, boolean updateCheckEnabled, boolean specialCommandEnabled) {
+      Set<String> fuseMountOptions, boolean updateCheckEnabled,
+      boolean specialCommandEnabled, boolean directIOEanbled) {
     mFileSystemOptions = Preconditions.checkNotNull(fileSystemOptions);
     mFuseMountOptions = Preconditions.checkNotNull(fuseMountOptions);
     mUpdateCheckEnabled = updateCheckEnabled;
+    mDirectIOEnabled = directIOEanbled;
     mSpecialCommandEnabled = specialCommandEnabled;
   }
 
@@ -147,5 +150,12 @@ public class FuseOptions {
    */
   public boolean specialCommandEnabled() {
     return mSpecialCommandEnabled;
+  }
+
+  /**
+   * @return true if fuse special command is enabled
+   */
+  public boolean directIOEnabled() {
+    return directIOEnabled();
   }
 }

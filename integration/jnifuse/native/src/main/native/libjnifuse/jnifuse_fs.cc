@@ -26,8 +26,9 @@
 namespace jnifuse {
 JniFuseFileSystem *JniFuseFileSystem::instance = nullptr;
 
-JniFuseFileSystem::JniFuseFileSystem(JNIEnv *env, jobject obj) {
+JniFuseFileSystem::JniFuseFileSystem(JNIEnv *env, jobject obj, bool directio) {
   this->fs = env->NewGlobalRef(obj);
+  this->directio = directio;
 
   this->chmodOper = new ChmodOperation(this);
   this->chownOper = new ChownOperation(this);
@@ -77,12 +78,12 @@ JniFuseFileSystem::~JniFuseFileSystem() {
   delete this->writeOper;
 }
 
-void JniFuseFileSystem::init(JNIEnv *env, jobject obj) {
+void JniFuseFileSystem::init(JNIEnv *env, jobject obj, jboolean directio) {
   // TODO(lu) support one mount per instance
   if (instance != nullptr) {
     LOGE("you cant initialize more than once");
   }
-  instance = new JniFuseFileSystem(env, obj);
+  instance = new JniFuseFileSystem(env, obj, directio);
 }
 
 JniFuseFileSystem *JniFuseFileSystem::getInstance() {
@@ -94,5 +95,6 @@ JniFuseFileSystem *JniFuseFileSystem::getInstance() {
 }
 
 jobject JniFuseFileSystem::getFSObj() { return this->fs; }
+bool JniFuseFileSystem::getDirectIO() { return this->directio; }
 
 }  // namespace jnifuse
