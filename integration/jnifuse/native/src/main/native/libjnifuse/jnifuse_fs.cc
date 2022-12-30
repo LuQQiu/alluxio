@@ -78,7 +78,7 @@ JniFuseFileSystem::~JniFuseFileSystem() {
   delete this->writeOper;
 }
 
-void JniFuseFileSystem::init(JNIEnv *env, jobject obj, jboolean directio) {
+void JniFuseFileSystem::init(JNIEnv *env, jobject obj, bool directio) {
   // TODO(lu) support one mount per instance
   if (instance != nullptr) {
     LOGE("you cant initialize more than once");
