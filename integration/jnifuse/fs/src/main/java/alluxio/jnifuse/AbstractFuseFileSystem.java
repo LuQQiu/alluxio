@@ -68,7 +68,7 @@ public abstract class AbstractFuseFileSystem implements FuseFileSystem {
    * @param debug whether to show debug information
    * @param fuseOpts the fuse mount options
    */
-  public void mount(boolean blocking, boolean debug, Set<String> fuseOpts) {
+  public void mount(boolean blocking, boolean debug, Set<String> fuseOpts, boolean directIOEnabled) {
     if (!mMounted.compareAndSet(false, true)) {
       throw new FuseException("Fuse File System already mounted!");
     }
@@ -98,11 +98,11 @@ public abstract class AbstractFuseFileSystem implements FuseFileSystem {
       }
       int res;
       if (blocking) {
-        res = execMount(argsArray);
+        res = execMount(argsArray, directIOEnabled);
       } else {
         try {
-          res = CompletableFuture.supplyAsync(() -> execMount(argsArray)).get(MOUNT_TIMEOUT_MS,
-              TimeUnit.MILLISECONDS);
+          res = CompletableFuture.supplyAsync(() -> execMount(argsArray, directIOEnabled))
+              .get(MOUNT_TIMEOUT_MS, TimeUnit.MILLISECONDS);
         } catch (TimeoutException e) {
           // ok
           res = 0;
@@ -117,8 +117,8 @@ public abstract class AbstractFuseFileSystem implements FuseFileSystem {
     }
   }
 
-  private int execMount(String[] arg) {
-    return mLibFuse.fuse_main_real(this, arg.length, arg);
+  private int execMount(String[] arg, boolean directio) {
+    return mLibFuse.fuse_main_real(this, arg.length, arg, directio);
   }
 
   /**

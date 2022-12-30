@@ -42,6 +42,9 @@ int chown_wrapper(const char *path, uid_t uid, gid_t gid, struct fuse_file_info 
 }
 
 int create_wrapper(const char *path, mode_t mode, struct fuse_file_info *fi) {
+  if (jnifuse::JniFuseFileSystem::getInstance()->getDirectIO()) {
+	  fi->direct_io = 1;
+  }
   return jnifuse::JniFuseFileSystem::getInstance()->createOper->call(path, mode,
                                                                      fi);
 }
@@ -81,7 +84,9 @@ int mkdir_wrapper(const char *path, mode_t mode) {
 
 int open_wrapper(const char *path, struct fuse_file_info *fi) {
   LOGD("open %s", path);
-
+  if (jnifuse::JniFuseFileSystem::getInstance()->getDirectIO()) {
+	  fi->direct_io = 1;
+  }
   int ret = jnifuse::JniFuseFileSystem::getInstance()->openOper->call(path, fi);
 
   return ret;

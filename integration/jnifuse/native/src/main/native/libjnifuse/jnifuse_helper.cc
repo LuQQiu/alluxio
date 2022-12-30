@@ -29,10 +29,10 @@ static struct fuse_operations jnifuse_oper;
 
 JNIEXPORT jint JNICALL Java_alluxio_jnifuse_LibFuse_fuse_1main_1real(
     JNIEnv *env, jobject libfuseobj, jobject obj, jint jargc,
-    jobjectArray jargv) {
+    jobjectArray jargv, jboolean jdirectio) {
   LOGI("Start initializing JNIFuse");
   LOGE("Validate standard errors can be logged as expected");
-  jnifuse::JniFuseFileSystem::init(env, obj);
+  jnifuse::JniFuseFileSystem::init(env, obj, (bool) jdirectio);
 
   int argc = jargc;
   LOGD("argc=%d", argc);
