@@ -156,6 +156,6 @@ public class FuseOptions {
    * @return true if fuse special command is enabled
    */
   public boolean directIOEnabled() {
-    return directIOEnabled();
+    return mDirectIOEnabled;
   }
 }
