@@ -49,7 +49,7 @@ public class StackMain {
     try {
       CommonUtils.PROCESS_TYPE.set(CommonUtils.ProcessType.CLIENT);
       MetricsSystem.startSinks(conf.getString(PropertyKey.METRICS_CONF_FILE));
-      fs.mount(true, false, fuseOpts);
+      fs.mount(true, false, fuseOpts, false);
     } catch (Exception e) {
       e.printStackTrace();
       fs.umount(true);
