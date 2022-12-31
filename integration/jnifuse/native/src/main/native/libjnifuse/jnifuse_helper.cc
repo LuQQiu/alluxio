@@ -94,11 +94,13 @@ jint JNICALL Java_alluxio_jnifuse_FuseFillDir_fill(JNIEnv *env, jclass cls,
                                                    jstring name, jobject stbuf,
                                                    jlong off) {
   LOGD("enter fill");
+  LOGE("enter fill");
   fuse_fill_dir_t filler = (fuse_fill_dir_t)(void *)address;
   const char *fn = env->GetStringUTFChars(name, 0);
   int ret;
 #if FUSE_USE_VERSION >= 30
   if (stbuf) {
+    LOGE("does not put in stbuf");
     ret = filler((void *)bufaddr, fn, NULL, 0, fuse_fill_dir_flags::FUSE_FILL_DIR_PLUS);
   } else {
     LOGE("put in stbuf");
