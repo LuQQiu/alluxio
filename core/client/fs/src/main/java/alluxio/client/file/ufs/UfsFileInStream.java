@@ -174,11 +174,12 @@ public class UfsFileInStream extends FileInStream {
       return;
     }
     InputStream ufsInStream = mFileOpener.apply(mPosition);
-    if (mLength - mPosition >= BUFFER_SIZE) {
+    // Remove so that it won't affect the big chunk read by client side cache or dora cache?
+/*    if (mLength - mPosition >= BUFFER_SIZE) {
       ufsInStream = ufsInStream instanceof Seekable
           ? new SeekableBufferedInputStream(ufsInStream, BUFFER_SIZE)
           : new BufferedInputStream(ufsInStream, BUFFER_SIZE);
-    }
+    }*/
     mUfsInStream = Optional.of(ufsInStream);
   }
 }
