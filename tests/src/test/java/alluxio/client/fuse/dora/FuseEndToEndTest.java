@@ -89,7 +89,7 @@ public class FuseEndToEndTest {
     AlluxioJniFuseFileSystem fuseFileSystem = new AlluxioJniFuseFileSystem(context, fileSystem,
         FuseOptions.create(Configuration.global(), FileSystemOptions.create(
             context.getClusterConf(), Optional.of(ufsOptions)), false));
-    fuseFileSystem.mount(false, false, new HashSet<>());
+    fuseFileSystem.mount(false, false, new HashSet<>(), true);
     if (!waitForFuseMounted()) {
       umountFromShellIfMounted();
       fail("Could not setup FUSE mount point");
