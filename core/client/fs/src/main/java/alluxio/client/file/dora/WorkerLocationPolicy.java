@@ -30,7 +30,6 @@ import java.util.NavigableMap;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 /**
@@ -82,7 +81,7 @@ public class WorkerLocationPolicy {
       // check if we need to update worker info
       if (mLastUpdatedTimestamp <= 0L
           || System.currentTimeMillis() - mLastUpdatedTimestamp > WORKER_INFO_UPDATE_INTERVAL_MS) {
-          mNeedUpdate.set(true);
+        mNeedUpdate.set(true);
       }
       // update worker info if needed
       if (mNeedUpdate.compareAndSet(true, false)) {
