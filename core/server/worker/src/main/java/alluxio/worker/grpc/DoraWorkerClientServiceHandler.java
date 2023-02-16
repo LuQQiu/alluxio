@@ -116,6 +116,7 @@ public class DoraWorkerClientServiceHandler extends BlockWorkerGrpc.BlockWorkerI
               FileInfo.newBuilder()
                   .setName(status.getName())
                   .setPath(ufsFilePath)
+                  .setFileId(ufsFilePath.hashCode())
                   .setUfsPath(ufsFilePath)
                   .setLength(status.getContentLength())
                   .setBlockSizeBytes(status.getBlockSize())

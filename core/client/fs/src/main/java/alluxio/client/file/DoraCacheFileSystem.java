@@ -61,7 +61,7 @@ public class DoraCacheFileSystem extends DelegatingFileSystem {
       return mDelegatedFileSystem.getStatus(path, options);
     }
     try {
-      return mDoraClient.getStatus(path.getPath(), options);
+      return mDoraClient.getStatus(path.toString(), options);
     } catch (RuntimeException ex) {
       LOG.debug("Dora client get status error", ex);
       return mDelegatedFileSystem.getStatus(path, options);

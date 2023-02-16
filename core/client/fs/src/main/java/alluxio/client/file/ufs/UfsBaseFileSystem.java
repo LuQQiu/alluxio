@@ -424,7 +424,7 @@ public class UfsBaseFileSystem implements FileSystem {
         .setMode(ufsStatus.getMode())
         .setCompleted(true);
     if (ufsStatus.getLastModifiedTime() != null) {
-      info.setLastModificationTimeMs(info.getLastModificationTimeMs());
+      info.setLastModificationTimeMs(ufsStatus.getLastModifiedTime());
     }
     if (ufsStatus.getXAttr() != null) {
       info.setXAttr(ufsStatus.getXAttr());
