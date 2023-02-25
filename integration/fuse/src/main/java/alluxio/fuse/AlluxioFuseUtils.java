@@ -662,6 +662,10 @@ public final class AlluxioFuseUtils {
         errorMessage = "";
       }
       LOG.error("Failed to {}({}) with unexpected throwable: ", methodName, errorMessage, t);
+      while (t.getCause() != null) {
+        LOG.error("Failed to read", t.getCause());
+        t = t.getCause();
+      }
       return -ErrorCodes.EIO();
     }
     return ret;
