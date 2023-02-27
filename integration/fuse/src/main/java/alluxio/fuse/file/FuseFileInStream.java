@@ -16,12 +16,15 @@ import alluxio.client.file.FileInStream;
 import alluxio.client.file.FileSystem;
 import alluxio.client.file.URIStatus;
 import alluxio.concurrent.LockMode;
+import alluxio.conf.Configuration;
+import alluxio.conf.PropertyKey;
 import alluxio.exception.AlluxioException;
 import alluxio.exception.PreconditionMessage;
 import alluxio.exception.runtime.AlluxioRuntimeException;
 import alluxio.exception.runtime.FailedPreconditionRuntimeException;
 import alluxio.exception.runtime.NotFoundRuntimeException;
 import alluxio.exception.runtime.UnimplementedRuntimeException;
+import alluxio.file.SeekableBufferedInputStream;
 import alluxio.fuse.AlluxioFuseUtils;
 import alluxio.fuse.lock.FuseReadWriteLockManager;
 import alluxio.grpc.OpenFilePOptions;
@@ -40,7 +43,7 @@ import javax.annotation.concurrent.ThreadSafe;
  */
 @ThreadSafe
 public class FuseFileInStream implements FuseFileStream {
-  private final FileInStream mInStream;
+  private final SeekableBufferedInputStream mInStream;
   private final FileStatus mFileStatus;
   private final AlluxioURI mURI;
   private final CloseableResource<Lock> mLockResource;
@@ -81,7 +84,9 @@ public class FuseFileInStream implements FuseFileStream {
       try {
         FileInStream is = fileSystem.openFile(status.get(),
             OpenFilePOptions.getDefaultInstance());
-        return new FuseFileInStream(is, lockResource,
+        SeekableBufferedInputStream stream = new SeekableBufferedInputStream(is,
+            (int) Configuration.getBytes(PropertyKey.FUSE_INSTREAM_BUFFER_SIZE));
+        return new FuseFileInStream(stream, lockResource,
             new FileStatus(status.get().getLength()), uri);
       } catch (IOException | AlluxioException e) {
         throw new RuntimeException(e);
@@ -92,8 +97,8 @@ public class FuseFileInStream implements FuseFileStream {
     }
   }
 
-  private FuseFileInStream(FileInStream inStream, CloseableResource<Lock> lockResource,
-      FileStatus fileStatus, AlluxioURI uri) {
+  private FuseFileInStream(SeekableBufferedInputStream inStream,
+      CloseableResource<Lock> lockResource, FileStatus fileStatus, AlluxioURI uri) {
     mInStream = Preconditions.checkNotNull(inStream);
     mLockResource = Preconditions.checkNotNull(lockResource);
     mFileStatus = Preconditions.checkNotNull(fileStatus);
@@ -115,12 +120,14 @@ public class FuseFileInStream implements FuseFileStream {
     int currentRead;
     try {
       mInStream.seek(offset);
+      byte[] bytes = buf.hasArray() ? buf.array() : new byte[sz];
       do {
-        currentRead = mInStream.read(buf, totalRead, sz - totalRead);
+        currentRead = mInStream.read(bytes, totalRead, sz - totalRead);
         if (currentRead > 0) {
           totalRead += currentRead;
         }
       } while (currentRead > 0 && totalRead < sz);
+      buf.put(bytes, 0, totalRead);
     } catch (IOException e) {
       throw AlluxioRuntimeException.from(e);
     }
