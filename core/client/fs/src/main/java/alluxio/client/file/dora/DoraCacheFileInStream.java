@@ -166,7 +166,7 @@ public class DoraCacheFileInStream extends FileInStream {
       if (mDebug) {
         LOG.info("Skip forward from {} to pos {}", mPos, pos);
       }
-    } else if (mCurrentChunk != null) {
+    } else if (mCurrentChunk != null && mCurrentChunk.position() + pos - mPos >= 0) {
       try {
         mCurrentChunk.skipBytes((int) (pos - mPos));
       } catch (Exception e) {
