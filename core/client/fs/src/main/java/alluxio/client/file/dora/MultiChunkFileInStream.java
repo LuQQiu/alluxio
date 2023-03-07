@@ -137,6 +137,7 @@ public class MultiChunkFileInStream extends FileInStream {
           mChunkSizes[1] = mChunks[1].readableBytes();
         } else {
           mChunkSizes[1] = 0; // TODO(tcrain) this line is not needed?
+          LOG.info("mChunk is null, set chunk size to 0");
         }
       }
     }
@@ -229,8 +230,8 @@ public class MultiChunkFileInStream extends FileInStream {
       // the seek is after the end of the chunks
       closeDataReader();
       if (mDebug) {
-        LOG.info("Seek forward from {} to pos {}, bigger than mchunkStart {} + chunk0 {} + 2* chunk1 {} = {}", mPos, pos,
-            mChunkStart, mChunkSizes[0], mChunkSizes[1], mChunkStart + mChunkSizes[0] + mChunkSizes[1] + mChunkSizes[1]);
+        LOG.info("Seek forward from {} to pos {}, bigger than mchunkStart {} + chunk0 {} + 2* chunk1 {} = {}, mChunks[0] {}, mChunks[1] {}, mChunk {}", mPos, pos,
+            mChunkStart, mChunkSizes[0], mChunkSizes[1], mChunkStart + mChunkSizes[0] + mChunkSizes[1] + mChunkSizes[1], mChunks[0], mChunks[1], mChunk);
       }
     }
     mPos = pos;
