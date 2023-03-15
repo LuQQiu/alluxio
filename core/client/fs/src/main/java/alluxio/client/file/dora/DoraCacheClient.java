@@ -15,8 +15,8 @@ import static com.google.common.base.Preconditions.checkState;
 
 import alluxio.client.block.BlockWorkerInfo;
 import alluxio.client.block.stream.BlockWorkerClient;
-import alluxio.client.block.stream.DataReader;
 import alluxio.client.block.stream.GrpcDataReader;
+import alluxio.client.block.stream.LocalCachedNettyDataReader;
 import alluxio.client.block.stream.NettyDataReader;
 import alluxio.client.file.FileSystemContext;
 import alluxio.client.file.URIStatus;
@@ -71,17 +71,24 @@ public class DoraCacheClient {
    * @param ufsOptions
    * @return the input stream
    */
-  public DoraCacheFileInStream getInStream(URIStatus status,
-                                           Protocol.OpenUfsBlockOptions ufsOptions) {
+  public PositionReadDoraFileInStream getInStream(URIStatus status, 
+      Protocol.OpenUfsBlockOptions ufsOptions) throws IOException {
     WorkerNetAddress workerNetAddress = getWorkerNetAddress(status.getPath());
+    Protocol.ReadRequest.Builder builder = Protocol.ReadRequest.newBuilder()
+        .setBlockId(DUMMY_BLOCK_ID)
+        .setOpenUfsBlockOptions(ufsOptions)
+        .setChunkSize(mChunkSize);
+    return new PositionReadDoraFileInStream(
+        new LocalCachedNettyDataReader.Factory(mContext, workerNetAddress, builder)
+            .create(0,status.getLength()));
     // Construct the partial read request
-    DataReader.Factory readerFactory;
+   /* DataReader.Factory readerFactory = createLocalCachedNettyDataReader(workerNetAddress, ufsOptions);
     if (mNettyTransEnabled) {
       readerFactory = createNettyDataReader(workerNetAddress, ufsOptions);
     } else {
       readerFactory = createGrpcDataReader(workerNetAddress, ufsOptions);
     }
-    return new DoraCacheFileInStream(readerFactory, status.getLength());
+    return new DoraCacheFileInStream(readerFactory, status.getLength());*/
   }
 
   private GrpcDataReader.Factory createGrpcDataReader(

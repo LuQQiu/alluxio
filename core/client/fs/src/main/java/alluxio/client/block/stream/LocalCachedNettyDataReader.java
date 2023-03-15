@@ -11,6 +11,7 @@
 
 package alluxio.client.block.stream;
 
+import alluxio.cli.RunTestUtils;
 import alluxio.client.file.FileSystemContext;
 import alluxio.conf.Configuration;
 import alluxio.conf.PropertyKey;
@@ -24,6 +25,7 @@ import alluxio.network.protocol.databuffer.NettyDataBuffer;
 import alluxio.proto.dataserver.Protocol;
 import alluxio.proto.status.Status.PStatus;
 import alluxio.util.CommonUtils;
+import alluxio.util.io.PathUtils;
 import alluxio.util.network.NettyUtils;
 import alluxio.util.proto.ProtoMessage;
 import alluxio.wire.WorkerNetAddress;
@@ -31,6 +33,7 @@ import alluxio.wire.WorkerNetAddress;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
 import io.netty.buffer.ByteBuf;
+import io.netty.buffer.ByteBufUtil;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFutureListener;
@@ -39,10 +42,20 @@ import io.netty.channel.ChannelInboundHandlerAdapter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.BufferedOutputStream;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.FileReader;
 import java.io.IOException;
+import java.io.OutputStream;
+import java.io.RandomAccessFile;
+import java.nio.ByteBuffer;
+import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import javax.annotation.concurrent.NotThreadSafe;
 
 /**
@@ -63,7 +76,7 @@ import javax.annotation.concurrent.NotThreadSafe;
  * 7. To make it simple to handle errors, the channel is closed if any error occurs.
  */
 @NotThreadSafe
-public final class NettyDataReader implements DataReader {
+public final class LocalCachedNettyDataReader implements DataReader {
   private static final Logger LOG = LoggerFactory.getLogger(NettyDataReader.class);
 
   private static final int MAX_PACKETS_IN_FLIGHT =
@@ -108,6 +121,12 @@ public final class NettyDataReader implements DataReader {
   private boolean mDone = false;
 
   private boolean mClosed = false;
+  
+  private volatile AtomicLong mSafeReadPosition = new AtomicLong(0);
+  private final File mLocalCacheFile = new File(PathUtils.concatPath(
+      CommonUtils.getTmpDir(Configuration.getList(PropertyKey.TMP_DIRS)), UUID.randomUUID()));
+  private final OutputStream mLocalCacheFileWriter = new BufferedOutputStream(new FileOutputStream(mLocalCacheFile));
+  private final RandomAccessFile mLocalCacheFileReader = new RandomAccessFile(mLocalCacheFile, "r");
 
   /**
    * Creates an instance of {@link NettyDataReader}. If this is used to read a block remotely, it
@@ -117,8 +136,8 @@ public final class NettyDataReader implements DataReader {
    * @param address the netty data server address
    * @param readRequest the read request
    */
-  private NettyDataReader(FileSystemContext context, WorkerNetAddress address,
-                            Protocol.ReadRequest readRequest) throws IOException {
+  private LocalCachedNettyDataReader(FileSystemContext context, WorkerNetAddress address,
+                          Protocol.ReadRequest readRequest) throws IOException {
     mContext = context;
     mAddress = address;
     mPosToRead = readRequest.getOffset();
@@ -137,103 +156,54 @@ public final class NettyDataReader implements DataReader {
 
   @Override
   public DataBuffer readChunk() throws IOException {
+    throw new UnsupportedOperationException();
+  }
+
+  public int positionedRead(long position, byte[] buf, int offset, int length) throws IOException {
     Preconditions.checkState(!mClosed, "PacketReader is closed while reading packets.");
-    // TODO(peis): Have a better criteria to resume so that we can have fewer state changes.
-    if (!tooManyPacketsPending()) {
-      NettyUtils.enableAutoRead(mChannel);
+    if (length == 0) {
+      return 0;
     }
-    ByteBuf buf;
     try {
-      while ((buf = mPackets.poll(READ_TIMEOUT_MS, TimeUnit.MILLISECONDS)) == UFS_READ_HEARTBEAT) {
+      while (offset + length > mSafeReadPosition.get()) {
+        wait(READ_TIMEOUT_MS);
       }
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
-      throw new CancelledException(e);
+      throw new IOException("interrupted");
     }
-    if (buf == null) {
-      throw new DeadlineExceededException(String
-          .format("Timeout to read %d from %s.", mReadRequest.getBlockId(), mChannel.toString()));
+    // TODO(lu) or multiple data readers see which is faster
+    synchronized (this) {
+      mLocalCacheFileReader.seek(position);
+      int totalRead = 0;
+      int curRead = 0;
+      while (totalRead < length) {
+        curRead = mLocalCacheFileReader.read(buf, offset + totalRead, length - totalRead);
+        if (curRead == -1) {
+          break;
+        }
+        totalRead += curRead;
+      }
+      return mLocalCacheFileReader.read(buf, offset, length);
     }
-    if (buf == THROWABLE) {
-      Preconditions.checkNotNull(mPacketReaderException, "mPacketReaderException");
-      Throwables.propagateIfPossible(mPacketReaderException, IOException.class);
-      throw AlluxioStatusException.fromCheckedException(mPacketReaderException);
-    }
-    if (buf == EOF_OR_CANCELLED) {
-      mDone = true;
-      return null;
-    }
-    mPosToRead += buf.readableBytes();
-    Preconditions.checkState(mPosToRead - mReadRequest.getOffset() <= mReadRequest.getLength());
-    return new NettyDataBuffer(buf);
   }
-  
-  
 
   @Override
   public void close() {
     if (mClosed) {
       return;
     }
-    try {
-      if (mDone) {
-        return;
-      }
-      if (!mChannel.isOpen()) {
-        return;
-      }
-      if (remaining() > 0) {
-        Protocol.ReadRequest cancelRequest = mReadRequest.toBuilder().setCancel(true).build();
-        mChannel.writeAndFlush(new RPCProtoMessage(new ProtoMessage(cancelRequest)))
-            .addListener(ChannelFutureListener.CLOSE_ON_FAILURE);
-      }
-
-      try {
-        readAndDiscardAll();
-      } catch (IOException e) {
-        LOG.warn("Failed to close the NettyBlockReader (block: {}, address: {}) with exception {}.",
-            mReadRequest.getBlockId(), mAddress, e.getMessage());
-        CommonUtils.closeChannel(mChannel);
-        return;
-      }
-    } finally {
-      if (mChannel.isOpen()) {
-        mChannel.pipeline().removeLast();
-
-        // Make sure "autoread" is on before releasing the channel.
-        NettyUtils.enableAutoRead(mChannel);
-      }
-      mContext.releaseNettyChannel(mAddress, mChannel);
-      mClosed = true;
+    if (mDone) {
+      return;
     }
-  }
+    if (mChannel.isOpen()) {
+      mChannel.pipeline().removeLast();
 
-  /**
-   * Reads and discards everything read from the channel until it reaches end of the stream.
-   */
-  private void readAndDiscardAll() throws IOException {
-    DataBuffer buf;
-    do {
-      buf = readChunk();
-      if (buf != null) {
-        buf.release();
-      }
-      // A null packet indicates the end of the stream.
-    } while (buf != null);
-  }
-
-  /**
-   * @return bytes remaining
-   */
-  private long remaining() {
-    return mReadRequest.getOffset() + mReadRequest.getLength() - mPosToRead;
-  }
-
-  /**
-   * @return true if there are too many packets pending
-   */
-  private boolean tooManyPacketsPending() {
-    return mPackets.size() >= MAX_PACKETS_IN_FLIGHT;
+      // Make sure "autoread" is on before releasing the channel.
+      NettyUtils.enableAutoRead(mChannel);
+    }
+    mContext.releaseNettyChannel(mAddress, mChannel);
+    mClosed = true;
   }
 
   /**
@@ -279,26 +249,17 @@ public final class NettyDataReader implements DataReader {
         throw new IllegalStateException(
             String.format("Incorrect response type %s.", message.toString()));
       }
-
-      if (tooManyPacketsPending()) {
-        NettyUtils.disableAutoRead(ctx.channel());
-      }
-      mPackets.offer(buf);
+      int readableBytes = buf.readableBytes();
+      mLocalCacheFileWriter.write(ByteBufUtil.getBytes(buf));
+      mLocalCacheFileWriter.flush();
+      mSafeReadPosition.addAndGet(readableBytes);
     }
 
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
       LOG.error("Exception is caught while reading block {} from channel {}:",
           mReadRequest.getBlockId(), ctx.channel(), cause);
-
-      // NOTE: The netty I/O thread associated with mChannel is the only thread that can update
-      // mPacketReaderException and push to mPackets. So it is safe to do the following without
-      // synchronization.
-      // Make sure to set mPacketReaderException before pushing THROWABLE to mPackets.
-      if (mPacketReaderException == null) {
-        mPacketReaderException = cause;
-        mPackets.offer(THROWABLE);
-      }
+      // TODO(lu) handle exception
       ctx.close();
     }
 
@@ -306,16 +267,7 @@ public final class NettyDataReader implements DataReader {
     public void channelUnregistered(ChannelHandlerContext ctx) {
       LOG.warn("Channel is closed while reading block {} from channel {}.",
           mReadRequest.getBlockId(), ctx.channel());
-
-      // NOTE: The netty I/O thread associated with mChannel is the only thread that can update
-      // mPacketReaderException and push to mPackets. So it is safe to do the following without
-      // synchronization.
-      // Make sure to set mPacketReaderException before pushing THROWABLE to mPackets.
-      if (mPacketReaderException == null) {
-        mPacketReaderException =
-            new UnavailableException(String.format("Channel %s is closed.", mChannel.toString()));
-        mPackets.offer(THROWABLE);
-      }
+      // TODO(lu) handle unregister
       ctx.fireChannelUnregistered();
     }
   }
@@ -343,8 +295,8 @@ public final class NettyDataReader implements DataReader {
     }
 
     @Override
-    public DataReader create(long offset, long len) throws IOException {
-      return new NettyDataReader(mContext, mAddress,
+    public LocalCachedNettyDataReader create(long offset, long len) throws IOException {
+      return new LocalCachedNettyDataReader(mContext, mAddress,
           mReadRequestBuilder.setOffset(offset).setLength(len).build());
     }
 

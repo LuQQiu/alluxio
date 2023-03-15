@@ -15,6 +15,7 @@ import alluxio.AlluxioURI;
 import alluxio.Constants;
 import alluxio.cli.FuseShell;
 import alluxio.client.block.BlockMasterClient;
+import alluxio.client.file.FileInStream;
 import alluxio.client.file.FileSystem;
 import alluxio.client.file.FileSystemContext;
 import alluxio.client.file.URIStatus;
@@ -25,6 +26,8 @@ import alluxio.conf.PropertyKey;
 import alluxio.exception.AlluxioException;
 import alluxio.exception.DirectoryNotEmptyException;
 import alluxio.exception.FileDoesNotExistException;
+import alluxio.exception.FileIncompleteException;
+import alluxio.exception.OpenDirectoryException;
 import alluxio.exception.runtime.AlluxioRuntimeException;
 import alluxio.exception.runtime.AlreadyExistsRuntimeException;
 import alluxio.exception.runtime.CancelledRuntimeException;
@@ -69,9 +72,11 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.file.Paths;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
@@ -115,6 +120,8 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
   /** df command will treat -1 as an unknown value. */
   @VisibleForTesting
   public static final int UNKNOWN_INODES = -1;
+
+  private static final ConcurrentHashMap<String, FileInStream> mReadStreams = new ConcurrentHashMap<>();
 
   /**
    * Creates a new instance of {@link AlluxioJniFuseFileSystem}.
@@ -176,9 +183,9 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
       return res;
     }
     try {
-      FuseFileStream stream = mStreamFactory.create(uri, fi.flags.get(), mode);
+      FileInStream in = mFileSystem.openFile(uri);
+      mReadStreams.put(path, in);
       long fd = mNextOpenFileId.getAndIncrement();
-      mFileEntries.add(new FuseFileEntry<>(fd, path, stream));
       fi.fh.set(fd);
     } catch (NotFoundRuntimeException e) {
       LOG.error("Failed to read {}: path does not exist or is invalid", path, e);
@@ -195,6 +202,16 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
     } catch (UnimplementedRuntimeException e) {
       LOG.error("Failed to create stream {}: operation does not supported", path, e);
       return -ErrorCodes.ENOSYS();
+    } catch (OpenDirectoryException e) {
+      throw new RuntimeException(e);
+    } catch (FileDoesNotExistException e) {
+      throw new RuntimeException(e);
+    } catch (FileIncompleteException e) {
+      throw new RuntimeException(e);
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    } catch (AlluxioException e) {
+      throw new RuntimeException(e);
     }
     return 0;
   }
@@ -302,17 +319,24 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
 
   private int readInternal(
       String path, ByteBuffer buf, long size, long offset, long fd) {
-    FuseFileEntry<FuseFileStream> entry = mFileEntries.getFirstByField(ID_INDEX, fd);
-    if (entry == null) {
+    FileInStream in = mReadStreams.get(path);
+    if (in == null) {
+      
       LOG.error("Failed to read {}: Cannot find fd {}", path, fd);
       return -ErrorCodes.EBADFD();
     }
     try {
-      return entry.getFileStream().read(buf, size, offset);
+      int transferedSize = (int) size;
+      byte[] bytes = new byte[transferedSize];
+      int bytesRead = in.positionedRead(offset, bytes, 0, transferedSize);
+      buf.put(bytes);
+      return bytesRead;
     } catch (NotFoundRuntimeException e) {
       LOG.error("Failed to read {}: File does not exist or is writing by other clients", path);
       LOG.debug("Failed to read {}", path, e);
       return -ErrorCodes.ENOENT();
+    } catch (IOException e) {
+      throw new RuntimeException(e);
     }
   }
 
@@ -368,16 +392,7 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
   }
 
   private int releaseInternal(String path, long fd) {
-    FuseFileEntry<FuseFileStream> entry = mFileEntries.getFirstByField(ID_INDEX, fd);
-    if (entry == null) {
-      LOG.error("Failed to release {}: Cannot find fd {}", path, fd);
-      return -ErrorCodes.EBADFD();
-    }
-    try {
-      entry.getFileStream().close();
-    } finally {
-      mFileEntries.remove(entry);
-    }
+    
     return 0;
   }
 
