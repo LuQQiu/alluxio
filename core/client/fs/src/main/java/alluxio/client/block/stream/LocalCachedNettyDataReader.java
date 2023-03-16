@@ -165,14 +165,17 @@ public final class LocalCachedNettyDataReader implements DataReader {
       return 0;
     }
     try {
-      while (offset + length > mSafeReadPosition.get()) {
-        wait(READ_TIMEOUT_MS);
+      if (offset + length > mSafeReadPosition.get()) {
+        synchronized (mSafeReadPosition) {
+          while (offset + length > mSafeReadPosition.get()) {
+            mSafeReadPosition.wait(READ_TIMEOUT_MS);
+          }
+        }
       }
     } catch (InterruptedException e) {
+      LOG.error("interrupted");
       Thread.currentThread().interrupt();
-      throw new IOException("interrupted");
     }
-    // TODO(lu) or multiple data readers see which is faster
     synchronized (this) {
       mLocalCacheFileReader.seek(position);
       int totalRead = 0;
@@ -244,15 +247,19 @@ public final class LocalCachedNettyDataReader implements DataReader {
         } else {
           Preconditions.checkState(dataBuffer.getNettyOutput() instanceof ByteBuf);
           buf = (ByteBuf) dataBuffer.getNettyOutput();
+          int readableBytes = buf.readableBytes();
+          mLocalCacheFileWriter.write(ByteBufUtil.getBytes(buf));
+          mLocalCacheFileWriter.flush();
+          buf.release();
+          synchronized (mSafeReadPosition) {
+            mSafeReadPosition.addAndGet(readableBytes);
+            mSafeReadPosition.notifyAll();
+          }
         }
       } else {
         throw new IllegalStateException(
             String.format("Incorrect response type %s.", message.toString()));
       }
-      int readableBytes = buf.readableBytes();
-      mLocalCacheFileWriter.write(ByteBufUtil.getBytes(buf));
-      mLocalCacheFileWriter.flush();
-      mSafeReadPosition.addAndGet(readableBytes);
     }
 
     @Override

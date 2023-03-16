@@ -79,6 +79,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 import javax.annotation.Nullable;
@@ -121,7 +122,7 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
   @VisibleForTesting
   public static final int UNKNOWN_INODES = -1;
 
-  private static final ConcurrentHashMap<String, FileInStream> mReadStreams = new ConcurrentHashMap<>();
+  private static final ConcurrentHashMap<String, ReadEntry> mReadStreams = new ConcurrentHashMap<>();
 
   /**
    * Creates a new instance of {@link AlluxioJniFuseFileSystem}.
@@ -183,8 +184,14 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
       return res;
     }
     try {
-      FileInStream in = mFileSystem.openFile(uri);
-      mReadStreams.put(path, in);
+      synchronized (mReadStreams) {
+        if (!mReadStreams.contains(path)) {
+          FileInStream in = mFileSystem.openFile(uri);
+          mReadStreams.put(path, new ReadEntry(in));
+        } else {
+          mReadStreams.get(path).mCount.incrementAndGet();
+        }
+      }
       long fd = mNextOpenFileId.getAndIncrement();
       fi.fh.set(fd);
     } catch (NotFoundRuntimeException e) {
@@ -319,16 +326,15 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
 
   private int readInternal(
       String path, ByteBuffer buf, long size, long offset, long fd) {
-    FileInStream in = mReadStreams.get(path);
-    if (in == null) {
-      
+    ReadEntry entry = mReadStreams.get(path);
+    if (entry == null) {
       LOG.error("Failed to read {}: Cannot find fd {}", path, fd);
       return -ErrorCodes.EBADFD();
     }
     try {
       int transferedSize = (int) size;
       byte[] bytes = new byte[transferedSize];
-      int bytesRead = in.positionedRead(offset, bytes, 0, transferedSize);
+      int bytesRead = entry.mStream.positionedRead(offset, bytes, 0, transferedSize);
       buf.put(bytes);
       return bytesRead;
     } catch (NotFoundRuntimeException e) {
@@ -375,12 +381,12 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
   }
 
   private int flushInternal(String path, long fd) {
-    FuseFileEntry<FuseFileStream> entry = mFileEntries.getFirstByField(ID_INDEX, fd);
+    /*FuseFileEntry<FuseFileStream> entry = mFileEntries.getFirstByField(ID_INDEX, fd);
     if (entry == null) {
       LOG.error("Failed to flush {}: Cannot find fd {}", path, fd);
       return -ErrorCodes.EBADFD();
     }
-    entry.getFileStream().flush();
+    entry.getFileStream().flush();*/
     return 0;
   }
 
@@ -392,7 +398,13 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
   }
 
   private int releaseInternal(String path, long fd) {
-    
+    synchronized (mReadStreams) {
+      if (mReadStreams.contains(path)) {
+        if (mReadStreams.get(path).mCount.decrementAndGet() == 0) {
+          mReadStreams.remove(path);
+        }
+      }
+    }
     return 0;
   }
 
@@ -743,5 +755,13 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
   @VisibleForTesting
   LoadingCache<String, AlluxioURI> getPathResolverCache() {
     return mPathResolverCache;
+  }
+  
+  class ReadEntry {
+    AtomicInteger mCount = new AtomicInteger(1);
+    FileInStream mStream;
+    public ReadEntry(FileInStream stream) {
+      mStream = stream;
+    }
   }
 }

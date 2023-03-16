@@ -121,7 +121,7 @@ public class DoraCacheFileSystem extends DelegatingFileSystem {
       return mDoraClient.getInStream(status, openUfsBlockOptions);
     } catch (RuntimeException ex) {
       UFS_FALLBACK_COUNTER.inc();
-      LOG.debug("Dora client open file error ({} times). Fall back to UFS.",
+      LOG.info("Dora client open file error ({} times). Fall back to UFS.",
           UFS_FALLBACK_COUNTER.getCount(), ex);
       return mDelegatedFileSystem.openFile(status, mergedOptions);
     }

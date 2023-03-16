@@ -31,6 +31,8 @@ import alluxio.grpc.ReadRequest;
 import alluxio.proto.dataserver.Protocol;
 import alluxio.resource.CloseableResource;
 import alluxio.wire.WorkerNetAddress;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -41,6 +43,7 @@ import java.util.stream.Collectors;
  * Dora cache client.
  */
 public class DoraCacheClient {
+  private static final Logger LOG = LoggerFactory.getLogger(DoraCacheClient.class);
   public static final int DUMMY_BLOCK_ID = -1;
   public static final int PREFERRED_WORKER_COUNT = 1;
   private final FileSystemContext mContext;
@@ -78,6 +81,7 @@ public class DoraCacheClient {
         .setBlockId(DUMMY_BLOCK_ID)
         .setOpenUfsBlockOptions(ufsOptions)
         .setChunkSize(mChunkSize);
+    LOG.info("Created position read dora file in stream");
     return new PositionReadDoraFileInStream(
         new LocalCachedNettyDataReader.Factory(mContext, workerNetAddress, builder)
             .create(0,status.getLength()));
