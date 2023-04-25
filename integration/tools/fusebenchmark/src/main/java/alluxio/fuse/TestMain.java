@@ -16,6 +16,7 @@ import alluxio.client.file.FileSystemContext;
 import alluxio.conf.AlluxioConfiguration;
 import alluxio.conf.Configuration;
 import alluxio.conf.PropertyKey;
+import alluxio.fuse.options.FuseOptions;
 import alluxio.jnifuse.LibFuse;
 import alluxio.jnifuse.struct.FuseFileInfo;
 import alluxio.network.protocol.databuffer.NioDirectBufferPool;
@@ -27,6 +28,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.io.FileReader;
+import java.util.HashSet;
 import java.util.List;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -65,10 +67,11 @@ public final class TestMain {
     mMountPoint = conf.getString(PropertyKey.FUSE_MOUNT_POINT);
     LibFuse.loadLibrary(AlluxioFuseUtils.getLibfuseVersion(conf));
     FileSystemContext context = FileSystemContext.create(conf);
-    FileSystem fileSystem = FileSystem.Factory.create(context);
+    FuseOptions fuseOptions = FuseOptions.create(conf);
+    FileSystem fileSystem = FileSystem.Factory.create(context, fuseOptions.getFileSystemOptions());
     mFuseFileSystem
-        = new AlluxioJniFuseFileSystem(context, fileSystem);
-    mFuseFileSystem.mount(false, false, new String[]{});
+        = new AlluxioJniFuseFileSystem(context, fileSystem, fuseOptions);
+    mFuseFileSystem.mount(false, false, new HashSet<>());
   }
 
   public void testConcurrent1() throws IOException {
