@@ -29,5 +29,7 @@ get_env() {
 
 get_env
 
-cmd="${JAVA} -cp ${CLASSPATH}  alluxio.fuse.TestMain $@"
+
+cmd="${JAVA} -cp ${CLASSPATH} -Dalluxio.dora.client.ufs.root=/local2 -Dalluxio.master.embedded.journal.addresses=FuseBasic-worker-0:19200  -Dalluxio.master.hostname=FuseBasic-worker-0 -Dalluxio.master.journal.type=EMBEDDED -Dalluxio.user.short.circuit.enabled=false -Dalluxio.user.file.passive.cache.enabled=false -Dalluxio.dora.client.read.location.policy.enabled=true -Dalluxio.dora.client.ufs.root=/local2/ -Dalluxio.user.netty.data.transmission.enabled=true -Dalluxio.user.file.metadata.sync.interval=100000000   alluxio.fuse.TestMain $@"
 exec ${cmd}
+
