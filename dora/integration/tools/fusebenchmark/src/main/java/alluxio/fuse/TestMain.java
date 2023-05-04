@@ -84,8 +84,8 @@ public final class TestMain {
     long totalBytesRead = threadTimes.stream().mapToLong(t -> t).sum();
     double throughput = (double) totalBytesRead / totalTime * 1000;
     System.out.printf("Total time: %dms\n", totalTime);
-    System.out.printf("Total files read: %d\n", totalBytesRead);
-    System.out.printf("Throughput: %.2f files/second\n", throughput);
+    System.out.printf("Total bytes read: %d\n", totalBytesRead);
+    System.out.printf("Throughput: %.2f bytes/second\n", throughput);
   }
 
   static class FileReaderTask implements Runnable {

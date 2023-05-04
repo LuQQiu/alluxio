@@ -353,7 +353,7 @@ public class PagedDoraWorker extends AbstractWorker implements DoraWorker {
         -1;
 
     DoraMeta.FileStatus status = mUfsStatusCache.getIfPresent(ufsFullPath);
-    if (syncIntervalMs >= 0 && status != null) {
+/*    if (syncIntervalMs >= 0 && status != null) {
       // Check if the metadata is still valid.
       if (System.nanoTime() - status.getTs() > syncIntervalMs * Constants.MS_NANO) {
         // The metadata is expired. Remove it from in-memory cache.
@@ -361,7 +361,7 @@ public class PagedDoraWorker extends AbstractWorker implements DoraWorker {
         invalidated = invalidateCachedFile(GrpcUtils.fromProto(status.getFileInfo()));
         status = null;
       }
-    }
+    }*/
     if (status == null) {
       // The requested FileStatus is not present in memory cache.
       // Let's try to query local persistent DoraMetaStore.
