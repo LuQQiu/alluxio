@@ -372,7 +372,7 @@ public class PagedDoraWorker extends AbstractWorker implements DoraWorker {
         // The MetaStore is not ready. Treat this as not found.
         fs = Optional.empty();
       }
-      if (syncIntervalMs >= 0 && fs.isPresent()) {
+/*      if (syncIntervalMs >= 0 && fs.isPresent()) {
         // Check if the metadata is still valid.
         if (System.nanoTime() - fs.get().getTs() > syncIntervalMs * Constants.MS_NANO) {
           // The metadata is expired. Remove it from RocksDB.
@@ -384,7 +384,7 @@ public class PagedDoraWorker extends AbstractWorker implements DoraWorker {
           }
           fs = Optional.empty();
         }
-      }
+      }*/
 
       if (fs.isPresent()) {
         // Found in persistent DoraMetaStore
@@ -406,9 +406,9 @@ public class PagedDoraWorker extends AbstractWorker implements DoraWorker {
         }
         if (mMetaStore != null) {
           mMetaStore.putDoraMeta(ufsFullPath, status);
-          if (!invalidated) {
+          /*if (!invalidated) {
             invalidateCachedFile(GrpcUtils.fromProto(status.getFileInfo()));
-          }
+          }*/
         }
         fi = status.getFileInfo();
       }
