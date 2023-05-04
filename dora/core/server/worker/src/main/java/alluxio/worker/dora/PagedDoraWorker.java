@@ -290,16 +290,7 @@ public class PagedDoraWorker extends AbstractWorker implements DoraWorker {
     if (resultFromCache == null) {
       cachedStatuses = null;
     } else {
-      // Metadata is cached. Check if it is expired.
-      if (syncIntervalMs >= 0
-          && System.nanoTime() - resultFromCache.mTimeStamp > syncIntervalMs * Constants.MS_NANO) {
-        // The metadata is expired. Remove it from in-memory cache.
-        mListStatusCache.invalidate(path);
-        cachedStatuses = null;
-      } else {
-        // Cache is still valid. Use cached statuses.
-        cachedStatuses = resultFromCache.mUfsStatuses;
-      }
+      cachedStatuses = resultFromCache.mUfsStatuses;
     }
     if (cachedStatuses != null) {
       return cachedStatuses;
