@@ -118,13 +118,14 @@ public final class TestMain {
           if (stopReading) {
             break;
           }
-          try (PositionReader reader = fileSystem.openPositionRead(new AlluxioURI(String.format(testFileFormat, threadId, i)))) {
-            int bytesRead = 0;
-            while (bytesRead != -1) {
-              bytesRead = reader.read(0, buffer, 0, BUFFER_SIZE);
-              if (bytesRead > 0) {
-                totalBytesRead += bytesRead;
-              }
+          AlluxioURI uri = new AlluxioURI(String.format(testFileFormat, threadId, i));
+          try (PositionReader reader = fileSystem.openPositionRead(uri)) {
+            int bytesRead = reader.read(0, buffer, 0, BUFFER_SIZE);
+            if (bytesRead < 0) {
+              System.out.printf("error reading from file %s", uri.toString());
+            }
+            if (bytesRead > 0) {
+              totalBytesRead += bytesRead;
             }
           }
         }
