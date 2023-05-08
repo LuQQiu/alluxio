@@ -104,7 +104,7 @@ public class DoraCacheFileSystem extends DelegatingFileSystem {
     } catch (RuntimeException ex) {
       if (ex instanceof StatusRuntimeException) {
         if (((StatusRuntimeException) ex).getStatus().getCode() == Status.NOT_FOUND.getCode()) {
-          throw new FileNotFoundException();
+          throw new FileNotFoundException(String.format("Failed to find path %s", path));
         }
       }
       UFS_FALLBACK_COUNTER.inc();
