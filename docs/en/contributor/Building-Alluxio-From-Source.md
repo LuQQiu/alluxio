@@ -96,7 +96,7 @@ Once Alluxio is built, you can validate and start it with:
 # Alluxio uses ./underFSStorage for under file system storage by default
 $ mkdir ./underFSStorage
 $ ./bin/alluxio format
-$ ./bin/alluxio-start.sh local SudoMount
+$ ./bin/alluxio-start.sh local
 ```
 
 To verify that Alluxio is running, you can visit [`http://localhost:19999`](http://localhost:19999) or

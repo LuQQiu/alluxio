@@ -47,28 +47,89 @@ On the master node, create the `conf/alluxio-site.properties` configuration file
 $ cp conf/alluxio-site.properties.template conf/alluxio-site.properties
 ```
 
+### Basic Configuration
+
 Set the following properties in this configuration file (`conf/alluxio-site.properties`):
 
 ```
+alluxio.dora.client.read.location.policy.enabled=true
+alluxio.user.short.circuit.enabled=false
+alluxio.master.worker.register.lease.enabled=false
 alluxio.master.hostname=<MASTER_HOSTNAME>
-alluxio.master.mount.table.root.ufs=<STORAGE_URI>
+alluxio.dora.client.ufs.root=<under_fs_uri>
 ```
 
-- The first property `alluxio.master.hostname` sets the hostname of the single master node.
+- The property `alluxio.master.hostname` sets the hostname of the single master node.
   Please ensure this address is reachable by your worker nodes.
   Examples include
   `alluxio.master.hostname=1.2.3.4` or `alluxio.master.hostname=node1.a.com`.
-- The second property `alluxio.master.mount.table.root.ufs` sets to the URI of the under store to
+- The property `alluxio.dora.client.ufs.root=<under_fs_uri>` sets to the URI of the under store to
   mount to the Alluxio root.
   This shared storage system must be accessible by the master node and all worker nodes.
   
   For example, when [HDFS]({{ '/en/ufs/HDFS.html#basic-setup' | relativize_url }})
   is used as the under storage system, the value of this property can be set to
-  `alluxio.master.mount.table.root.ufs=hdfs://1.2.3.4:9000/alluxio/root/`
+  `alluxio.dora.client.ufs.root=hdfs://1.2.3.4:9000/alluxio/root/`
   
   When [Amazon S3]({{ '/en/ufs/S3.html#basic-setup' | relativize_url }})
   is used as the under storage system, the value can be set to
-  `alluxio.master.mount.table.root.ufs=s3://bucket/dir/`
+  `alluxio.dora.client.ufs.root=s3://bucket/dir/`
+  
+  To configure additionally UFS specific configurations, simply put them in the `alluxio-site.properties` file. Make sure
+  the configuration are the same across all Dora nodes.
+
+  You may need to set additional properties to enable Alluxio to access
+  the configured under storage (eg., [AWS S3 configuration](https://docs.alluxio.io/os/user/stable/en/overview/Getting-Started.html#bonus-configuration-for-aws))
+
+  For example, if the UFS is HDFS, and needs special configurations specified in `core-site.xml` and `hdfs-site.xml`,
+  specify the Alluxio property `alluxio.underfs.hdfs.configuration` directly. The documentation on
+  [configuring HDFS](https://github.com/Alluxio/alluxio/blob/dora/docs/en/ufs/HDFS.md#specify-hdfs-configuration-location) suggests using
+  the Master mount point option starting with `alluxio.master.mount.table.root.option`. This is currently not supported
+  by Dora nodes.
+
+### Cache Storage Configuration
+
+Alluxio supports finer-grained page-level (typically, 1 MB) caching storage on Alluxio workers,
+as an alternative option to the existing block-based (defaults to 64 MB) tiered caching storage.
+
+```properties
+alluxio.worker.block.store.type=PAGE
+alluxio.worker.page.store.type=LOCAL
+alluxio.worker.page.store.dirs=/tmp/alluxio_cache
+alluxio.worker.page.store.sizes=1GB
+alluxio.worker.page.store.page.size=1MB
+```
+
+You can specify multiple directories to be used as cache storage for the paging store.
+For example, to use two SSDs (mounted at `/mnt/ssd1` and `/mnt/ssd2`):
+
+```properties
+alluxio.worker.page.store.dirs=/mnt/ssd1,/mnt/ssd2
+```
+
+You can set a limit to the maximum amount of storage for cache for each of the directories.
+For example, to allocate 100 GB of space on each SSD:
+
+```properties
+alluxio.worker.page.store.sizes=100GB,100GB
+```
+
+Note that the ordering of the sizes must match the ordering of the dirs. It is highly recommended to allocate all directories to be the same size, since the allocator will distribute data evenly.
+
+To specify the page size:
+```properties
+alluxio.worker.page.store.page.size=1MB
+```
+A larger page size might improve sequential read performance, but it may take up more cache space.
+We recommend to use the default value (1MB) for Presto workload (reading Parquet or Orc files).
+
+To enable the asynchronous writes for paging store:
+```properties
+alluxio.worker.page.store.async.write.enabled=true
+```
+You might find this property helpful if you notice performance degradation when there are a lot of cache misses.
+
+### Configuration File Distribution
 
 Append the hostname of each node into `conf/masters` and `conf/workers` accordingly.
 Append the hostname of each Alluxio master node to a new line into `conf/masters`,
@@ -97,9 +158,6 @@ This is the minimal configuration to start Alluxio. Additional configuration pro
 may be set as needed. See the [configuration properties reference](https://docs.alluxio.io/os/user/stable/en/reference/Properties-List.html)
 for more details.
 
-- You may need to set additional properties to enable Alluxio to access
-  the configured under storage (eg., [AWS S3 configuration](https://docs.alluxio.io/os/user/stable/en/overview/Getting-Started.html#bonus-configuration-for-aws))
-
 ## Start an Alluxio Cluster
 
 ### Format Alluxio
@@ -123,25 +181,13 @@ To start the Alluxio cluster, on the master node make sure the `conf/masters` an
 On the master node, start the Alluxio cluster with the following command:
 
 ```console
-$ ./bin/alluxio-start.sh all SudoMount
+$ ./bin/alluxio-start.sh all
 ```
 
 This will start the master on the master node, and start all the workers on all the
 worker nodes specified in the `conf/workers` file.
 The `SudoMount` argument enables the workers to attempt to mount the RamFS using `sudo` 
 privilege, if not already mounted.
-
-### Verify Alluxio Cluster
-
-To verify that Alluxio is running, visit `http://<alluxio_master_hostname>:19999` to see the status
-page of the Alluxio master.
-
-Alluxio comes with a simple program that writes and reads sample files in Alluxio.
-Run the sample program with:
-
-```console
-$ ./bin/alluxio runTests
-```
 
 ## Common Operations
 
@@ -218,7 +264,7 @@ configuration.
 Run the following command on the new worker to add it to the cluster.
 
 ```console
-$ ./bin/alluxio-start.sh worker SudoMount # starts the local worker
+$ ./bin/alluxio-start.sh worker # starts the local worker
 ```
 
 Once the worker is started, it will register itself with the Alluxio master, and become part of the
@@ -249,3 +295,24 @@ not need to be stopped and restarted.
 Simply stop the desired worker, update the configuration
 (e.g., `conf/alluxio-site.properties`) file on that node, and then restart the process.
 
+## Tuning
+
+### Optional Dora Server-side Metadata Cache
+
+By default, Dora worker caches metadata and data.
+Set `alluxio.dora.client.metadata.cache.enabled` to `false` to disable the metadata cache on docker worker if needed.
+If disabled, client will always fetch metadata from under storage directly.
+
+### High performance data transmission over Netty
+
+Set `alluxio.user.netty.data.transmission.enabled` to `true` to enable transmission of data between clients and
+Dora cache nodes over Netty. This avoids serialization and deserialization cost of gRPC, as well as consumes less
+resources on the worker side.
+
+## Known limitations
+
+1. Currently, only one UFS is supported by Dora. Nested mounts are not supported yet.
+2. Currently, the Alluxio Master node still needs to be up and running. It is used for Dora worker discovery,
+   cluster configuration updates, as well as handling write IO operations.
+3. Currently, Alluxio Fuse is not supported with Dora on Kubernetes with the existing helm chart. The helm chart
+   supporting Alluxio Fuse is under development.

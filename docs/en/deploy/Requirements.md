@@ -40,9 +40,9 @@ There are Alluxio-specific requirements for cluster nodes running the master pro
 Note that these are bare minimum requirements to run the software.
 Running Alluxio at scale and under high load will increase these requirements.
 
-* Minimum 4 GB disk space
-* Minimum 4 GB memory (6 GB if using embedded journal)
-* Minimum 4 CPU cores
+* Minimum 1 GB disk space
+* Minimum 1 GB memory (2 GB if using embedded journal)
+* Minimum 2 CPU cores
 * Allow the following ports and protocols:
   * Inbound TCP 19998 - The Alluxio master's default RPC port
   * Inbound TCP 19999 - The Alluxio master's default web UI port: `http://<master-hostname>:19999`
@@ -66,35 +66,6 @@ There are Alluxio-specific requirements for cluster nodes running the worker pro
   * Inbound TCP 30002 - The Alluxio job worker's default data port
   * Inbound TCP 30003 - The Alluxio job worker's default web UI
     port: `http://<worker-hostname>:30003`
-
-#### Worker Cache
-
-Alluxio workers need configure a storage volume to use as the caching layer.
-By default, workers will set up a
-[`ramfs`](https://www.kernel.org/doc/Documentation/filesystems/ramfs-rootfs-initramfs.txt) but this
-can be modified to use a different storage volume by setting a different directory for the
-`alluxio.worker.tieredstore.level%d.dirs.path` property in `alluxio-site.properties`.
-
-Note from the `ramfs` documentation:
-
-> "One downside of ramfs is you can keep writing data into it until you fill
-> up all memory ... Because of this, only root (or a trusted user) should
-> be allowed write access to a ramfs mount."
-
-To get started with the default configuration, set `alluxio.worker.ramdisk.size` in
-`alluxio-site.properties`, add worker hostnames in `conf/workers`, then run the following command:
-
-```console
-$ ./bin/alluxio-mount.sh SudoMount workers
-```
-
-### Proxy Requirements
-
-The proxy process provides a REST based client:
-
-* Minimum 1 GB memory
-* Allow the following ports and protocols:
-  * Inbound TCP 39999 - Used by clients to access the proxy.
 
 ### Fuse Requirements
 

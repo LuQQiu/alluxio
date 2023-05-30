@@ -188,64 +188,6 @@ in `logs/fuse.log`:
 2020-03-03 14:33:35,140 DEBUG AlluxioJniFuseFileSystem - Exit (-2): getattr(path=/._aaa) in 2 ms
 ```
 
-### Logging RPCs Calls Sent by Client
-
-Add the following to your application-side `log4j.properties` to capture RPCs between the Alluxio client
-and FileSystem Master:
-
-```properties
-log4j.logger.alluxio.client.file.FileSystemMasterClient=DEBUG
-```
-
-Similarly, capture lower-level RPCs between Alluxio client and Block Master:
-
-```properties
-log4j.logger.alluxio.client.block.BlockMasterClient=DEBUG
-```
-
-You will see debug logs at the beginning and end of each RPC with its arguments and result
-in the client logs like the following:
-
-```
-2020-03-03 15:56:40,115 DEBUG FileSystemMasterClient - Enter: GetStatus(path=/.DS_Store,options=loadMetadataType: ONCE
-commonOptions {
-  syncIntervalMs: -1
-  ttl: -1
-  ttlAction: DELETE
-}
-)
-2020-03-03 15:56:40,117 DEBUG FileSystemMasterClient - Exit (ERROR): GetStatus(path=/.DS_Store,options=loadMetadataType: ONCE
-commonOptions {
-  syncIntervalMs: -1
-  ttl: -1
-  ttlAction: DELETE
-}
-) in 2 ms: alluxio.exception.status.NotFoundException: Path "/.DS_Store" does not exist.
-```
-
-### Logging RPC Calls Received by Masters
-
-On the master, debug-level logging for incoming File System level RPC calls can be turned on (e.g.,
-creating/reading/writing/removing files, updating file attributions) using the `logLevel` command:
-
-```console
-$ ./bin/alluxio logLevel \
---logName=alluxio.master.file.FileSystemMasterClientServiceHandler \
---target master --level=DEBUG
-```
-
-Similarly, turn on the debug-level logging for block related RPC calls (e.g., adding/removing
-blocks):
-
-```console
-$ ./bin/alluxio logLevel \
---logName=alluxio.master.block.BlockMasterClientServiceHandler \
---target master --level=DEBUG
-```
-
-Similarly, you can update the log level for these classes in the `conf/log4j.properties` file.
-You need to restart the relevant processes for the log4j properties to take effect.
-
 ### Logging UnderFileSystem Operations
 
 Sometimes it can be useful to log all operations on under storage.
