@@ -24,6 +24,8 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.hash.HashCode;
 import com.google.common.hash.HashFunction;
 
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -250,13 +252,50 @@ public class ConsistentHashProvider {
     NavigableMap<Integer, WorkerIdentity> activeNodesByConsistentHashing = new TreeMap<>();
     for (WorkerIdentity worker : workers) {
       for (int i = 0; i < numVirtualNodes; i++) {
+        byte[] idBytes = worker.getId();
+        byte[] versionBytes = intToByteArray(worker.getVersion());
+        //byte[] indexBytes = intToByteArray(i);
+
+        byte[] toHash = concatenateByteArrays(idBytes, versionBytes);
+        final HashCode hashCode1 = HASH_FUNCTION.newHasher()
+            .putBytes(toHash)
+            .hash();
+
+        final HashCode hashCode2 = HASH_FUNCTION.newHasher()
+            .putBytes(worker.getId())
+            .putInt(worker.getVersion())
+            //.putInt(i)
+            .hash();
+        
         final HashCode hashCode = HASH_FUNCTION.newHasher()
             .putObject(worker, WorkerIdentity.HashFunnel.INSTANCE)
-            .putInt(i)
+            //.putInt(i)
             .hash();
         activeNodesByConsistentHashing.put(hashCode.asInt(), worker);
       }
     }
     return activeNodesByConsistentHashing;
+  }
+
+  static public byte[] intToByteArray(int value) {
+    return ByteBuffer.allocate(Integer.BYTES) // Integer.BYTES is 4.
+        .order(ByteOrder.BIG_ENDIAN) // Ensure big-endian order.
+        .putInt(value)
+        .array();
+  }
+  static public byte[] concatenateByteArrays(byte[]... arrays) {
+    int totalLength = 0;
+    for (byte[] array : arrays) {
+      totalLength += array.length;
+    }
+
+    byte[] result = new byte[totalLength];
+    int offset = 0;
+    for (byte[] array : arrays) {
+      System.arraycopy(array, 0, result, offset, array.length);
+      offset += array.length;
+    }
+
+    return result;
   }
 }

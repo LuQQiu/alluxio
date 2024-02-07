@@ -63,9 +63,17 @@ public final class WorkerIdentity implements Serializable {
   private final int mVersion;
   private transient int mHashcode;
 
-  WorkerIdentity(byte[] id, int version) {
+  public WorkerIdentity(byte[] id, int version) {
     mId = id;
     mVersion = version;
+  }
+
+  public byte[] getId() {
+    return mId;
+  }
+  
+  public int getVersion() {
+    return mVersion;
   }
 
   /**
@@ -383,6 +391,7 @@ public final class WorkerIdentity implements Serializable {
       buffer.putLong(uuid.getMostSignificantBits());
       buffer.putLong(uuid.getLeastSignificantBits());
       byte[] bytes = buffer.array();
+      
       return new WorkerIdentity(bytes, VERSION);
     }
 

@@ -21,14 +21,32 @@ import alluxio.wire.WorkerIdentity;
 import alluxio.wire.WorkerIdentityTestUtils;
 
 import com.google.common.collect.ImmutableSet;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonDeserializationContext;
+import com.google.gson.JsonDeserializer;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParseException;
+import com.google.gson.JsonSerializationContext;
+import com.google.gson.JsonSerializer;
+import com.google.gson.reflect.TypeToken;
+import org.apache.commons.codec.DecoderException;
+import org.apache.commons.codec.binary.Hex;
 import org.junit.Test;
 
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.lang.reflect.Type;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -77,6 +95,134 @@ public class ConsistentHashProviderTest {
     assertTrue(calcSDoverMean(count.values()) < 0.25);
   }
 
+  public class WorkerIdentityDeserializer implements JsonDeserializer<WorkerIdentity> {
+    @Override
+    public WorkerIdentity deserialize(JsonElement json, Type typeOfT, JsonDeserializationContext context)
+        throws JsonParseException {
+      JsonObject jsonObject = json.getAsJsonObject();
+
+      int version = jsonObject.get("version").getAsInt();
+      String identifierHex = jsonObject.get("identifier").getAsString();
+      byte[] identifier;
+      try {
+        identifier = Hex.decodeHex(identifierHex.toCharArray());
+      } catch (DecoderException e) {
+        throw new JsonParseException("Error decoding hexadecimal identifier", e);
+      }
+
+      return new WorkerIdentity(identifier, version);
+    }
+  }
+  
+  public class WorkerIdentitySerializer implements JsonSerializer<WorkerIdentity> {
+    @Override
+    public JsonElement serialize(WorkerIdentity src, Type typeOfSrc, JsonSerializationContext context) {
+      JsonObject jsonObject = new JsonObject();
+      jsonObject.addProperty("version", src.getVersion());
+
+      // Convert the identifier byte array to a hexadecimal string
+      String hex = Hex.encodeHexString(src.getId());
+
+      jsonObject.addProperty("identifier", hex);
+      return jsonObject;
+    }
+
+    private String formatAsUUID(String hexStr) {
+      // Ensure the string is long enough to be a UUID
+      if (hexStr == null || hexStr.length() != 32) {
+        throw new IllegalArgumentException("Invalid hex string for UUID conversion: " + hexStr);
+      }
+      return hexStr.substring(0, 8) + "-" + hexStr.substring(8, 12) + "-" + hexStr.substring(12, 16) + "-" +
+          hexStr.substring(16, 20) + "-" + hexStr.substring(20, 32);
+    }
+  }
+  @Test
+  public void sourceOfTruth() throws IOException, InterruptedException {
+    GsonBuilder gsonBuilder = new GsonBuilder();
+    gsonBuilder.setPrettyPrinting();
+    gsonBuilder.registerTypeAdapter(WorkerIdentity.class, new WorkerIdentitySerializer());
+    Gson gson = gsonBuilder.create();
+
+    ConsistentHashProvider provider = new ConsistentHashProvider(
+        100, 100000000, 3);
+    Set<WorkerIdentity> workerList = generateRandomWorkerList(3);
+    // set initial state
+    provider.refresh(workerList);
+    Thread.sleep(20000);
+    NavigableMap<Integer, WorkerIdentity> map = provider.getActiveNodesMap();
+
+    try (FileWriter writer = new FileWriter("/Users/alluxio/downloads/testData/workerList.json")) {
+      gson.toJson(workerList, writer);
+    }
+
+    // Serialize and write active nodes map to a file
+    try (FileWriter writer = new FileWriter("/Users/alluxio/downloads/testData/activeNodesMap.json")) {
+      gson.toJson(map, writer);
+    }
+
+    List<String> ufsUrls = Arrays.asList(
+        "s3://bucket/path/to/dir",
+        "s3://bucket/path/to/file",
+        "s://ai-testing/",
+        "hdfs://host:port/path/to/dir",
+        "hdfs://host:port/path/to/file",
+        "s3://ai-ref-arch/yelp-review/model.pt",
+        "s3://ai-ref-arch/yelp-review/yelp_academic_dataset_business.json",
+        "s3://ai-ref-arch/yelp-review/yelp_academic_dataset_checkin.json",
+        "s3://ai-ref-arch/yelp-review/yelp_academic_dataset_review.json",
+        "s3://ai-ref-arch/yelp-review/yelp_academic_dataset_tip.json",
+        "s3://ai-ref-arch/yelp-review/yelp_academic_dataset_user.json",
+        "s3://ai-ref-arch/yelp-review/yelp_review_sample.csv",
+        "s3://ai-ref-arch/yelp-review/yelp_review_sample_large.csv",
+        "hdfs://namenode:8020/user/hadoop/dir",
+        "hdfs://namenode:8020/user/hadoop/file.txt",
+        "wasbs://container@account.blob.core.windows.net/dir",
+        "wasbs://container@account.blob.core.windows.net/file.txt",
+        "gs://bucket/dir",
+        "gs://bucket/file.txt",
+        "gcs://bucket/dir",
+        "gcs://bucket/file.txt"
+    );
+
+    try (FileWriter writer = new FileWriter("/Users/alluxio/downloads/testData/fileUrlWorkers.json")) {
+      Map<String, List<WorkerIdentity>> fileUrlWorkers = new HashMap<>();
+      for (String ufsUrl : ufsUrls) {
+        List<WorkerIdentity> selectedWorkers = provider.getMultiple(ufsUrl, 2);
+        
+        fileUrlWorkers.put(ufsUrl, selectedWorkers);
+      }
+      gson.toJson(fileUrlWorkers, writer);
+    }
+  }
+
+  @Test
+  public void sourceOfTruth2() throws IOException, InterruptedException {
+    GsonBuilder gsonBuilder = new GsonBuilder();
+    gsonBuilder.setPrettyPrinting();
+    gsonBuilder.registerTypeAdapter(WorkerIdentity.class, new WorkerIdentityDeserializer());
+    Gson gson = gsonBuilder.create();
+
+    ConsistentHashProvider provider = new ConsistentHashProvider(
+        100, 100000000, 3);
+
+    // Read worker list from file
+    Set<WorkerIdentity> workerList;
+    try (FileReader reader = new FileReader("/Users/alluxio/downloads/testData/workerList.json")) {
+      Type setType = new TypeToken<Set<WorkerIdentity>>(){}.getType();
+      workerList = gson.fromJson(reader, setType);
+    }
+    
+    provider.refresh(workerList);
+    Thread.sleep(20000);
+    NavigableMap<Integer, WorkerIdentity> map = provider.getActiveNodesMap();
+    for (Map.Entry<Integer, WorkerIdentity> entry : map.entrySet()) {
+      Integer key = entry.getKey();
+      WorkerIdentity value = entry.getValue();
+
+      System.out.println("Key: " + key + ", Value: " +  WorkerIdentity.ParserV1.INSTANCE.toUUID(value));
+    }
+  }
+  
   private double calcSDoverMean(Collection<Long> list) {
     long sum = 0L;
     double var = 0;
@@ -231,7 +377,8 @@ public class ConsistentHashProviderTest {
     ThreadLocalRandom rng = ThreadLocalRandom.current();
     ImmutableSet.Builder<WorkerIdentity> builder = ImmutableSet.builder();
     while (count-- > 0) {
-      WorkerIdentity id = WorkerIdentityTestUtils.randomLegacyId();
+      UUID generatedId = UUID.randomUUID();
+      WorkerIdentity id = WorkerIdentity.ParserV1.INSTANCE.fromUUID(generatedId);
       builder.add(id);
     }
     return builder.build();
